@@ -3,9 +3,9 @@
 from itertools           import chain
 from matplotlib.pyplot   import figure, legend, plot, savefig, show, xlabel, ylabel
 from numpy               import array
-from torch               import zeros, matmul, randn, from_numpy
+from torch               import from_numpy, matmul, randn, save, zeros
 from torch.autograd      import Variable
-from torch.nn.functional import log_softmax,nll_loss
+from torch.nn.functional import log_softmax, nll_loss
 
 
 def tokenize_corpus(corpus):
@@ -77,6 +77,7 @@ def train(idx_pairs,vocabulary_size,
 if __name__=='__main__':
     from argparse import ArgumentParser
     parser = ArgumentParser('Build word2vector')
+    parser.add_argument('action', choices=['train'])
     parser.add_argument('--N',         type = int,   default = 20001,              help = 'Number of Epochs for training')
     parser.add_argument('--lr',        type = float, default = 0.01,               help = 'Learning rate (before decay)')
     parser.add_argument('--decay',     type = float, default = [0.005], nargs='+', help = 'Decay rate for learning')
@@ -85,7 +86,7 @@ if __name__=='__main__':
     parser.add_argument('--m',         type = int,   default = 5,                  help ='Embedding size')
     parser.add_argument('--output',                  default = 'out',              help = 'Output file name')
     parser.add_argument('--burn',      type=int,     default = None,               help = 'Burn in')
-
+    parser.add_argument('--show',                    default = False,              action='store_true')
     args = parser.parse_args()
 
     corpus = [
@@ -98,26 +99,31 @@ if __name__=='__main__':
         'paris is france capital',
     ]
 
-    tokenized_corpus             = tokenize_corpus(corpus)
-    vocabulary,word2idx,idx2word = create_vocabulary(tokenized_corpus)
-    vocabulary_size              = len(vocabulary)
-    idx_pairs                    = create_idx_pairs(tokenized_corpus, word2idx,
-                                                    window_size = args.n)
+    if args.action == 'train':
+        tokenized_corpus             = tokenize_corpus(corpus)
+        vocabulary,word2idx,idx2word = create_vocabulary(tokenized_corpus)
+        vocabulary_size              = len(vocabulary)
+        idx_pairs                    = create_idx_pairs(tokenized_corpus, word2idx,
+                                                        window_size = args.n)
 
-    figure(figsize=(10,10))
+        figure(figsize=(10,10))
 
-    for decay_rate in args.decay:
-        W1,W2,Epochs,Losses = train(idx_pairs,vocabulary_size,
-                                    lr             = args.lr,
-                                    decay_rate     = decay_rate,
-                                    burn_in        = 2*args.frequency if args.burn ==None else args.burn,
-                                    num_epochs     = args.N,
-                                    embedding_dims = args.m,
-                                    frequency      = args.frequency)
-        plot(Epochs,Losses,label=f'Decay rate={decay_rate}')
+        for decay_rate in args.decay:
+            W1,W2,Epochs,Losses = train(idx_pairs,vocabulary_size,
+                                        lr             = args.lr,
+                                        decay_rate     = decay_rate,
+                                        burn_in        = 2*args.frequency if args.burn ==None else args.burn,
+                                        num_epochs     = args.N,
+                                        embedding_dims = args.m,
+                                        frequency      = args.frequency)
+            plot(Epochs,Losses,label=f'Decay rate={decay_rate}')
+            save(W1,f'{args.output}-W1.pt')
+            save(W2,f'{args.output}-W2.pt')
 
-    xlabel('Epoch')
-    ylabel('Loss')
-    legend()
-    savefig(args.output)
-    show()
+        xlabel('Epoch')
+        ylabel('Loss')
+        legend()
+        savefig(args.output)
+
+    if args.show:
+        show()
