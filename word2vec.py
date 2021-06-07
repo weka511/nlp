@@ -38,16 +38,20 @@ def get_input_layer(word_idx,vocabulary_size):
     return x
 
 def train(idx_pairs,vocabulary_size,
-          decay_rate = 0,
-          burn_in    = 0):
-    W1     = Variable(randn(EMBEDDING_DIMS, vocabulary_size).float(), requires_grad=True)
-    W2     = Variable(randn(vocabulary_size, EMBEDDING_DIMS).float(), requires_grad=True)
+          lr             = 0.01,
+          decay_rate     = 0,
+          burn_in        = 0,
+          num_epochs     = 1000,
+          embedding_dims = 5,
+          frequency      = 100):
+    W1     = Variable(randn(embedding_dims, vocabulary_size).float(), requires_grad=True)
+    W2     = Variable(randn(vocabulary_size, embedding_dims).float(), requires_grad=True)
     Losses = []
     Epochs = []
-
-    for epoch in range(NUM_EPOCHS):
+    print (f'Decay rate={decay_rate}')
+    for epoch in range(num_epochs):
         loss_val = 0
-        learning_rate = LEARNING_RATE/(1+decay_rate * epoch)
+        learning_rate = lr/(1+decay_rate * epoch)
         for data, target in idx_pairs:
             x           = Variable(get_input_layer(data,vocabulary_size)).float()
             y_true      = Variable(from_numpy(array([target])).long())
@@ -62,7 +66,7 @@ def train(idx_pairs,vocabulary_size,
             W1.grad.data.zero_()
             W2.grad.data.zero_()
 
-        if epoch % FREQUENCY == 0:
+        if epoch % frequency == 0:
             print(f'Loss at epoch {epoch}: {loss_val/len(idx_pairs)}')
             if epoch > burn_in:
                 Epochs.append(epoch)
@@ -71,13 +75,19 @@ def train(idx_pairs,vocabulary_size,
     return W1,W2,Epochs,Losses
 
 if __name__=='__main__':
-    NUM_EPOCHS     = 20001
-    LEARNING_RATE  = 0.01
-    DECAY_RATES    = [0.005, 0.0075, 0.01, 0.0125, 0.015]
-    FREQUENCY      = 100
-    WINDOW_SIZE    = 2
-    EMBEDDING_DIMS = 2 * WINDOW_SIZE +1
-    BURN_IN        = 2 * FREQUENCY
+    from argparse import ArgumentParser
+    parser = ArgumentParser('Build word2vector')
+    parser.add_argument('--N',         type = int,   default = 20001,              help = 'Number of Epochs for training')
+    parser.add_argument('--lr',        type = float, default = 0.01,               help = 'Learning rate (before decay)')
+    parser.add_argument('--decay',     type = float, default = [0.005], nargs='+', help = 'Decay rate for learning')
+    parser.add_argument('--frequency', type = int,   default = 100,                help = 'Frequency for display')
+    parser.add_argument('--n',         type = int,   default = 2,                  help = 'Window size')
+    parser.add_argument('--m',         type = int,   default = 5,                  help ='Embedding size')
+    parser.add_argument('--output',                  default = 'out',              help = 'Output file name')
+    parser.add_argument('--burn',      type=int,     default = None,               help = 'Burn in')
+
+    args = parser.parse_args()
+
     corpus = [
         'he is a king',
         'she is a queen',
@@ -92,18 +102,22 @@ if __name__=='__main__':
     vocabulary,word2idx,idx2word = create_vocabulary(tokenized_corpus)
     vocabulary_size              = len(vocabulary)
     idx_pairs                    = create_idx_pairs(tokenized_corpus, word2idx,
-                                                    window_size = WINDOW_SIZE)
+                                                    window_size = args.n)
 
     figure(figsize=(10,10))
 
-    for decay_rate in DECAY_RATES:
+    for decay_rate in args.decay:
         W1,W2,Epochs,Losses = train(idx_pairs,vocabulary_size,
-                                    decay_rate = decay_rate,
-                                    burn_in    = BURN_IN)
+                                    lr             = args.lr,
+                                    decay_rate     = decay_rate,
+                                    burn_in        = 2*args.frequency if args.burn ==None else args.burn,
+                                    num_epochs     = args.N,
+                                    embedding_dims = args.m,
+                                    frequency      = args.frequency)
         plot(Epochs,Losses,label=f'Decay rate={decay_rate}')
 
     xlabel('Epoch')
     ylabel('Loss')
     legend()
-    savefig('word2vec')
+    savefig(args.output)
     show()
