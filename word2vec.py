@@ -1,7 +1,7 @@
 # https://towardsdatascience.com/implementing-word2vec-in-pytorch-skip-gram-model-e6bae040d2fb
 
 from itertools           import chain
-from matplotlib.pyplot   import figure, legend, plot, show, xlabel, ylabel
+from matplotlib.pyplot   import figure, legend, plot, savefig, show, xlabel, ylabel
 from numpy               import array
 from torch               import zeros, matmul, randn, from_numpy
 from torch.autograd      import Variable
@@ -71,9 +71,9 @@ def train(idx_pairs,vocabulary_size,
     return W1,W2,Epochs,Losses
 
 if __name__=='__main__':
-    NUM_EPOCHS     = 10001
+    NUM_EPOCHS     = 20001
     LEARNING_RATE  = 0.01
-    DECAY_RATES    = [0.005, 0.01, 0.015]
+    DECAY_RATES    = [0.005, 0.0075, 0.01, 0.0125, 0.015]
     FREQUENCY      = 100
     WINDOW_SIZE    = 2
     EMBEDDING_DIMS = 2 * WINDOW_SIZE +1
@@ -105,4 +105,5 @@ if __name__=='__main__':
     xlabel('Epoch')
     ylabel('Loss')
     legend()
+    savefig('word2vec')
     show()

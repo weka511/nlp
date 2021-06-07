@@ -4,4 +4,4 @@ My experiments with Natural Language Processing
 
 |File|Description|
 |------------|--------------------------------------------------------------------------|
-|word2vec.py|Word3Vec implemented in pytorch|
+|word2vec.py|Word2Vec implemented in pytorch|
