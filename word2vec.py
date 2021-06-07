@@ -3,9 +3,10 @@
 from itertools           import chain
 from matplotlib.pyplot   import figure, legend, plot, savefig, show, xlabel, ylabel
 from numpy               import array
-from torch               import from_numpy, matmul, randn, save, zeros
+from torch               import dot, from_numpy, load, matmul, norm, randn, save, zeros
 from torch.autograd      import Variable
 from torch.nn.functional import log_softmax, nll_loss
+
 
 
 def tokenize_corpus(corpus):
@@ -74,10 +75,20 @@ def train(idx_pairs,vocabulary_size,
 
     return W1,W2,Epochs,Losses
 
+# https://gist.github.com/mbednarski/da08eb297304f7a66a3840e857e060a0#gistcomment-3689982
+def get_similarity(v,u):
+    return dot(v,u)/(norm(v)*norm(u))
+
+def compare(word1,word2,W1,vocabulary_size):
+    w1v = matmul(W1,get_input_layer(word2idx[word1],vocabulary_size))
+    w2v = matmul(W1,get_input_layer(word2idx[word2],vocabulary_size))
+    s   = get_similarity(w1v,w2v)
+    print (f'{word1} {word2} {s}')
+
 if __name__=='__main__':
     from argparse import ArgumentParser
     parser = ArgumentParser('Build word2vector')
-    parser.add_argument('action', choices=['train'])
+    parser.add_argument('action',      choices=['train', 'test'])
     parser.add_argument('--N',         type = int,   default = 20001,              help = 'Number of Epochs for training')
     parser.add_argument('--lr',        type = float, default = 0.01,               help = 'Learning rate (before decay)')
     parser.add_argument('--decay',     type = float, default = [0.005], nargs='+', help = 'Decay rate for learning')
@@ -119,11 +130,24 @@ if __name__=='__main__':
             plot(Epochs,Losses,label=f'Decay rate={decay_rate}')
             save(W1,f'{args.output}-W1.pt')
             save(W2,f'{args.output}-W2.pt')
-
+            save(word2idx,f'{args.output}-word2idx.pt')
         xlabel('Epoch')
         ylabel('Loss')
         legend()
         savefig(args.output)
 
+    if args.action == 'test':
+        W1                = load(f'{args.output}-W1.pt')
+        W2                = load(f'{args.output}-W2.pt')
+        word2idx          = load(f'{args.output}-word2idx.pt')
+        _,vocabulary_size = W1.shape
+        compare('he',      'king',  W1, vocabulary_size)
+        compare('she',     'queen', W1, vocabulary_size)
+        compare('she',    'king',   W1, vocabulary_size)
+        compare('he',     'queen',  W1, vocabulary_size)
+        compare('warsaw', 'king',   W1, vocabulary_size)
+        compare('warsaw', 'poland', W1, vocabulary_size)
+        compare('poland', 'capital', W1, vocabulary_size)
+        compare('france', 'capital', W1, vocabulary_size)
     if args.show:
         show()
