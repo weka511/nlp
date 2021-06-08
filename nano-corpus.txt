@@ -1,8 +1,8 @@
-he is a king.
-she is a queen.
-he is a man.
-she is a woman.
-warsaw is poland capital.
-berlin is germany capital.
-paris is france capital.
-the queen and he are married.
+He is a king.
+She is a queen.
+He is a man.
+She is a woman.
+Warsaw is Poland capital.
+Berlin is Germany capital.
+Paris is France capital.
+The queen and he are married.

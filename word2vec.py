@@ -12,7 +12,10 @@
 #
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>
-
+#
+#  This program has been written to test my understanding of word2vec -- https://arxiv.org/abs/1301.3781/
+#
+# The code is based on Mateusz Bednarski's article, Implementing word2vec in PyTorch (skip-gram model)
 # https://towardsdatascience.com/implementing-word2vec-in-pytorch-skip-gram-model-e6bae040d2fb
 
 from argparse            import ArgumentParser
@@ -26,14 +29,35 @@ from torch.autograd      import Variable
 from torch.nn.functional import log_softmax, nll_loss
 
 # tokenize_corpus
+#
+# Convert corpus (list of lists of words) to list of tokens, each being a words in lower case.
+#
+# Parameters:
+#      corpus  (list of lists of words, punctuation, etc)
+# Returns:
+#      List of lists of tokens
 
 def tokenize_corpus(corpus):
-    return [x.split() for x in corpus]
+    def istoken(s):
+        return s.isalpha()
+    def lower(S):
+        return [s.lower() for s in S if istoken(s)]
+    return [lower(x.split()) for x in corpus]
 
 # create_vocabulary
+#
+# Extract list of words from document.
+#
+# Parameters:
+#      tokenized_corpus      List of lists of tokens from corpus
+#
+# Returns:
+#     vocabulary    List of all words in corpus
+#     word2idx      Map word to an index in vocabulary
+#     idx2word      Map index to word
 
 def create_vocabulary(tokenized_corpus):
-    vocabulary = {token for sentence in tokenized_corpus for token in sentence}
+    vocabulary = list({token for sentence in tokenized_corpus for token in sentence})
     return vocabulary,                                     \
            {w: idx for (idx, w) in enumerate(vocabulary)}, \
            {idx: w for (idx, w) in enumerate(vocabulary)}
@@ -41,6 +65,11 @@ def create_vocabulary(tokenized_corpus):
 # create_idx_pairs
 #
 # Create list of pairs, (word,context)
+#
+# Parameters:
+#      tokenized_corpus      List of lists of tokens from corpus
+#      word2idx              Map word to an index in vocabulary
+#      window_size           size of sliding window - used to determine whther a neighbour of a word is in context
 
 def create_idx_pairs(tokenized_corpus, word2idx,
                      window_size = 2):
