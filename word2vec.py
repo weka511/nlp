@@ -108,9 +108,18 @@ def create_idx_pairs(tokenized_corpus, word2idx, window_size = 2):
 
 
 
-# get_input_layer
+# create-1hot-vector
+#
+# Create input data for neural net - a 1-hot vector
+#
+# Parameters:
+#     word_idx             Index of word in vocabulary
+#     vocabulary_size      Size of vocabulary
+#
+# Returns:
+#       1 hot vector of dimension vocabulary_size
 
-def get_input_layer(word_idx,vocabulary_size):
+def create_1hot_vector(word_idx,vocabulary_size):
     x           = zeros(vocabulary_size).float()
     x[word_idx] = 1.0
     return x
@@ -118,6 +127,11 @@ def get_input_layer(word_idx,vocabulary_size):
 # shuffled
 #
 # Generator for shuffling idx_pairs
+#
+# Parameters:
+#      idx_pairs
+#      rg   Either a numpy.random.default_rng (shuffle)
+#           or None                           (no shuffle)
 
 def shuffled(idx_pairs, rg = None):
     indices = list(range(len(idx_pairs)))
@@ -127,6 +141,8 @@ def shuffled(idx_pairs, rg = None):
         yield idx_pairs[index]
 
 # train
+#
+# Train neural network
 
 def train(idx_pairs,vocabulary_size,
           lr             = 0.01,
@@ -150,7 +166,7 @@ def train(idx_pairs,vocabulary_size,
         learning_rate = lr/(1+decay_rate * epoch)
 
         for data, target in shuffled(idx_pairs,rg):
-            x           = Variable(get_input_layer(data,vocabulary_size)).float()
+            x           = Variable(create_1hot_vector(data,vocabulary_size)).float()
             y_true      = Variable(from_numpy(array([target])).long())
             z1          = matmul(W1, x)
             z2          = matmul(W2, z1)
@@ -173,27 +189,19 @@ def train(idx_pairs,vocabulary_size,
 
     return W1,W2,Epochs,Losses
 
+# get_similarity
+#
+# Determine similarity between two vctors
+
 def get_similarity(v,u):
     return dot(v,u)/(norm(v)*norm(u))
 
-# compare
 
-# https://gist.github.com/mbednarski/da08eb297304f7a66a3840e857e060a0#gistcomment-3689982
+# read_corpus
+#
+# Read corpous from file
 
-def compare(word1,word2,
-            W1              = None,
-            vocabulary_size = 0,
-            word2idx        = {}):
-
-
-    s = get_similarity(matmul(W1,get_input_layer(word2idx[word1],vocabulary_size)),
-                       matmul(W1,get_input_layer(word2idx[word2],vocabulary_size)))
-    print (f'{word1} {word2} {s}')
-    return s
-
-# corpus
-
-def corpus(file_name):
+def read_corpus(file_name):
     with open(file_name) as f:
         for line in f:
             yield line.strip('.\n')
@@ -218,7 +226,7 @@ if __name__=='__main__':
     args = parser.parse_args()
 
     if args.action == 'train':
-        tokenized_corpus             = tokenize_corpus(corpus(args.corpus))
+        tokenized_corpus             = tokenize_corpus(read_corpus(args.corpus))
         vocabulary,word2idx,idx2word = create_vocabulary(tokenized_corpus)
         vocabulary_size              = len(vocabulary)
         idx_pairs                    = create_idx_pairs(tokenized_corpus, word2idx, window_size = args.n)
