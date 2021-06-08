@@ -38,6 +38,8 @@ def create_vocabulary(tokenized_corpus):
            {idx: w for (idx, w) in enumerate(vocabulary)}
 
 # create_idx_pairs
+#
+# Create list of pairs, (word,context)
 
 def create_idx_pairs(tokenized_corpus, word2idx,
                      window_size = 2):
@@ -71,14 +73,17 @@ def train(idx_pairs,vocabulary_size,
           burn_in        = 0,
           num_epochs     = 1000,
           embedding_dims = 5,
-          frequency      = 100):
+          frequency      = 100,
+          alpha          = 0.9):
     W1     = Variable(randn(embedding_dims, vocabulary_size).float(), requires_grad=True)
     W2     = Variable(randn(vocabulary_size, embedding_dims).float(), requires_grad=True)
+    Delta1 = zeros(embedding_dims, vocabulary_size)
+    Delta2 = zeros(vocabulary_size, embedding_dims)
     Losses = []
     Epochs = []
     print (f'Decay rate={decay_rate}')
     for epoch in range(num_epochs):
-        loss_val = 0
+        loss_val      = 0
         learning_rate = lr/(1+decay_rate * epoch)
         for data, target in idx_pairs:
             x           = Variable(get_input_layer(data,vocabulary_size)).float()
@@ -89,8 +94,10 @@ def train(idx_pairs,vocabulary_size,
             loss        = nll_loss(y_predicted.view(1,-1), y_true)
             loss_val   += loss.item()
             loss.backward()
-            W1.data    -= learning_rate * W1.grad.data
-            W2.data    -= learning_rate * W2.grad.data
+            Delta1     = alpha * Delta1 - learning_rate * W1.grad.data
+            Delta2     = alpha * Delta2 - learning_rate * W2.grad.data
+            W2.data    += Delta2
+            W1.data    += Delta1
             W1.grad.data.zero_()
             W2.grad.data.zero_()
 
@@ -134,7 +141,8 @@ if __name__=='__main__':
     parser.add_argument('action',      choices=['train', 'test'],                          help = 'Train weights or test them')
     parser.add_argument('--N',         type = int,   default = 20001,                      help = 'Number of Epochs for training')
     parser.add_argument('--lr',        type = float, default = 0.01,                       help = 'Learning rate (before decay)')
-    parser.add_argument('--decay',     type = float, default = [0.005], nargs='+',         help = 'Decay rate for learning')
+    parser.add_argument('--alpha',     type = float, default = 0.9,                        help = 'Momentum')
+    parser.add_argument('--decay',     type = float, default = [0.01], nargs='+',          help = 'Decay rate for learning')
     parser.add_argument('--frequency', type = int,   default = 100,                        help = 'Frequency for display')
     parser.add_argument('--n',         type = int,   default = 2,                          help = 'Window size')
     parser.add_argument('--m',         type = int,   default = 5,                          help ='Embedding size')
@@ -162,7 +170,8 @@ if __name__=='__main__':
                                         burn_in        = 2*args.frequency if args.burn ==None else args.burn,
                                         num_epochs     = args.N,
                                         embedding_dims = args.m,
-                                        frequency      = args.frequency)
+                                        frequency      = args.frequency,
+                                        alpha          = args.alpha)
             plot(Epochs,Losses,label=f'Decay rate={decay_rate}')
 
             if Losses[-1]<minimum_loss:
@@ -179,7 +188,7 @@ if __name__=='__main__':
         xlabel('Epoch')
         ylabel('Loss')
         legend()
-        title(f'{args.corpus} -- Embedding dimenions={args.m}')
+        title(f'{args.corpus} -- Embedding dimensions={args.m}, momentum={args.alpha}')
         savefig(args.output)
 
     if args.action == 'test':
