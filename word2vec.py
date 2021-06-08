@@ -64,29 +64,49 @@ def create_vocabulary(tokenized_corpus):
 
 # create_idx_pairs
 #
-# Create list of pairs, (word,context)
+# Create list of pairs, (word,context) for corpus
 #
 # Parameters:
 #      tokenized_corpus      List of lists of tokens from corpus
 #      word2idx              Map word to an index in vocabulary
-#      window_size           size of sliding window - used to determine whther a neighbour of a word is in context
+#      window_size           size of sliding window - used to determine whether a neighbour of a word is in context
 
-def create_idx_pairs(tokenized_corpus, word2idx,
-                     window_size = 2):
+def create_idx_pairs(tokenized_corpus, word2idx, window_size = 2):
+    # flatten
+    #
+    # Convert a list of lists to a list containing all the same data
 
-    idx_pairs = []
+    def flatten(Lists):
+        return [x for List in Lists for x in List]
 
-    for sentence in tokenized_corpus:
-        indices = [word2idx[word] for word in sentence]
+    # create_contexts
+    #
+    # Create list of pairs, (word,context) for a single sentence
 
-        for center_word_pos in range(len(indices)):
-            for word_offset in chain(range(-window_size,0), range(1, window_size + 1)):
-                context_word_pos = center_word_pos + word_offset
-                if context_word_pos >= 0 and context_word_pos < len(indices):
-                    context_word_idx = indices[context_word_pos]
-                    idx_pairs.append((indices[center_word_pos], context_word_idx))
+    def create_contexts(sentence):
+        # in_window
+        #
+        # Used to verify that a context word is within the window
+        def in_window(context_word_pos):
+            return context_word_pos >= 0 and context_word_pos < len(sentence)
 
-    return array(idx_pairs)
+        # create_context
+        #
+        # Create a word context pair from a pair of positions within sentence
+        def create_context(center_word_pos, word_offset):
+            return (word_indices[center_word_pos], word_indices[center_word_pos+ word_offset])
+
+        word_indices = [word2idx[word] for word in sentence]
+        pos_offset_pairs = [(center_word_pos, context_word_offset)
+                            for center_word_pos in range(len(sentence))
+                                for context_word_offset in chain(range(-window_size,0), range(1, window_size + 1))
+                                    if in_window(center_word_pos + context_word_offset)]
+
+        return [create_context(center_word_pos, context_word_offset) for center_word_pos, context_word_offset in pos_offset_pairs]
+
+    return flatten([create_contexts(sentence) for sentence in tokenized_corpus])
+
+
 
 # get_input_layer
 
@@ -201,8 +221,7 @@ if __name__=='__main__':
         tokenized_corpus             = tokenize_corpus(corpus(args.corpus))
         vocabulary,word2idx,idx2word = create_vocabulary(tokenized_corpus)
         vocabulary_size              = len(vocabulary)
-        idx_pairs                    = create_idx_pairs(tokenized_corpus, word2idx,
-                                                        window_size = args.n)
+        idx_pairs                    = create_idx_pairs(tokenized_corpus, word2idx, window_size = args.n)
 
         figure(figsize=(10,10))
 
