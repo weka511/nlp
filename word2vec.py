@@ -70,10 +70,10 @@ def get_input_layer(word_idx,vocabulary_size):
 #
 # Generator for shuffling idx_pairs
 
-def shuffled(idx_pairs,
-             rg = default_rng()):
+def shuffled(idx_pairs, rg = None):
     indices = list(range(len(idx_pairs)))
-    rg.shuffle(indices)
+    if rg!=None:
+        rg.shuffle(indices)
     for index in indices:
         yield idx_pairs[index]
 
@@ -86,7 +86,8 @@ def train(idx_pairs,vocabulary_size,
           num_epochs     = 1000,
           embedding_dims = 5,
           frequency      = 100,
-          alpha          = 0.9):
+          alpha          = 0.9,
+          rg             = None):
     W1     = Variable(randn(embedding_dims, vocabulary_size).float(), requires_grad=True)
     W2     = Variable(randn(vocabulary_size, embedding_dims).float(), requires_grad=True)
     Delta1 = zeros(embedding_dims, vocabulary_size)
@@ -99,7 +100,7 @@ def train(idx_pairs,vocabulary_size,
         loss_val      = 0
         learning_rate = lr/(1+decay_rate * epoch)
 
-        for data, target in shuffled(idx_pairs):
+        for data, target in shuffled(idx_pairs,rg):
             x           = Variable(get_input_layer(data,vocabulary_size)).float()
             y_true      = Variable(from_numpy(array([target])).long())
             z1          = matmul(W1, x)
@@ -163,6 +164,7 @@ if __name__=='__main__':
     parser.add_argument('--output',                  default = 'out',                      help = 'Output file name')
     parser.add_argument('--burn',      type=int,     default = None,                       help = 'Burn in')
     parser.add_argument('--show',                    default = False, action='store_true', help='Show plots')
+    parser.add_argument('--shuffle',                 default = False, action='store_true', help='Shiffle indices before each epoch')
     parser.add_argument('--corpus',                  default = 'nano-corpus.txt',          help = 'Corpus file name')
     args = parser.parse_args()
 
@@ -185,7 +187,8 @@ if __name__=='__main__':
                                         num_epochs     = args.N,
                                         embedding_dims = args.m,
                                         frequency      = args.frequency,
-                                        alpha          = args.alpha)
+                                        alpha          = args.alpha,
+                                        rg             = default_rng() if args.shuffle else None)
             plot(Epochs,Losses,label=f'Decay rate={decay_rate}')
 
             if Losses[-1]<minimum_loss:
@@ -220,7 +223,7 @@ if __name__=='__main__':
             sims             = matmul(word_vector,W1)
             most_similar_ids = flip(sims.argsort(),[0])
             sim_words        = [idx2word[i] for i in most_similar_ids.tolist()]
-            print (f'{word}\t{" ".join([s for s in sim_words])}')
+            print (f'{word}\t{" ".join([s for s in sim_words])} {"Shuffled" if args.shuffle else ""}')
 
     if args.show:
         show()
