@@ -19,6 +19,7 @@ from argparse            import ArgumentParser
 from itertools           import chain
 from matplotlib.pyplot   import figure, legend, plot, savefig, show, title, xlabel, ylabel
 from numpy               import array
+from numpy.random        import default_rng
 from sys                 import float_info
 from torch               import dot, flip, from_numpy, load, matmul, norm, randn,  save, zeros
 from torch.autograd      import Variable
@@ -65,6 +66,17 @@ def get_input_layer(word_idx,vocabulary_size):
     x[word_idx] = 1.0
     return x
 
+# shuffled
+#
+# Generator for shuffling idx_pairs
+
+def shuffled(idx_pairs,
+             rg = default_rng()):
+    indices = list(range(len(idx_pairs)))
+    rg.shuffle(indices)
+    for index in indices:
+        yield idx_pairs[index]
+
 # train
 
 def train(idx_pairs,vocabulary_size,
@@ -81,11 +93,13 @@ def train(idx_pairs,vocabulary_size,
     Delta2 = zeros(vocabulary_size, embedding_dims)
     Losses = []
     Epochs = []
+
     print (f'Decay rate={decay_rate}')
     for epoch in range(num_epochs):
         loss_val      = 0
         learning_rate = lr/(1+decay_rate * epoch)
-        for data, target in idx_pairs:
+
+        for data, target in shuffled(idx_pairs):
             x           = Variable(get_input_layer(data,vocabulary_size)).float()
             y_true      = Variable(from_numpy(array([target])).long())
             z1          = matmul(W1, x)
