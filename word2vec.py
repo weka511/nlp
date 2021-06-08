@@ -276,10 +276,10 @@ if __name__=='__main__':
 
         for idx, word in idx2word.items():
             word_vector      = W1[:,idx]
-            sims             = matmul(word_vector,W1)
-            most_similar_ids = flip(sims.argsort(),[0])
-            sim_words        = [idx2word[i] for i in most_similar_ids.tolist()]
-            print (f'{word}\t{" ".join([s for s in sim_words])} {"Shuffled" if args.shuffle else ""}')
+            sims             = matmul(word_vector,W1)/(norm(word_vector)*norm(W1))
+            most_similar_ids = flip(sims.argsort(),[0]).tolist()
+            sim_words        = [(idx2word[i],sims[i]) for i in most_similar_ids]
+            print (f'{word}\t{" ".join([f"{w}({sim:.3f})" for w,sim in sim_words])} {"Shuffled" if args.shuffle else ""}')
 
     if args.show:
         show()
