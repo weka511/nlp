@@ -13,33 +13,53 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>
 
+from re import split
+
 def read_text(file_name='chapter1.txt'):
     with open(file_name) as text_file:
         for line in text_file:
             yield line.strip()
 
-def extract_sentences(text):
-    buffer = []
+def extract_tokens(text):
+    def consolidate_apostrophes(tokens):
+        Result = []
+        word = tokens[0]
+        i = 1
+        while i<len(tokens):
+            if tokens[i]=="'":
+                i += 1
+                if i<len(tokens)-1:
+                    word = f"{word}'{tokens[i]}"
+                    Result.append(word)
+                    i += 1
+                    word = tokens[i]
+                else:
+                    word = f"{word}'"
+                    Result.append(word)
+            else:
+                Result.append(word)
+                word = tokens[i]
+                i+=1
+        Result.append(word)
+        return Result
+
     for line in text:
-        parts = line.split('.')
-        buffer.append(parts[0])
-        while len(parts)>1:
-            parts = parts[1:]
-            if len(parts[0])==0:
-                buffer.append(parts[0])
-                parts = parts[1:]
-                yield ' '.join(buffer)
-                buffer = []
-                break
-            if parts[0]=='"':
-                buffer.append(parts[0])
-                parts = parts[1:]
-            yield ' '.join(buffer)
-            buffer = []
-            if len(parts)>0:
-                buffer.append(parts[0])
-        x=0
+        Tokens = [token.strip() for token in split(r'(\W+)',line.strip()) if len(token.replace(' ','')) != 0]
+        if len(Tokens)==0: continue
+        for token in consolidate_apostrophes(Tokens):
+            yield token
+
+
+def extract_sentences(Tokens):
+    sentence = []
+    for token in Tokens:
+        if token == '.':
+            yield sentence
+            sentence = []
+        else:
+            sentence.append(token)
 
 if __name__=='__main__':
-    for sentence in extract_sentences(read_text()):
+    for sentence in extract_sentences(extract_tokens(read_text())):
         print (sentence)
+
