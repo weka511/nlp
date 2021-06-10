@@ -24,6 +24,7 @@ from matplotlib.pyplot   import figure, legend, plot, savefig, show, title, xlab
 from numpy               import array
 from numpy.random        import default_rng
 from sys                 import float_info
+from tokenizer           import extract_sentences, extract_tokens, read_text
 from torch               import dot, flip, from_numpy, load, matmul, norm, randn,  save, zeros
 from torch.autograd      import Variable
 from torch.nn.functional import log_softmax, nll_loss
@@ -221,12 +222,15 @@ if __name__=='__main__':
     parser.add_argument('--output',                  default = 'out',                      help = 'Output file name')
     parser.add_argument('--burn',      type=int,     default = None,                       help = 'Burn in')
     parser.add_argument('--show',                    default = False, action='store_true', help='Show plots')
+    parser.add_argument('--nano',                    default = False, action='store_true', help='Use nano corpus')
     parser.add_argument('--shuffle',                 default = False, action='store_true', help='Shiffle indices before each epoch')
     parser.add_argument('--corpus',                  default = 'nano-corpus.txt',          help = 'Corpus file name')
+    parser.add_argument('--depth',     type = int,   default = 16,                         help ='For test')
     args = parser.parse_args()
 
     if args.action == 'train':
-        tokenized_corpus             = tokenize_corpus(read_corpus(args.corpus))
+        tokenized_corpus             = tokenize_corpus(read_corpus(args.corpus)) if args.nano else \
+                                         [w for w in extract_sentences(extract_tokens(read_text(file_name=args.corpus)))]
         vocabulary,word2idx,idx2word = create_vocabulary(tokenized_corpus)
         vocabulary_size              = len(vocabulary)
         idx_pairs                    = create_idx_pairs(tokenized_corpus, word2idx, window_size = args.n)
@@ -277,7 +281,7 @@ if __name__=='__main__':
         for idx, word in idx2word.items():
             word_vector      = W1[:,idx]
             sims             = matmul(word_vector,W1)/(norm(word_vector)*norm(W1))
-            most_similar_ids = flip(sims.argsort(),[0]).tolist()
+            most_similar_ids = flip(sims.argsort(),[0]).tolist()[:args.depth]
             sim_words        = [(idx2word[i],sims[i]) for i in most_similar_ids]
             print (f'{word}\t{" ".join([f"{w}({sim:.3f})" for w,sim in sim_words])} {"Shuffled" if args.shuffle else ""}')
 
