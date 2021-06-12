@@ -27,27 +27,32 @@ if __name__=='__main__':
     parser.add_argument('--show',                    default = False, action='store_true', help ='Show plots')
     args = parser.parse_args()
     figure(figsize=(10,10))
-    corpus   = None
-    embedded = None
+    corpus     = None
+    embeddings = None
+    window     = None
     for i,file_name in enumerate(args.input):
         loaded      = load(file_name)
         loaded_args = loaded['args']
-        print (loaded.keys())
-        print (loaded_args)
 
         if i==0:
-            corpus = loaded_args.corpus
-            embedded = loaded_args.m #FIXME
+            corpus    = loaded_args.corpus
+            embedding = loaded_args.embedding
+            window    = loaded_args.window
         else:
-            pass #FIXME
-        Epochs = [1,2,3] #FIXME
-        Losses = [1,2,3] #FIXME
-        plot(Epochs,Losses,label=f'{file_name}')
+            if corpus != loaded_args.corpus    or \
+            embedding != loaded_args.embedding or \
+            window    != loaded_args.window:
+                print ('There is an inconsistency between')
+                print (f'{corpus}: embedding={embedding}, window {window} and')
+                print (f'{corpus}: embedding={loaded_args.embedding}, window {loaded_args.window} and')
 
-    title(f'{corpus} -- Embedding dimensions={embedded}')
+        plot(loaded['Epochs'],loaded['Losses'],label=f'{file_name}, learning rate={loaded_args.lr}, momentum={loaded_args.alpha}')
+
+    title(f'Corpus {corpus}: Embedding dimensions={embedding}, window={loaded_args.window}')
     xlabel('Epoch')
     ylabel('Loss')
     legend()
     savefig(args.output)
+
     if args.show:
         show()
