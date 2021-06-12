@@ -145,7 +145,7 @@ def shuffled(idx_pairs, rg = None):
 #
 # Train neural network
 
-def train(idx_pairs,vocabulary_size,
+def train(W1,W2,idx_pairs,vocabulary_size,
           lr             = 0.01,
           decay_rate     = 0,
           burn_in        = 0,
@@ -154,8 +154,6 @@ def train(idx_pairs,vocabulary_size,
           frequency      = 100,
           alpha          = 0.9,
           rg             = None):
-    W1     = Variable(randn(embedding_dims, vocabulary_size).float(), requires_grad=True)
-    W2     = Variable(randn(vocabulary_size, embedding_dims).float(), requires_grad=True)
     Delta1 = zeros(embedding_dims, vocabulary_size)
     Delta2 = zeros(vocabulary_size, embedding_dims)
     Losses = []
@@ -208,24 +206,47 @@ def read_corpus(file_name):
             yield line.strip('.\n')
 
 
+def train_start(idx_pairs,vocabulary_size,
+          lr             = 0.01,
+          decay_rate     = 0,
+          burn_in        = 0,
+          num_epochs     = 1000,
+          embedding_dims = 5,
+          frequency      = 100,
+          alpha          = 0.9,
+          rg             = None):
+
+    return train(Variable(randn(embedding_dims, vocabulary_size).float(), requires_grad=True),
+                 Variable(randn(vocabulary_size, embedding_dims).float(), requires_grad=True),
+                 idx_pairs,
+                 vocabulary_size,
+                 lr             = lr,
+                 decay_rate     = decay_rate,
+                 burn_in        = burn_in,
+                 num_epochs     = num_epochs,
+                 embedding_dims = embedding_dims,
+                 frequency      = frequency,
+                 alpha          = alpha,
+                 rg             = None)
 
 if __name__=='__main__':
     parser = ArgumentParser('Build word2vector')
-    parser.add_argument('action',      choices=['train', 'test'],                                    help = 'Train weights or test them')
+    parser.add_argument('action',      choices=['train', 'test', 'resume'],                          help = 'Train weights or test them')
     parser.add_argument('--N',                   type = int,   default = 20001,                      help = 'Number of Epochs for training')
     parser.add_argument('--lr',                  type = float, default = 0.01,                       help = 'Learning rate (before decay)')
     parser.add_argument('--alpha',               type = float, default = 0.9,                        help = 'Momentum')
     parser.add_argument('--decay',               type = float, default = [0.01], nargs='+',          help = 'Decay rate for learning')
     parser.add_argument('--frequency',           type = int,   default = 100,                        help = 'Frequency for display')
-    parser.add_argument('--window',         type = int,   default = 2,                          help = 'Window size')
-    parser.add_argument('--embedding',         type = int,   default = 5,                          help = 'Embedding size')
-    parser.add_argument('--output',                  default = 'out',                      help = 'Output file name')
-    parser.add_argument('--burn',      type=int,     default = None,                       help = 'Burn in')
-    parser.add_argument('--show',                    default = False, action='store_true', help ='Show plots')
-    parser.add_argument('--nano',                    default = False, action='store_true', help ='Use nano corpus')
-    parser.add_argument('--shuffle',                 default = False, action='store_true', help ='Shuffle indices before each epoch')
-    parser.add_argument('--corpus',                  default = 'nano-corpus.txt',          help = 'Corpus file name')
-    parser.add_argument('--depth',     type = int,   default = 16,                         help = 'Number of matches to display when testingt')
+    parser.add_argument('--window',              type = int,   default = 2,                          help = 'Window size')
+    parser.add_argument('--embedding',           type = int,   default = 5,                          help = 'Embedding size')
+    parser.add_argument('--output',                            default = 'out',                      help = 'Output file name')
+    parser.add_argument('--saved',                             default = 'out',                      help = 'Output file name')
+    parser.add_argument('--burn',                type=int,     default = None,                       help = 'Burn in')
+    parser.add_argument('--show',                              default = False, action='store_true', help ='Show plots')
+    parser.add_argument('--nano',                              default = False, action='store_true', help ='Use nano corpus')
+    parser.add_argument('--shuffle',                           default = False, action='store_true', help ='Shuffle indices before each epoch')
+    parser.add_argument('--corpus',                            default = 'nano-corpus.txt',          help = 'Corpus file name')
+    parser.add_argument('--depth',               type = int,   default = 16,                         help = 'Number of matches to display when testingt')
     args = parser.parse_args()
 
     if args.action == 'train':
@@ -240,15 +261,15 @@ if __name__=='__main__':
         minimum_loss = float_info.max
 
         for decay_rate in args.decay:
-            W1,W2,Epochs,Losses = train(idx_pairs,vocabulary_size,
-                                        lr             = args.lr,
-                                        decay_rate     = decay_rate,
-                                        burn_in        = 2*args.frequency if args.burn ==None else args.burn,
-                                        num_epochs     = args.N,
-                                        embedding_dims = args.embedding,
-                                        frequency      = args.frequency,
-                                        alpha          = args.alpha,
-                                        rg             = default_rng() if args.shuffle else None)
+            W1,W2,Epochs,Losses = train_start(idx_pairs,vocabulary_size,
+                                              lr             = args.lr,
+                                              decay_rate     = decay_rate,
+                                              burn_in        = 2*args.frequency if args.burn ==None else args.burn,
+                                              num_epochs     = args.N,
+                                              embedding_dims = args.embedding,
+                                              frequency      = args.frequency,
+                                              alpha          = args.alpha,
+                                              rg             = default_rng() if args.shuffle else None)
             plot(Epochs,Losses,label=f'Decay rate={decay_rate}')
 
             if Losses[-1]<minimum_loss:
@@ -272,6 +293,38 @@ if __name__=='__main__':
         title(f'{args.corpus} -- Embedding dimensions={args.embedding}, momentum={args.alpha}')
         savefig(args.output)
 
+    if args.action == 'resume':
+        loaded            = load(f'{args.saved}.pt')
+        W1                = loaded['W1']
+        W2                = loaded['W2']
+        word2idx          = loaded['word2idx']
+        idx2word          = loaded['idx2word']
+        idx_pairs         = loaded['idx_pairs']
+        loaded_args       = loaded['args']
+        _,vocabulary_size = W1.shape
+        W1,W2,Epochs,Losses = train(W1, W2, idx_pairs, vocabulary_size,
+                                    lr             = args.lr,
+                                    decay_rate     = args.decay[0],
+                                    burn_in        = -1,         # force all data to be stored
+                                    num_epochs     = args.N,
+                                    embedding_dims = loaded_args.embedding,
+                                    frequency      = args.frequency,
+                                    alpha          = args.alpha,
+                                    rg             = default_rng() if loaded_args.shuffle else None)
+
+        minimum_loss = Losses[-1]
+        print (f'Saving weights for Loss={minimum_loss} in {args.output}.pt')
+        save (
+            {   'W1'         : W1,
+                'W2'         : W2,
+                'word2idx'   : word2idx,
+                'idx2word'   : idx2word,
+                'decay_rate' : args.decay,
+                'idx_pairs'  : idx_pairs,
+                'args'       : loaded_args,
+                'Epochs'     : Epochs,
+                'Losses'     : Losses},
+            f'{args.output}.pt')
     if args.action == 'test':
         loaded            = load(f'{args.output}.pt')
         W1                = loaded['W1']
