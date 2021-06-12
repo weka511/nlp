@@ -211,21 +211,21 @@ def read_corpus(file_name):
 
 if __name__=='__main__':
     parser = ArgumentParser('Build word2vector')
-    parser.add_argument('action',      choices=['train', 'test'],                          help = 'Train weights or test them')
-    parser.add_argument('--N',         type = int,   default = 20001,                      help = 'Number of Epochs for training')
-    parser.add_argument('--lr',        type = float, default = 0.01,                       help = 'Learning rate (before decay)')
-    parser.add_argument('--alpha',     type = float, default = 0.9,                        help = 'Momentum')
-    parser.add_argument('--decay',     type = float, default = [0.01], nargs='+',          help = 'Decay rate for learning')
-    parser.add_argument('--frequency', type = int,   default = 100,                        help = 'Frequency for display')
-    parser.add_argument('--n',         type = int,   default = 2,                          help = 'Window size')
-    parser.add_argument('--m',         type = int,   default = 5,                          help ='Embedding size')
+    parser.add_argument('action',      choices=['train', 'test'],                                    help = 'Train weights or test them')
+    parser.add_argument('--N',                   type = int,   default = 20001,                      help = 'Number of Epochs for training')
+    parser.add_argument('--lr',                  type = float, default = 0.01,                       help = 'Learning rate (before decay)')
+    parser.add_argument('--alpha',               type = float, default = 0.9,                        help = 'Momentum')
+    parser.add_argument('--decay',               type = float, default = [0.01], nargs='+',          help = 'Decay rate for learning')
+    parser.add_argument('--frequency',           type = int,   default = 100,                        help = 'Frequency for display')
+    parser.add_argument('--window',         type = int,   default = 2,                          help = 'Window size')
+    parser.add_argument('--embedding',         type = int,   default = 5,                          help = 'Embedding size')
     parser.add_argument('--output',                  default = 'out',                      help = 'Output file name')
     parser.add_argument('--burn',      type=int,     default = None,                       help = 'Burn in')
-    parser.add_argument('--show',                    default = False, action='store_true', help='Show plots')
-    parser.add_argument('--nano',                    default = False, action='store_true', help='Use nano corpus')
-    parser.add_argument('--shuffle',                 default = False, action='store_true', help='Shiffle indices before each epoch')
+    parser.add_argument('--show',                    default = False, action='store_true', help ='Show plots')
+    parser.add_argument('--nano',                    default = False, action='store_true', help ='Use nano corpus')
+    parser.add_argument('--shuffle',                 default = False, action='store_true', help ='Shuffle indices before each epoch')
     parser.add_argument('--corpus',                  default = 'nano-corpus.txt',          help = 'Corpus file name')
-    parser.add_argument('--depth',     type = int,   default = 16,                         help ='For test')
+    parser.add_argument('--depth',     type = int,   default = 16,                         help = 'Number of matches to display when testingt')
     args = parser.parse_args()
 
     if args.action == 'train':
@@ -233,7 +233,7 @@ if __name__=='__main__':
                                          [w for w in extract_sentences(extract_tokens(read_text(file_name=args.corpus)))]
         vocabulary,word2idx,idx2word = create_vocabulary(tokenized_corpus)
         vocabulary_size              = len(vocabulary)
-        idx_pairs                    = create_idx_pairs(tokenized_corpus, word2idx, window_size = args.n)
+        idx_pairs                    = create_idx_pairs(tokenized_corpus, word2idx, window_size = args.window)
 
         figure(figsize=(10,10))
 
@@ -245,7 +245,7 @@ if __name__=='__main__':
                                         decay_rate     = decay_rate,
                                         burn_in        = 2*args.frequency if args.burn ==None else args.burn,
                                         num_epochs     = args.N,
-                                        embedding_dims = args.m,
+                                        embedding_dims = args.embedding,
                                         frequency      = args.frequency,
                                         alpha          = args.alpha,
                                         rg             = default_rng() if args.shuffle else None)
@@ -254,18 +254,22 @@ if __name__=='__main__':
             if Losses[-1]<minimum_loss:
                 minimum_loss = Losses[-1]
                 print (f'Saving weights for Loss={minimum_loss} in {args.output}.pt')
-                save ({'W1'         : W1,
-                       'W2'         : W2,
-                       'word2idx'   : word2idx,
-                       'idx2word'   : idx2word,
-                       'decay_rate' : decay_rate,
-                       'idx_pairs'  : idx_pairs},
-                      f'{args.output}.pt')
+                save (
+                    {   'W1'         : W1,
+                        'W2'         : W2,
+                        'word2idx'   : word2idx,
+                        'idx2word'   : idx2word,
+                        'decay_rate' : decay_rate,
+                        'idx_pairs'  : idx_pairs,
+                        'args'       : args,
+                        'Epochs'     : Epochs,
+                        'Losses'     : Losses},
+                    f'{args.output}.pt')
 
         xlabel('Epoch')
         ylabel('Loss')
         legend()
-        title(f'{args.corpus} -- Embedding dimensions={args.m}, momentum={args.alpha}')
+        title(f'{args.corpus} -- Embedding dimensions={args.embedding}, momentum={args.alpha}')
         savefig(args.output)
 
     if args.action == 'test':
@@ -278,12 +282,21 @@ if __name__=='__main__':
 
         _,vocabulary_size = W1.shape
 
+        mismatches = []
         for idx, word in idx2word.items():
             word_vector      = W1[:,idx]
             sims             = matmul(word_vector,W1)/(norm(word_vector)*norm(W1))
             most_similar_ids = flip(sims.argsort(),[0]).tolist()[:args.depth]
             sim_words        = [(idx2word[i],sims[i]) for i in most_similar_ids]
-            print (f'{word}\t{" ".join([f"{w}({sim:.3f})" for w,sim in sim_words])} {"Shuffled" if args.shuffle else ""}')
+            first_word,_     = sim_words[0]
+            if word==first_word:
+                print (f'{" ".join([f"{w}({sim:.3f})" for w,sim in sim_words])} {"Shuffled" if args.shuffle else ""}')
+            else:
+                mismatches.append((word,sim_words))
+        if len(mismatches)>0:
+            print ('There were mismatches')
+            for word,sim_words in mismatches:
+                print (f'{word}\t{" ".join([f"{w}({sim:.3f})" for w,sim in sim_words])} {"Shuffled" if args.shuffle else ""}')
 
     if args.show:
         show()
