@@ -15,12 +15,25 @@
 
 from re import split
 
+# read_text
+#
+# generator for reading text from a corpus
+
 def read_text(file_name='chapter1.txt'):
     with open(file_name) as text_file:
         for line in text_file:
             yield line.strip()
 
+# extract_tokens
+#
+# Extract tokens from text
+
 def extract_tokens(text):
+    # consolidate_apostrophes
+    #
+    # Handle wordds such as "we,ve"
+    #
+    # [..."we", "'", "ve"...] -> [..."we've"...]
     def consolidate_apostrophes(tokens):
         Result = []
         word = tokens[0]
@@ -47,8 +60,11 @@ def extract_tokens(text):
         Tokens = [token.strip() for token in split(r'(\W+)',line.strip()) if len(token.replace(' ','')) != 0]
         if len(Tokens)==0: continue
         for token in consolidate_apostrophes(Tokens):
-            yield token
+            yield token.lower()
 
+# extract_sentences
+#
+# split list of tokens into list of lists
 
 def extract_sentences(Tokens):
     sentence = []
@@ -62,4 +78,3 @@ def extract_sentences(Tokens):
 if __name__=='__main__':
     for sentence in extract_sentences(extract_tokens(read_text())):
         print (sentence)
-
