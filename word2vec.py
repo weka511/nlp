@@ -153,7 +153,8 @@ def train(W1,W2,idx_pairs,vocabulary_size,
           embedding_dims = 5,
           frequency      = 100,
           alpha          = 0.9,
-          rg             = None):
+          shuffle        = False):
+    rg     = default_rng() if shuffle else None
     Delta1 = zeros(embedding_dims, vocabulary_size)
     Delta2 = zeros(vocabulary_size, embedding_dims)
     Losses = []
@@ -206,28 +207,7 @@ def read_corpus(file_name):
             yield line.strip('.\n')
 
 
-def train_start(idx_pairs,vocabulary_size,
-          lr             = 0.01,
-          decay_rate     = 0,
-          burn_in        = 0,
-          num_epochs     = 1000,
-          embedding_dims = 5,
-          frequency      = 100,
-          alpha          = 0.9,
-          rg             = None):
 
-    return train(Variable(randn(embedding_dims, vocabulary_size).float(), requires_grad=True),
-                 Variable(randn(vocabulary_size, embedding_dims).float(), requires_grad=True),
-                 idx_pairs,
-                 vocabulary_size,
-                 lr             = lr,
-                 decay_rate     = decay_rate,
-                 burn_in        = burn_in,
-                 num_epochs     = num_epochs,
-                 embedding_dims = embedding_dims,
-                 frequency      = frequency,
-                 alpha          = alpha,
-                 rg             = None)
 
 if __name__=='__main__':
     parser = ArgumentParser('Build word2vector')
@@ -236,7 +216,7 @@ if __name__=='__main__':
     parser.add_argument('--lr',                  type = float, default = 0.01,                       help = 'Learning rate (before decay)')
     parser.add_argument('--alpha',               type = float, default = 0.9,                        help = 'Momentum')
     parser.add_argument('--decay',               type = float, default = [0.01], nargs='+',          help = 'Decay rate for learning')
-    parser.add_argument('--frequency',           type = int,   default = 100,                        help = 'Frequency for display')
+    parser.add_argument('--frequency',           type = int,   default = 1,                          help = 'Frequency for display')
     parser.add_argument('--window',              type = int,   default = 2,                          help = 'Window size')
     parser.add_argument('--embedding',           type = int,   default = 5,                          help = 'Embedding size')
     parser.add_argument('--output',                            default = 'out',                      help = 'Output file name')
@@ -261,15 +241,20 @@ if __name__=='__main__':
         minimum_loss = float_info.max
 
         for decay_rate in args.decay:
-            W1,W2,Epochs,Losses = train_start(idx_pairs,vocabulary_size,
-                                              lr             = args.lr,
-                                              decay_rate     = decay_rate,
-                                              burn_in        = 2*args.frequency if args.burn ==None else args.burn,
-                                              num_epochs     = args.N,
-                                              embedding_dims = args.embedding,
-                                              frequency      = args.frequency,
-                                              alpha          = args.alpha,
-                                              rg             = default_rng() if args.shuffle else None)
+            W1,W2,Epochs,Losses = train(
+                                    Variable(randn(embedding_dims, vocabulary_size).float(), requires_grad=True),
+                                    Variable(randn(vocabulary_size, embedding_dims).float(), requires_grad=True),
+                                    idx_pairs,
+                                    vocabulary_size,
+                                    lr             = args.lr,
+                                    decay_rate     = decay_rate,
+                                    burn_in        = 2*args.frequency if args.burn ==None else args.burn,
+                                    num_epochs     = args.N,
+                                    embedding_dims = args.embedding,
+                                    frequency      = args.frequency,
+                                    alpha          = args.alpha,
+                                    shuffle        = args.shuffle)
+
             plot(Epochs,Losses,label=f'Decay rate={decay_rate}')
 
             if Losses[-1]<minimum_loss:
@@ -310,7 +295,7 @@ if __name__=='__main__':
                                     embedding_dims = loaded_args.embedding,
                                     frequency      = args.frequency,
                                     alpha          = args.alpha,
-                                    rg             = default_rng() if loaded_args.shuffle else None)
+                                    shuffle        = loaded_args.shuffle)
 
         minimum_loss = Losses[-1]
         print (f'Saving weights for Loss={minimum_loss} in {args.output}.pt')
@@ -325,6 +310,7 @@ if __name__=='__main__':
                 'Epochs'     : Epochs,
                 'Losses'     : Losses},
             f'{args.output}.pt')
+
     if args.action == 'test':
         loaded            = load(f'{args.output}.pt')
         W1                = loaded['W1']
