@@ -24,12 +24,14 @@ if __name__=='__main__':
     parser = ArgumentParser('Plot training from word2vector')
     parser.add_argument('input',       nargs='+',                                           help = 'Files to process')
     parser.add_argument('--output',                  default = 'plot',                      help = 'Output file name')
-    parser.add_argument('--show',                    default = False, action='store_true', help ='Show plots')
+    parser.add_argument('--show',                    default = False, action='store_true',  help ='Show plots')
+    parser.add_argument('--chain',                   default = False, action='store_true',  help ='Clain plots along x axis')
     args = parser.parse_args()
     figure(figsize=(10,10))
     corpus     = None
     embeddings = None
     window     = None
+    T          = 0
     for i,file_name in enumerate(args.input):
         loaded      = load(file_name)
         loaded_args = loaded['args']
@@ -46,7 +48,11 @@ if __name__=='__main__':
                 print (f'{corpus}: embedding={embedding}, window {window} and')
                 print (f'{corpus}: embedding={loaded_args.embedding}, window {loaded_args.window} and')
 
-        plot(loaded['Epochs'],loaded['Losses'],label=f'{file_name}, learning rate={loaded_args.lr}, momentum={loaded_args.alpha}')
+        plot([t+T for t in loaded['Epochs']],loaded['Losses'],
+             label=f'{file_name}, learning rate={loaded_args.lr}, momentum={loaded_args.alpha}')
+
+        if args.chain:
+            T += len(loaded['Epochs'])
 
     title(f'Corpus {corpus}: Embedding dimensions={embedding}, window={loaded_args.window}')
     xlabel('Epoch')

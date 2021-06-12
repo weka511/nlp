@@ -214,7 +214,7 @@ if __name__=='__main__':
     parser.add_argument('action',      choices=['train', 'test', 'resume'],                          help = 'Train weights or test them')
     parser.add_argument('--N',                   type = int,   default = 20001,                      help = 'Number of Epochs for training')
     parser.add_argument('--lr',                  type = float, default = 0.01,                       help = 'Learning rate (before decay)')
-    parser.add_argument('--alpha',               type = float, default = 0.9,                        help = 'Momentum')
+    parser.add_argument('--alpha',               type = float, default = 0.0,                        help = 'Momentum')
     parser.add_argument('--decay',               type = float, default = [0.01], nargs='+',          help = 'Decay rate for learning')
     parser.add_argument('--frequency',           type = int,   default = 1,                          help = 'Frequency for display')
     parser.add_argument('--window',              type = int,   default = 2,                          help = 'Window size')
@@ -297,7 +297,9 @@ if __name__=='__main__':
                                     alpha          = args.alpha,
                                     shuffle        = loaded_args.shuffle)
 
-        minimum_loss = Losses[-1]
+        minimum_loss      = Losses[-1]
+        loaded_args.alpha = args.alpha
+        loaded_args.lr    = args.lr
         print (f'Saving weights for Loss={minimum_loss} in {args.output}.pt')
         save (
             {   'W1'         : W1,
@@ -332,6 +334,7 @@ if __name__=='__main__':
                 print (f'{" ".join([f"{w}({sim:.3f})" for w,sim in sim_words])} {"Shuffled" if args.shuffle else ""}')
             else:
                 mismatches.append((word,sim_words))
+
         if len(mismatches)>0:
             print ('There were mismatches')
             for word,sim_words in mismatches:
