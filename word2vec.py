@@ -19,10 +19,12 @@
 # https://towardsdatascience.com/implementing-word2vec-in-pytorch-skip-gram-model-e6bae040d2fb
 
 from argparse            import ArgumentParser
+from glob                import glob
 from itertools           import chain
 from matplotlib.pyplot   import figure, legend, plot, savefig, show, title, xlabel, ylabel
 from numpy               import array
 from numpy.random        import default_rng
+from os                  import remove
 from sys                 import float_info
 from time                import time
 from tokenizer           import extract_sentences, extract_tokens, read_text
@@ -212,6 +214,20 @@ def read_corpus(file_name):
         for line in f:
             yield line.strip('.\n')
 
+# save_checkpoint
+#
+# Save checkpoint, and delete excess checkpoint files
+
+def save_checkpoint(obj,
+                    base            = 'CHK',
+                    seq             = 0,
+                    max_checkpoints = 3):
+    save(obj,f'{base}{seq}.pt')
+    checkpoints = sorted(glob(f'{base}*.pt'), reverse = True)
+    if len(checkpoints)>max_checkpoints:
+        for file_name in checkpoints[max_checkpoints:]:
+            remove(file_name)
+
 if __name__=='__main__':
     parser = ArgumentParser('Build word2vector')
     parser.add_argument('action', choices=['train',
@@ -233,6 +249,7 @@ if __name__=='__main__':
     parser.add_argument('--corpus',                            default = 'nano-corpus.txt',          help = 'Corpus file name')
     parser.add_argument('--chk',                               default = 'chk',                      help = 'Base for checkpoint file name')
     parser.add_argument('--depth',               type = int,   default = 16,                         help = 'Number of matches to display when testingt')
+    parser.add_argument('--max_checkpoints',     type = int,   default = 3,                          help = 'Maximum number of checkpoints to be retained')
     args = parser.parse_args()
 
     if args.action == 'train':
@@ -247,8 +264,8 @@ if __name__=='__main__':
         minimum_loss = float_info.max
 
         for decay_rate in args.decay:
-            W1 = Variable(randn(args.embedding, vocabulary_size).float(), requires_grad=True),
-            W2 = Variable(randn(vocabulary_size, args.embedding).float(), requires_grad=True),
+            W1 = Variable(randn(args.embedding, vocabulary_size).float(), requires_grad=True)
+            W2 = Variable(randn(vocabulary_size, args.embedding).float(), requires_grad=True)
             W1,W2,Epochs,Losses = train(
                                     W1              = W1,
                                     W2              = W2,
@@ -262,17 +279,19 @@ if __name__=='__main__':
                                     frequency       = args.frequency,
                                     alpha           = args.alpha,
                                     shuffle         = args.shuffle,
-                                    checkpoint      = lambda Epochs,Losses: save (
+                                    checkpoint      = lambda Epochs,Losses: save_checkpoint (
                                         {   'W1'         : W1,
                                             'W2'         : W2,
                                             'word2idx'   : word2idx,
                                             'idx2word'   : idx2word,
                                             'decay_rate' : args.decay,
                                             'idx_pairs'  : idx_pairs,
-                                            'args'       : loaded_args,
+                                            'args'       : args,
                                             'Epochs'     : Epochs,
                                             'Losses'     : Losses},
-                                        f'{args.chk}{Epochs[-1]}.pt'))
+                                       seq             = Epochs[-1],
+                                       base            = args.chk,
+                                       max_checkpoints = args.max_checkpoints))
 
             plot(Epochs,Losses,label=f'Decay rate={decay_rate}')
 
@@ -318,7 +337,7 @@ if __name__=='__main__':
                                     frequency       = args.frequency,
                                     alpha           = args.alpha,
                                     shuffle         = loaded_args.shuffle,
-                                    checkpoint      = lambda Epochs,Losses: save (
+                                    checkpoint      = lambda Epochs,Losses: save_checkpoint (
                                         {   'W1'         : W1,
                                             'W2'         : W2,
                                             'word2idx'   : word2idx,
@@ -328,7 +347,10 @@ if __name__=='__main__':
                                             'args'       : loaded_args,
                                             'Epochs'     : Epochs,
                                             'Losses'     : Losses},
-                                        f'{args.chk}{Epochs[-1]}.pt'))
+                                       seq             = Epochs[-1],
+                                       base            = args.chk,
+                                       max_checkpoints = args.max_checkpoints))
+
 
         minimum_loss      = Losses[-1]
         loaded_args.alpha = args.alpha
