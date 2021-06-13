@@ -24,6 +24,7 @@ from matplotlib.pyplot   import figure, legend, plot, savefig, show, title, xlab
 from numpy               import array
 from numpy.random        import default_rng
 from sys                 import float_info
+from time                import time
 from tokenizer           import extract_sentences, extract_tokens, read_text
 from torch               import dot, flip, from_numpy, load, matmul, norm, randn,  save, zeros
 from torch.autograd      import Variable
@@ -145,18 +146,22 @@ def shuffled(idx_pairs, rg = None):
 #
 # Train neural network
 
-def train(W1,W2,idx_pairs,vocabulary_size,
-          lr             = 0.01,
-          decay_rate     = 0,
-          burn_in        = 0,
-          num_epochs     = 1000,
-          embedding_dims = 5,
-          frequency      = 100,
-          alpha          = 0.9,
-          shuffle        = False):
+def train(W1              = Variable(randn(0,0).float(), requires_grad=True),
+          W2              = Variable(randn(0,0).float(), requires_grad=True),
+          idx_pairs       = [],
+          vocabulary_size = 0,
+          lr              = 0.01,
+          decay_rate      = 0,
+          burn            = 0,
+          num_epochs      = 1000,
+          embedding       = 5,
+          frequency       = 100,
+          alpha           = 0.9,
+          shuffle         = False,
+          checkpoint      = lambda Epochs,Losses: None):
     rg     = default_rng() if shuffle else None
-    Delta1 = zeros(embedding_dims, vocabulary_size)
-    Delta2 = zeros(vocabulary_size, embedding_dims)
+    Delta1 = zeros(embedding, vocabulary_size)
+    Delta2 = zeros(vocabulary_size, embedding)
     Losses = []
     Epochs = []
 
@@ -183,9 +188,10 @@ def train(W1,W2,idx_pairs,vocabulary_size,
 
         if epoch % frequency == 0:
             print(f'Loss at epoch {epoch}: {loss_val/len(idx_pairs)}')
-            if epoch > burn_in:
+            if epoch >= burn:
                 Epochs.append(epoch)
                 Losses.append(loss_val/len(idx_pairs))
+                checkpoint(Epochs,Losses)
 
     return W1,W2,Epochs,Losses
 
@@ -206,31 +212,31 @@ def read_corpus(file_name):
         for line in f:
             yield line.strip('.\n')
 
-
-
-
 if __name__=='__main__':
     parser = ArgumentParser('Build word2vector')
-    parser.add_argument('action',      choices=['train', 'test', 'resume'],                          help = 'Train weights or test them')
+    parser.add_argument('action', choices=['train',
+                                           'test',
+                                           'resume'],                                                help = 'Train weights or test them')
     parser.add_argument('--N',                   type = int,   default = 20001,                      help = 'Number of Epochs for training')
-    parser.add_argument('--lr',                  type = float, default = 0.01,                       help = 'Learning rate (before decay)')
+    parser.add_argument('--lr',                  type = float, default = 0.001,                       help = 'Learning rate (before decay)')
     parser.add_argument('--alpha',               type = float, default = 0.0,                        help = 'Momentum')
     parser.add_argument('--decay',               type = float, default = [0.01], nargs='+',          help = 'Decay rate for learning')
     parser.add_argument('--frequency',           type = int,   default = 1,                          help = 'Frequency for display')
     parser.add_argument('--window',              type = int,   default = 2,                          help = 'Window size')
     parser.add_argument('--embedding',           type = int,   default = 5,                          help = 'Embedding size')
-    parser.add_argument('--output',                            default = 'out',                      help = 'Output file name')
-    parser.add_argument('--saved',                             default = 'out',                      help = 'Output file name')
-    parser.add_argument('--burn',                type=int,     default = None,                       help = 'Burn in')
-    parser.add_argument('--show',                              default = False, action='store_true', help ='Show plots')
-    parser.add_argument('--nano',                              default = False, action='store_true', help ='Use nano corpus')
-    parser.add_argument('--shuffle',                           default = False, action='store_true', help ='Shuffle indices before each epoch')
+    parser.add_argument('--output',                            default = 'out',                      help = 'Output file name (train or resume)')
+    parser.add_argument('--saved',                             default = 'out',                      help = 'Saved weights (resume or test)')
+    parser.add_argument('--burn',                type=int,     default = 0,                          help = 'Burn in')
+    parser.add_argument('--show',                              default = False, action='store_true', help = 'Show plots')
+    parser.add_argument('--nano',                              default = False, action='store_true', help = 'Use nano corpus')
+    parser.add_argument('--shuffle',                           default = False, action='store_true', help = 'Shuffle indices before each epoch')
     parser.add_argument('--corpus',                            default = 'nano-corpus.txt',          help = 'Corpus file name')
+    parser.add_argument('--chk',                               default = 'chk',                      help = 'Base for checkpoint file name')
     parser.add_argument('--depth',               type = int,   default = 16,                         help = 'Number of matches to display when testingt')
     args = parser.parse_args()
 
     if args.action == 'train':
-        tokenized_corpus             = tokenize_corpus(read_corpus(args.corpus)) if args.nano else \
+        tokenized_corpus             = tokenize_corpus(read_corpus(args.corpus)) if args.nano else                        \
                                          [w for w in extract_sentences(extract_tokens(read_text(file_name=args.corpus)))]
         vocabulary,word2idx,idx2word = create_vocabulary(tokenized_corpus)
         vocabulary_size              = len(vocabulary)
@@ -241,19 +247,32 @@ if __name__=='__main__':
         minimum_loss = float_info.max
 
         for decay_rate in args.decay:
+            W1 = Variable(randn(args.embedding, vocabulary_size).float(), requires_grad=True),
+            W2 = Variable(randn(vocabulary_size, args.embedding).float(), requires_grad=True),
             W1,W2,Epochs,Losses = train(
-                                    Variable(randn(embedding_dims, vocabulary_size).float(), requires_grad=True),
-                                    Variable(randn(vocabulary_size, embedding_dims).float(), requires_grad=True),
-                                    idx_pairs,
-                                    vocabulary_size,
-                                    lr             = args.lr,
-                                    decay_rate     = decay_rate,
-                                    burn_in        = 2*args.frequency if args.burn ==None else args.burn,
-                                    num_epochs     = args.N,
-                                    embedding_dims = args.embedding,
-                                    frequency      = args.frequency,
-                                    alpha          = args.alpha,
-                                    shuffle        = args.shuffle)
+                                    W1              = W1,
+                                    W2              = W2,
+                                    idx_pairs       = idx_pairs,
+                                    vocabulary_size = vocabulary_size,
+                                    lr              = args.lr,
+                                    decay_rate      = decay_rate,
+                                    burn            = args.burn,
+                                    num_epochs      = args.N,
+                                    embedding       = args.embedding,
+                                    frequency       = args.frequency,
+                                    alpha           = args.alpha,
+                                    shuffle         = args.shuffle,
+                                    checkpoint      = lambda Epochs,Losses: save (
+                                        {   'W1'         : W1,
+                                            'W2'         : W2,
+                                            'word2idx'   : word2idx,
+                                            'idx2word'   : idx2word,
+                                            'decay_rate' : args.decay,
+                                            'idx_pairs'  : idx_pairs,
+                                            'args'       : loaded_args,
+                                            'Epochs'     : Epochs,
+                                            'Losses'     : Losses},
+                                        f'{args.chk}{Epochs[-1]}.pt'))
 
             plot(Epochs,Losses,label=f'Decay rate={decay_rate}')
 
@@ -287,15 +306,29 @@ if __name__=='__main__':
         idx_pairs         = loaded['idx_pairs']
         loaded_args       = loaded['args']
         _,vocabulary_size = W1.shape
-        W1,W2,Epochs,Losses = train(W1, W2, idx_pairs, vocabulary_size,
-                                    lr             = args.lr,
-                                    decay_rate     = args.decay[0],
-                                    burn_in        = -1,         # force all data to be stored
-                                    num_epochs     = args.N,
-                                    embedding_dims = loaded_args.embedding,
-                                    frequency      = args.frequency,
-                                    alpha          = args.alpha,
-                                    shuffle        = loaded_args.shuffle)
+        W1,W2,Epochs,Losses = train(W1              = W1,
+                                    W2              = W2,
+                                    idx_pairs       = idx_pairs,
+                                    vocabulary_size = vocabulary_size,
+                                    lr              = args.lr,
+                                    decay_rate      = args.decay[0],
+                                    burn            = -1,         # force all data to be stored
+                                    num_epochs      = args.N,
+                                    embedding       = loaded_args.embedding,
+                                    frequency       = args.frequency,
+                                    alpha           = args.alpha,
+                                    shuffle         = loaded_args.shuffle,
+                                    checkpoint      = lambda Epochs,Losses: save (
+                                        {   'W1'         : W1,
+                                            'W2'         : W2,
+                                            'word2idx'   : word2idx,
+                                            'idx2word'   : idx2word,
+                                            'decay_rate' : args.decay,
+                                            'idx_pairs'  : idx_pairs,
+                                            'args'       : loaded_args,
+                                            'Epochs'     : Epochs,
+                                            'Losses'     : Losses},
+                                        f'{args.chk}{Epochs[-1]}.pt'))
 
         minimum_loss      = Losses[-1]
         loaded_args.alpha = args.alpha
