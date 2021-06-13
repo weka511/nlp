@@ -13,15 +13,15 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>
 #
-#
+#    Plot learning curves for a single corpus
 
-from argparse            import ArgumentParser
-from glob                import glob
-from matplotlib.pyplot   import figure, legend, plot, savefig, show, suptitle, title, xlabel, ylabel
-from torch import load
+from argparse          import ArgumentParser
+from glob              import glob
+from matplotlib.pyplot import figure, legend, plot, savefig, show, suptitle, title, xlabel, ylabel
+from torch             import load
 
 if __name__=='__main__':
-    parser = ArgumentParser('Plot training from word2vector')
+    parser = ArgumentParser('Plot Plot learning curves for a single corpus')
     parser.add_argument('input',    nargs='+',                                        help = 'Files to process (may be globbed)')
     parser.add_argument('--output',            default = 'plot',                      help = 'Output file name')
     parser.add_argument('--show',              default = False, action='store_true',  help ='Show plots')
