@@ -17,23 +17,23 @@
 
 from argparse            import ArgumentParser
 from glob                import glob
-from matplotlib.pyplot   import figure, legend, plot, savefig, show, title, xlabel, ylabel
+from matplotlib.pyplot   import figure, legend, plot, savefig, show, suptitle, title, xlabel, ylabel
 from torch import load
 
 if __name__=='__main__':
     parser = ArgumentParser('Plot training from word2vector')
-    parser.add_argument('input',       nargs='+',                                           help = 'Files to process')
-    parser.add_argument('--output',                  default = 'plot',                      help = 'Output file name')
-    parser.add_argument('--show',                    default = False, action='store_true',  help ='Show plots')
-    parser.add_argument('--chain',                   default = False, action='store_true',  help ='Chain plots along x axis')
+    parser.add_argument('input',    nargs='+',                                        help = 'Files to process (may be globbed)')
+    parser.add_argument('--output',            default = 'plot',                      help = 'Output file name')
+    parser.add_argument('--show',              default = False, action='store_true',  help ='Show plots')
+    parser.add_argument('--chain',             default = False, action='store_true',  help ='Chain plots along x axis')
     args = parser.parse_args()
     figure(figsize=(10,10))
     corpus     = None
     embeddings = None
     window     = None
     T          = 0    # offset for plots of chain specified
-    file_names = glob(f'{args.input[0]}') if len(args.input)==1 else args.input
-    for i,file_name in enumerate(file_names):
+
+    for i,file_name in enumerate([name for file_spec in args.input for name in glob(f'{file_spec}')]):
         loaded      = load(file_name)
         loaded_args = loaded['args']
 
@@ -55,7 +55,8 @@ if __name__=='__main__':
         if args.chain:
             T += len(loaded['Epochs'])
 
-    title(f'Corpus {corpus}: Embedding dimensions={embedding}, window={loaded_args.window}')
+    suptitle(f'{corpus}')
+    title(f'Embedding = {embedding}, window = {loaded_args.window}')
     xlabel('Epoch')
     ylabel('Loss')
     legend()
