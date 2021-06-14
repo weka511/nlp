@@ -10,4 +10,3 @@ word2vec.py |This program has been written to test my understanding of [word2vec
 nlp.wpr|Wing IDE Project file
 64317-0.txt|The Great Gatsby
 chapter1.txt|First chapter of The Great Gatsby
-nano_corpus.txt|Tiny corpus for developing word2vec.py

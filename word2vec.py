@@ -222,7 +222,7 @@ def save_checkpoint(obj,
                     base            = 'CHK',
                     seq             = 0,
                     max_checkpoints = 3):
-    save(obj,f'{base}{seq}.pt')
+    save(obj,f'{base}{seq:06d}.pt')
     checkpoints = sorted(glob(f'{base}*.pt'), reverse = True)
     if len(checkpoints)>max_checkpoints:
         for file_name in checkpoints[max_checkpoints:]:
@@ -244,17 +244,15 @@ if __name__=='__main__':
     parser.add_argument('--saved',                             default = 'out',                      help = 'Saved weights (resume or test)')
     parser.add_argument('--burn',                type=int,     default = 0,                          help = 'Burn in')
     parser.add_argument('--show',                              default = False, action='store_true', help = 'Show plots')
-    parser.add_argument('--nano',                              default = False, action='store_true', help = 'Use nano corpus')
     parser.add_argument('--shuffle',                           default = False, action='store_true', help = 'Shuffle indices before each epoch')
-    parser.add_argument('--corpus',                            default = 'nano-corpus.txt',          help = 'Corpus file name')
+    parser.add_argument('--corpus',                            default = None,                       help = 'Corpus file name')
     parser.add_argument('--chk',                               default = 'chk',                      help = 'Base for checkpoint file name')
     parser.add_argument('--depth',               type = int,   default = 16,                         help = 'Number of matches to display when testingt')
     parser.add_argument('--max_checkpoints',     type = int,   default = 3,                          help = 'Maximum number of checkpoints to be retained')
     args = parser.parse_args()
 
     if args.action == 'train':
-        tokenized_corpus             = tokenize_corpus(read_corpus(args.corpus)) if args.nano else                        \
-                                         [w for w in extract_sentences(extract_tokens(read_text(file_name=args.corpus)))]
+        tokenized_corpus             = [word for word in extract_sentences(extract_tokens(read_text(file_name=args.corpus)))]
         vocabulary,word2idx,idx2word = create_vocabulary(tokenized_corpus)
         vocabulary_size              = len(vocabulary)
         idx_pairs                    = create_idx_pairs(tokenized_corpus, word2idx, window_size = args.window)
