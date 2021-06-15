@@ -25,6 +25,7 @@ from matplotlib.pyplot   import figure, legend, plot, savefig, show, title, xlab
 from numpy               import array
 from numpy.random        import default_rng
 from os                  import remove
+from re                  import compile
 from sys                 import float_info
 from time                import time
 from tokenizer           import extract_sentences, extract_tokens, read_text
@@ -228,6 +229,23 @@ def save_checkpoint(obj,
         for file_name in checkpoints[max_checkpoints:]:
             remove(file_name)
 
+# get_output
+#
+# Used to determine output file name
+
+def get_output(output=None, saved=None, corpus=[]):
+    if output != None: return output
+    if saved!= None:
+        match = compile('(\D+)(\d*)').search(saved)
+        if match:
+            digits = match[2]
+            seq = int(digits) if len(digits)>0 else -1
+            return f'{match[1]}{seq+1}'
+    else:
+        head  = corpus[0]
+        parts = head.split('.')
+        return f'{parts[0]}-0'
+
 if __name__=='__main__':
     parser = ArgumentParser('Build word2vector')
     parser.add_argument('action', choices=['train',
@@ -240,19 +258,21 @@ if __name__=='__main__':
     parser.add_argument('--frequency',           type = int,   default = 1,                          help = 'Frequency for display')
     parser.add_argument('--window',              type = int,   default = 2,                          help = 'Window size')
     parser.add_argument('--embedding',           type = int,   default = 5,                          help = 'Embedding size')
-    parser.add_argument('--output',                            default = 'out',                      help = 'Output file name (train or resume)')
-    parser.add_argument('--saved',                             default = 'out',                      help = 'Saved weights (resume or test)')
+    parser.add_argument('--output',                            default = None,                       help = 'Output file name (train or resume)')
+    parser.add_argument('--saved',                             default = None,                       help = 'Saved weights (resume or test)')
     parser.add_argument('--burn',                type=int,     default = 0,                          help = 'Burn in')
     parser.add_argument('--show',                              default = False, action='store_true', help = 'Show plots')
     parser.add_argument('--shuffle',                           default = False, action='store_true', help = 'Shuffle indices before each epoch')
-    parser.add_argument('--corpus',                            default = None,                       help = 'Corpus file name')
+    parser.add_argument('--corpus',                            default = None,  nargs='+',           help = 'Corpus file name')
     parser.add_argument('--chk',                               default = 'chk',                      help = 'Base for checkpoint file name')
     parser.add_argument('--depth',               type = int,   default = 16,                         help = 'Number of matches to display when testingt')
     parser.add_argument('--max_checkpoints',     type = int,   default = 3,                          help = 'Maximum number of checkpoints to be retained')
     args = parser.parse_args()
 
+
     if args.action == 'train':
-        tokenized_corpus             = [word for word in extract_sentences(extract_tokens(read_text(file_name=args.corpus)))]
+        output_file                  = get_output(output=args.output, corpus=args.corpus)
+        tokenized_corpus             = [word for word in extract_sentences(extract_tokens(read_text(file_names=args.corpus)))]
         vocabulary,word2idx,idx2word = create_vocabulary(tokenized_corpus)
         vocabulary_size              = len(vocabulary)
         idx_pairs                    = create_idx_pairs(tokenized_corpus, word2idx, window_size = args.window)
@@ -295,7 +315,7 @@ if __name__=='__main__':
 
             if Losses[-1]<minimum_loss:
                 minimum_loss = Losses[-1]
-                print (f'Saving weights for Loss={minimum_loss} in {args.output}.pt')
+                print (f'Saving weights for Loss={minimum_loss} in {output_file}.pt')
                 save (
                     {   'W1'         : W1,
                         'W2'         : W2,
@@ -306,7 +326,7 @@ if __name__=='__main__':
                         'args'       : args,
                         'Epochs'     : Epochs,
                         'Losses'     : Losses},
-                    f'{args.output}.pt')
+                    f'{output_file}.pt')
 
         xlabel('Epoch')
         ylabel('Loss')
@@ -315,6 +335,7 @@ if __name__=='__main__':
         savefig(args.output)
 
     if args.action == 'resume':
+        output_file       = get_output(output=args.output, saved=args.saved)
         loaded            = load(f'{args.saved}.pt')
         W1                = loaded['W1']
         W2                = loaded['W2']
@@ -353,7 +374,7 @@ if __name__=='__main__':
         minimum_loss      = Losses[-1]
         loaded_args.alpha = args.alpha
         loaded_args.lr    = args.lr
-        print (f'Saving weights for Loss={minimum_loss} in {args.output}.pt')
+        print (f'Saving weights for Loss={minimum_loss} in {output_file}.pt')
         save (
             {   'W1'         : W1,
                 'W2'         : W2,
@@ -364,7 +385,7 @@ if __name__=='__main__':
                 'args'       : loaded_args,
                 'Epochs'     : Epochs,
                 'Losses'     : Losses},
-            f'{args.output}.pt')
+            f'{output_file}.pt')
 
     if args.action == 'test':
         loaded            = load(f'{args.output}.pt')

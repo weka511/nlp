@@ -19,10 +19,11 @@ from re import split
 #
 # generator for reading text from a corpus
 
-def read_text(file_name='chapter1.txt'):
-    with open(file_name) as text_file:
-        for line in text_file:
-            yield line.strip()
+def read_text(file_names = ['chapter1.txt']):
+    for file_name in file_names:
+        with open(file_name) as text_file:
+            for line in text_file:
+                yield line.strip()
 
 # extract_tokens
 #
