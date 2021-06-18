@@ -162,6 +162,7 @@ def train(W1              = Variable(randn(0,0).float(), requires_grad=True),
           alpha           = 0.9,
           shuffle         = False,
           checkpoint      = lambda Epochs,Losses: None):
+    start  = time()
     rg     = default_rng() if shuffle else None
     Delta1 = zeros(embedding, vocabulary_size)
     Delta2 = zeros(vocabulary_size, embedding)
@@ -190,7 +191,7 @@ def train(W1              = Variable(randn(0,0).float(), requires_grad=True),
             W2.grad.data.zero_()
 
         if epoch % frequency == 0:
-            print(f'Loss at epoch {epoch}: {loss_val/len(idx_pairs)}')
+            print(f'Loss at epoch {epoch}: {loss_val/len(idx_pairs)}. Time/epoch = {(time()-start)/(epoch+1):.0f} seconds')
             if epoch >= burn:
                 Epochs.append(epoch)
                 Losses.append(loss_val/len(idx_pairs))
@@ -252,12 +253,12 @@ if __name__=='__main__':
                                            'test',
                                            'resume'],                                                help = 'Train weights or test them')
     parser.add_argument('--N',                   type = int,   default = 20001,                      help = 'Number of Epochs for training')
-    parser.add_argument('--lr',                  type = float, default = 0.001,                       help = 'Learning rate (before decay)')
+    parser.add_argument('--lr',                  type = float, default = 0.001,                      help = 'Learning rate (before decay)')
     parser.add_argument('--alpha',               type = float, default = 0.0,                        help = 'Momentum')
     parser.add_argument('--decay',               type = float, default = [0.01], nargs='+',          help = 'Decay rate for learning')
     parser.add_argument('--frequency',           type = int,   default = 1,                          help = 'Frequency for display')
     parser.add_argument('--window',              type = int,   default = 2,                          help = 'Window size')
-    parser.add_argument('--embedding',           type = int,   default = 5,                          help = 'Embedding size')
+    parser.add_argument('--embedding',           type = int,   default = 100,                        help = 'Embedding size')
     parser.add_argument('--output',                            default = None,                       help = 'Output file name (train or resume)')
     parser.add_argument('--saved',                             default = None,                       help = 'Saved weights (resume or test)')
     parser.add_argument('--burn',                type=int,     default = 0,                          help = 'Burn in')
@@ -269,13 +270,13 @@ if __name__=='__main__':
     parser.add_argument('--max_checkpoints',     type = int,   default = 3,                          help = 'Maximum number of checkpoints to be retained')
     args = parser.parse_args()
 
-
     if args.action == 'train':
         output_file                  = get_output(output=args.output, corpus=args.corpus)
         tokenized_corpus             = [word for word in extract_sentences(extract_tokens(read_text(file_names=args.corpus)))]
         vocabulary,word2idx,idx2word = create_vocabulary(tokenized_corpus)
         vocabulary_size              = len(vocabulary)
         idx_pairs                    = create_idx_pairs(tokenized_corpus, word2idx, window_size = args.window)
+        print (f'Vocabulary size={vocabulary_size:,d} words. There are {len(idx_pairs):,d} idx pairs')
 
         figure(figsize=(10,10))
 
