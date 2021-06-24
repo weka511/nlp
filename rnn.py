@@ -1,3 +1,5 @@
+# https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html
+
 from __future__        import unicode_literals, print_function, division
 from glob              import glob
 from io                import open
@@ -154,24 +156,19 @@ if __name__=='__main__':
         category, line, category_tensor, line_tensor = randomTrainingExample()
         print('category =', category, '/ line =', line)
 
-    criterion = NLLLoss()
+    criterion     = NLLLoss()
     learning_rate = 0.005
+    n_iters       = 100000
+    print_every   = 5000
+    plot_every    = 1000
+    current_loss  = 0 # Keep track of losses for plotting
+    all_losses   = []
+    start        = time()
 
-
-
-    n_iters = 100000
-    print_every = 5000
-    plot_every = 1000
-
-    # Keep track of losses for plotting
-    current_loss = 0
-    all_losses = []
-
-    start = time()
     for iter in range(1, n_iters + 1):
         category, line, category_tensor, line_tensor = randomTrainingExample()
-        output, loss = train(category_tensor, line_tensor)
-        current_loss += loss
+        output, loss                                 = train(category_tensor, line_tensor)
+        current_loss                                += loss
 
         # Print iter number, loss, name and guess
         if iter % print_every == 0:
@@ -188,23 +185,20 @@ if __name__=='__main__':
     plot(all_losses)
 
     # Keep track of correct guesses in a confusion matrix
-    confusion = zeros(n_categories, n_categories)
+    confusion   = zeros(n_categories, n_categories)
     n_confusion = 10000
-
-
 
     # Go through a bunch of examples and record which are correctly guessed
     for i in range(n_confusion):
         category, line, category_tensor, line_tensor = randomTrainingExample()
-        output = evaluate(line_tensor)
-        guess, guess_i = categoryFromOutput(output)
-        category_i = all_categories.index(category)
-        confusion[category_i][guess_i] += 1
+        output                                       = evaluate(line_tensor)
+        guess, guess_i                               = categoryFromOutput(output)
+        category_i                                   = all_categories.index(category)
+        confusion[category_i][guess_i]              += 1
 
     # Normalize by dividing every row by its sum
     for i in range(n_categories):
         confusion[i] = confusion[i] / confusion[i].sum()
-
 
     # Set up plot
     fig = figure()
