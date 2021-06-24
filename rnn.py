@@ -34,10 +34,6 @@ class RNN(Module):
         return zeros(1, self.hidden_size)
 
 
-def findFiles(path):
-    return glob(path)
-
-
 # Turn a Unicode string to plain ASCII, thanks to https://stackoverflow.com/a/518232/2809427
 def unicodeToAscii(s):
     return ''.join(c for c in normalize('NFD', s) if category(c) != 'Mn' and c in all_letters)
@@ -113,49 +109,18 @@ def evaluate(line_tensor):
     return output
 
 if __name__=='__main__':
-    print(findFiles('data/names/*.txt'))
-
-    all_letters = ascii_letters + " .,;'"
-    n_letters = len(all_letters)
-
-    print(unicodeToAscii('Ślusàrski'))
-
-    # Build the category_lines dictionary, a list of names per language
+    all_letters    = ascii_letters + " .,;'"
+    n_letters      = len(all_letters)
     category_lines = {}
     all_categories = []
 
-    for filename in findFiles('data/names/*.txt'):
-        category1 = splitext(basename(filename))[0]
-        all_categories.append(category1)
-        lines = readLines(filename)
-        category_lines[category1] = lines
+    for filename in glob('data/names/*.txt'):
+        all_categories.append(splitext(basename(filename))[0])
+        category_lines[all_categories[-1]] =  readLines(filename)
 
-    n_categories = len(all_categories)
-    print(category_lines['Italian'][:5])
-
-    print(letterToTensor('J'))
-
-    print(lineToTensor('Jones').size())
-
-    n_hidden = 128
-    rnn = RNN(n_letters, n_hidden, n_categories)
-    input = letterToTensor('A')
-    hidden = zeros(1, n_hidden)
-
-    output, next_hidden = rnn(input, hidden)
-
-    input = lineToTensor('Albert')
-    hidden = zeros(1, n_hidden)
-
-    output, next_hidden = rnn(input[0], hidden)
-    print(output)
-
-    print(categoryFromOutput(output))
-
-    for i in range(10):
-        category, line, category_tensor, line_tensor = randomTrainingExample()
-        print('category =', category, '/ line =', line)
-
+    n_categories  = len(all_categories)
+    n_hidden      = 128
+    rnn           = RNN(n_letters, n_hidden, n_categories)
     criterion     = NLLLoss()
     learning_rate = 0.005
     n_iters       = 100000
@@ -173,16 +138,13 @@ if __name__=='__main__':
         # Print iter number, loss, name and guess
         if iter % print_every == 0:
             guess, guess_i = categoryFromOutput(output)
-            correct = '✓' if guess == category else '✗ (%s)' % category
-            print('%d %d%% (%s) %.4f %s / %s %s' % (iter, iter / n_iters * 100, timeSince(start), loss, line, guess, correct))
+            correct = '✓' if guess == category else f'✗ ({category})'
+            print (f'{iter}, {int((iter / n_iters) * 100)}%, {timeSince(start)}, {loss:.4f}, {line}, {guess}, {correct}')
 
         # Add current loss avg to list of losses
         if iter % plot_every == 0:
             all_losses.append(current_loss / plot_every)
             current_loss = 0
-
-    figure()
-    plot(all_losses)
 
     # Keep track of correct guesses in a confusion matrix
     confusion   = zeros(n_categories, n_categories)
@@ -201,18 +163,20 @@ if __name__=='__main__':
         confusion[i] = confusion[i] / confusion[i].sum()
 
     # Set up plot
-    fig = figure()
-    ax  = fig.add_subplot(111)
-    cax = ax.matshow(confusion.numpy())
+    fig = figure(figsize=(20,20))
+    ax1 = fig.add_subplot(211)
+    ax1.plot(all_losses)
+
+    ax2 = fig.add_subplot(212)
+    cax = ax2.matshow(confusion.numpy())
     fig.colorbar(cax)
 
     # Set up axes
-    ax.set_xticklabels([''] + all_categories, rotation=90)
-    ax.set_yticklabels([''] + all_categories)
+    ax2.set_xticklabels([''] + all_categories, rotation=90)
+    ax2.set_yticklabels([''] + all_categories)
 
     # Force label at every tick
-    ax.xaxis.set_major_locator(MultipleLocator(1))
-    ax.yaxis.set_major_locator(MultipleLocator(1))
+    ax2.xaxis.set_major_locator(MultipleLocator(1))
+    ax2.yaxis.set_major_locator(MultipleLocator(1))
 
-    # sphinx_gallery_thumbnail_number = 2
     show()
