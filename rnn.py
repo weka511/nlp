@@ -33,48 +33,71 @@ class RNN(Module):
     def initHidden(self):
         return zeros(1, self.hidden_size)
 
+class Alphabet:
+    def __init__(self):
+        self.all_letters = ascii_letters + " .,;'"
+        self.n           = len(self.all_letters)
 
-# Turn a Unicode string to plain ASCII, thanks to https://stackoverflow.com/a/518232/2809427
-def unicodeToAscii(s):
-    return ''.join(c for c in normalize('NFD', s) if category(c) != 'Mn' and c in all_letters)
+    # Turn a Unicode string to plain ASCII, thanks to https://stackoverflow.com/a/518232/2809427
+    def unicodeToAscii(self,s):
+        return ''.join(c for c in normalize('NFD', s) if category(c) != 'Mn' and c in self.all_letters)
+
+    def letterToIndex(self,letter):
+        return self.all_letters.find(letter)
+
+    # Turn a line into a <line_length x 1 x n>,
+    # or an array of one-hot letter vectors
+    def lineToTensor(self,line):
+        tensor = zeros(len(line), 1, self.n)
+        for li, letter in enumerate(line):
+            tensor[li][0][self.letterToIndex(letter)] = 1
+        return tensor
+
+class Categories:
+    def __init__(self):
+        self.category_lines = {}
+        self.all_categories = []
+
+    def add(self,filename):
+        self.all_categories.append(splitext(basename(filename))[0])
+        self.category_lines[self.all_categories[-1]] =  readLines(filename,alphabet)
+
+    def get_n(self):
+        return len(self.all_categories)
+
+    def fromOutput(self,output):
+        top_n, top_i = output.topk(1)
+        category_i   = top_i[0].item()
+        return self.all_categories[category_i], category_i
+
+    def get_random(self,alphabet):
+        category        = randomChoice(self.all_categories)
+        line            = randomChoice(self.category_lines[category])
+        category_tensor = tensor([self.all_categories.index(category)], dtype=long)
+        line_tensor     = alphabet.lineToTensor(line)
+        return category, line, category_tensor, line_tensor
+
+    def get_index(self,name):
+        return self.all_categories.index(name)
+
+class Timer:
+    def __init__(self):
+        self.start = time()
+
+    def since(self):
+        s   = time() - self.start
+        m   = floor(s / 60)
+        s  -= m * 60
+        return (m, s)
 
 # Read a file and split into lines
-def readLines(filename):
-    lines = open(filename, encoding='utf-8').read().strip().split('\n')
-    return [unicodeToAscii(line) for line in lines]
-
-def letterToIndex(letter):
-    return all_letters.find(letter)
-
-# Just for demonstration, turn a letter into a <1 x n_letters> Tensor
-def letterToTensor(letter):
-    tensor = zeros(1, n_letters)
-    tensor[0][letterToIndex(letter)] = 1
-    return tensor
-
-# Turn a line into a <line_length x 1 x n_letters>,
-# or an array of one-hot letter vectors
-def lineToTensor(line):
-    tensor = zeros(len(line), 1, n_letters)
-    for li, letter in enumerate(line):
-        tensor[li][0][letterToIndex(letter)] = 1
-    return tensor
-
-def categoryFromOutput(output):
-    top_n, top_i = output.topk(1)
-    category_i   = top_i[0].item()
-    return all_categories[category_i], category_i
-
+def readLines(filename,alphabet):
+    lines  = open(filename, encoding='utf-8').read().strip().split('\n')
+    return [alphabet.unicodeToAscii(line) for line in lines]
 
 def randomChoice(l):
     return l[randint(0, len(l) - 1)]
 
-def randomTrainingExample():
-    category        = randomChoice(all_categories)
-    line            = randomChoice(category_lines[category])
-    category_tensor = tensor([all_categories.index(category)], dtype=long)
-    line_tensor     = lineToTensor(line)
-    return category, line, category_tensor, line_tensor
 
 def train(category_tensor, line_tensor):
     hidden = rnn.initHidden()
@@ -93,13 +116,6 @@ def train(category_tensor, line_tensor):
 
     return output, loss.item()
 
-def timeSince(since):
-    now = time()
-    s   = now - since
-    m   = floor(s / 60)
-    s  -= m * 60
-    return '%dm %ds' % (m, s)
-
 def evaluate(line_tensor):
     hidden = rnn.initHidden()
 
@@ -109,57 +125,54 @@ def evaluate(line_tensor):
     return output
 
 if __name__=='__main__':
-    all_letters    = ascii_letters + " .,;'"
-    n_letters      = len(all_letters)
-    category_lines = {}
-    all_categories = []
+    # Hyperparameters
 
-    for filename in glob('data/names/*.txt'):
-        all_categories.append(splitext(basename(filename))[0])
-        category_lines[all_categories[-1]] =  readLines(filename)
-
-    n_categories  = len(all_categories)
-    n_hidden      = 128
-    rnn           = RNN(n_letters, n_hidden, n_categories)
     criterion     = NLLLoss()
     learning_rate = 0.005
     n_iters       = 100000
     print_every   = 5000
     plot_every    = 1000
-    current_loss  = 0 # Keep track of losses for plotting
-    all_losses   = []
-    start        = time()
+    n_confusion   = 10000
+    n_hidden      = 128
+
+    alphabet   = Alphabet()
+    categories = Categories()
+    timer      = Timer()
+
+    for filename in glob('data/names/*.txt'):
+        categories.add(filename)
+
+    rnn           = RNN(alphabet.n, n_hidden, categories.get_n())
+    current_loss  = 0
+    all_losses    = []
 
     for iter in range(1, n_iters + 1):
-        category, line, category_tensor, line_tensor = randomTrainingExample()
+        category, line, category_tensor, line_tensor = categories.get_random(alphabet)
         output, loss                                 = train(category_tensor, line_tensor)
         current_loss                                += loss
 
-        # Print iter number, loss, name and guess
         if iter % print_every == 0:
-            guess, guess_i = categoryFromOutput(output)
+            guess, guess_i = categories.fromOutput(output)
             correct = '✓' if guess == category else f'✗ ({category})'
-            print (f'{iter}, {int((iter / n_iters) * 100)}%, {timeSince(start)}, {loss:.4f}, {line}, {guess}, {correct}')
+            m,s     = timer.since()
+            print (f'{iter}, {int((iter / n_iters) * 100)}%, {m}m {s:0f}s, {loss:.4f}, {line}, {guess}, {correct}')
 
-        # Add current loss avg to list of losses
         if iter % plot_every == 0:
             all_losses.append(current_loss / plot_every)
             current_loss = 0
 
     # Keep track of correct guesses in a confusion matrix
-    confusion   = zeros(n_categories, n_categories)
-    n_confusion = 10000
+    confusion   = zeros(categories.get_n(), categories.get_n())
 
     # Go through a bunch of examples and record which are correctly guessed
     for i in range(n_confusion):
-        category, line, category_tensor, line_tensor = randomTrainingExample()
-        output                                       = evaluate(line_tensor)
-        guess, guess_i                               = categoryFromOutput(output)
-        category_i                                   = all_categories.index(category)
-        confusion[category_i][guess_i]              += 1
+        category, line, category_tensor, line_tensor        = categories.get_random(alphabet)
+        output                                              = evaluate(line_tensor)
+        guess, guess_i                                      = categories.fromOutput(output)
+        confusion[categories.get_index(category)][guess_i] += 1
 
     # Normalize by dividing every row by its sum
-    for i in range(n_categories):
+    for i in range(categories.get_n()):
         confusion[i] = confusion[i] / confusion[i].sum()
 
     # Set up plot
@@ -172,8 +185,8 @@ if __name__=='__main__':
     fig.colorbar(cax)
 
     # Set up axes
-    ax2.set_xticklabels([''] + all_categories, rotation=90)
-    ax2.set_yticklabels([''] + all_categories)
+    ax2.set_xticklabels([''] + categories.all_categories, rotation=90)
+    ax2.set_yticklabels([''] + categories.all_categories)
 
     # Force label at every tick
     ax2.xaxis.set_major_locator(MultipleLocator(1))
