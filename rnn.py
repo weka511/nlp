@@ -99,19 +99,18 @@ def randomChoice(l):
     return l[randint(0, len(l) - 1)]
 
 
-def train(category_tensor, line_tensor):
-    hidden = rnn.initHidden()
-
-    rnn.zero_grad()
+def train(model,category_tensor, line_tensor, criterion):
+    hidden = model.initHidden()
+    model.zero_grad()
 
     for i in range(line_tensor.size()[0]):
-        output, hidden = rnn(line_tensor[i], hidden)
+        output, hidden = model(line_tensor[i], hidden)
 
     loss = criterion(output, category_tensor)
     loss.backward()
 
     # Add parameters' gradients to their values, multiplied by learning rate
-    for p in rnn.parameters():
+    for p in model.parameters():
         p.data.add_(p.grad.data, alpha=-learning_rate)
 
     return output, loss.item()
@@ -148,14 +147,14 @@ if __name__=='__main__':
 
     for iter in range(1, n_iters + 1):
         category, line, category_tensor, line_tensor = categories.get_random(alphabet)
-        output, loss                                 = train(category_tensor, line_tensor)
+        output, loss                                 = train(rnn, category_tensor, line_tensor, criterion)
         current_loss                                += loss
 
         if iter % print_every == 0:
             guess, guess_i = categories.fromOutput(output)
             correct = '✓' if guess == category else f'✗ ({category})'
             m,s     = timer.since()
-            print (f'{iter}, {int((iter / n_iters) * 100)}%, {m}m {s:0f}s, {loss:.4f}, {line}, {guess}, {correct}')
+            print (f'{iter}, {int((iter / n_iters) * 100)}%, {m}m {s:.0f}s, {loss:.4f}, {line}, {guess}, {correct}')
 
         if iter % plot_every == 0:
             all_losses.append(current_loss / plot_every)
