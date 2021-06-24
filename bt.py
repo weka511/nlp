@@ -1,11 +1,11 @@
 from cycler            import cycler
 from matplotlib.pyplot import figure,bar,xlabel,ylabel,legend,rc, plot,savefig, title, scatter, show
-from numpy             import argsort, exp, zeros, int32, sum, sqrt, log
+from numpy             import argsort, exp, zeros, int32, sum, sqrt, log, argmin,mean,std
 from numpy.random      import rand
 from os                import walk
 from os.path           import join
 from pandas            import read_csv
-from random            import random, randrange, gauss
+from random            import random, randrange, gauss,sample
 from time              import time
 
 
@@ -14,35 +14,39 @@ rc('axes',
    prop_cycle=(cycler(color=['c', 'm', 'y','b','c', 'm', 'y','b']) +
                   cycler(linestyle=[ '--', '--','--','--',':', ':', ':',':'])))
 
-N_TRIALS       = 1
+N_TRIALS       = 25
 N_CONTESTS     = 20
-N_MAX          = 500#None
+N_MAX          = 50#200#None
 MAX_ITERATIONS = 1000
 FREQUENCY      = 150
 PLOT_FILE      = 'bt-iterations'
-EPSILON        = 1e-8
+EPSILON        = 1e-6
 
 train_data    = None
-
+df_colours    = None
+xkcd_colours  = None
 for dirname, _, filenames in walk('./'):
     for filename in filenames:
         path_name = join(dirname, filename)
         if filename.startswith('train'):
             train_data = read_csv(path_name)
+        if filename.startswith('colors'):
+            df_colours = read_csv(path_name)
+            xkcd_colours = df_colours.XKCD_COLORS.dropna()
 
-            # create_wins_losses
-            #
-            # Compute a matrix w[i,k] -- the number of wins for i competing with k
-            def create_wins_losses(Lambdas):
-                w  = zeros((N_MAX,N_MAX))
-                for i in range(N_MAX):
-                    for j in range(N_CONTESTS):
-                        k = (i+randrange(1,N_MAX)) % N_MAX
-                        if random() < Lambdas[i]/(Lambdas[i] + Lambdas[k]):
-                            w[i,k] += 1
-                        else:
-                            w[k,i] += 1
-                return w
+# create_wins_losses
+#
+# Compute a matrix w[i,k] -- the number of wins for i competing with k
+def create_wins_losses(Lambdas):
+    w  = zeros((N_MAX,N_MAX))
+    for i in range(N_MAX):
+        for j in range(N_CONTESTS):
+            k = (i+randrange(1,N_MAX)) % N_MAX
+            if random() < Lambdas[i]/(Lambdas[i] + Lambdas[k]):
+                w[i,k] += 1
+            else:
+                w[k,i] += 1
+    return w
 
 # update
 #
@@ -68,53 +72,62 @@ def normalize(p):
 def rmse(predictions, targets):
     return sqrt(((predictions - targets) ** 2).mean())
 
-for i in range(N_TRIALS):
-    start          = time()
-    Betas          = train_data.target.to_numpy()
-    Lambdas        = exp(Betas)
-    N,_            = train_data.shape
-    if N_MAX==None:
-        N_MAX = N
-    else:
-        Lambdas    = Lambdas[:N_MAX]
+
+start          = time()
+Targets        = train_data.target.to_numpy()
+if N_MAX<len(Targets):
+    Targets = sample(list(Targets),N_MAX)
+Betas          = sorted(Targets)
+index_min_beta = argmin([abs(b) for b in Betas])
+
+Lambdas        = exp(Betas)
+N,_            = train_data.shape
+
+fig            = figure(figsize=(10,10))
+# axes           = fig.subplots(nrows=1,ncols=1)
+
+# plot(range(N_MAX),Betas,#Lambdas/sum(Lambdas),
+             # label     = r'$\lambda$',
+             # linestyle = '-', linewidth=6, color='k')
+
+Scores = zeros((N_MAX,N_TRIALS))
+
+for trial in range(N_TRIALS):
     w              = create_wins_losses( Lambdas)
     w_symmetric    = w + w.transpose()
     W              = sum(w,axis=1)  # Number won by i
-    p              = normalize(rand(N_MAX))
-
-    fig            = figure(figsize=(10,10))
-    axes           = fig.subplots(nrows=2,ncols=1)
-    axes[0].plot(range(N_MAX),Lambdas/sum(Lambdas),
-                 label     = r'$\lambda$',
-                 linestyle = '-',
-                 color     = 'k')
+    Ps             = normalize(rand(N_MAX))
 
     for k in range(MAX_ITERATIONS):
-        p1 = update(p,w_symmetric,W,N_MAX)
-        if (abs(p-p1)<EPSILON*p1).all():
-            p = p1
+        p1 = update(Ps,w_symmetric,W,N_MAX)
+        if (abs(Ps-p1)<EPSILON*p1).all():
+            Ps = p1
             break
-        p  = p1
-        if k%FREQUENCY==0:
-            axes[0].plot(range(N_MAX),p,
-                         label = f'iteration={k}')
+        Ps  = p1
+    Ls = log(Ps)
+    offset = Ls[index_min_beta]-Betas[index_min_beta]
+    LLs = [l - offset for l in Ls]
+    Scores[:,trial] = LLs
+    # plot(range(N_MAX),LLs,  linestyle = ':',color=xkcd_colours[trial%len(xkcd_colours)])
+    if trial%10==0:
+        print (f'Trial {trial}')
 
-    axes[0].plot(range(N_MAX),p,
-                 label     = f'Final',
-        linestyle = '-',
-        color     = 'r')
-    axes[0].legend()
-    axes[0].set_xlabel('index')
-    axes[0].set_ylabel('p')
-    elapsed = int(time() - start)
-    axes[0].set_title(f'{N_MAX} Contestants, {N_CONTESTS} contests. Time = {elapsed} seconds, eps={EPSILON}, k={k}')
+mu = mean(Scores,axis=1)
+sigma = std(Scores,axis=1)
+plot (mu)
+plot (sigma)
+legend()
+xlabel('index')
+ylabel('p')
+elapsed = int(time() - start)
+title(f'{N_MAX} Contestants, {N_CONTESTS} contests. Time = {elapsed} seconds, eps={EPSILON}, k={k}')
 
-    axes[1].scatter(Lambdas/sum(Lambdas),p,s=5,label=r'$\lambda$ vs p',color='b')
-    axes[1].plot(Lambdas/sum(Lambdas),Lambdas/sum(Lambdas),label='Ideal',color='k')
-    axes[1].set_xlabel(r'$\lambda$')
-    axes[1].set_ylabel('p')
-    axes[1].legend()
-    axes[1].set_title(f'RMS (log domain)= {rmse(log(p), log(Lambdas/sum(Lambdas))):.2f}')
-    fig.savefig(f'{PLOT_FILE}-{i}')
+    # axes[1].scatter(Lambdas/sum(Lambdas),p,s=5,label=r'$\lambda$ vs p',color='b')
+    # axes[1].plot(Lambdas/sum(Lambdas),Lambdas/sum(Lambdas),label='Ideal',color='k')
+    # axes[1].set_xlabel(r'$\lambda$')
+    # axes[1].set_ylabel('p')
+    # axes[1].legend()
+    # axes[1].set_title(f'RMS (log domain)= {rmse(log(p), log(Lambdas/sum(Lambdas))):.2f}')
+fig.savefig(f'{PLOT_FILE}')
 
 show()
