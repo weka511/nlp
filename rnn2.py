@@ -1,6 +1,5 @@
 # https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html
 from __future__        import unicode_literals, print_function, division
-from glob              import glob
 from matplotlib.pyplot import figure, plot, show
 from random            import randint
 from rnn               import Alphabet, Categories, Timer
@@ -8,13 +7,13 @@ from torch             import cat, zeros, LongTensor, no_grad
 from torch.nn          import Dropout, Linear, LogSoftmax, Module, NLLLoss
 
 class RNN(Module):
-    def __init__(self, input_size, hidden_size, output_size,n_categories):
+    def __init__(self, input_size=None, hidden_size=None, output_size=None,n_categories=None,dropout=0.1):
         super().__init__()
         self.hidden_size = hidden_size
         self.i2h         = Linear(n_categories + input_size + hidden_size, hidden_size)
         self.i2o         = Linear(n_categories + input_size + hidden_size, output_size)
         self.o2o         = Linear(hidden_size + output_size, output_size)
-        self.dropout     = Dropout(0.1)
+        self.dropout     = Dropout(dropout)
         self.softmax     = LogSoftmax(dim=1)
 
     def forward(self, category, input, hidden):
@@ -40,9 +39,6 @@ def randomTrainingPair():
     category = randomChoice(categories.all_categories)
     line     = randomChoice(categories.category_lines[category])
     return category, line
-
-
-
 
 # One-hot vector for category
 def categoryTensor(category):
@@ -76,11 +72,8 @@ def randomTrainingExample():
 def train(category_tensor, input_line_tensor, target_line_tensor):
     target_line_tensor.unsqueeze_(-1)
     hidden = rnn.initHidden()
-
     rnn.zero_grad()
-
     loss = 0
-
     for i in range(input_line_tensor.size(0)):
         output, hidden = rnn(category_tensor, input_line_tensor[i], hidden)
         l = criterion(output, target_line_tensor[i])
@@ -105,10 +98,10 @@ def sample(category, start_letter='A',max_length = 20):
             output, hidden = rnn(category_tensor, input[0], hidden)
             topv, topi     = output.topk(1)
             topi           = topi[0][0]
-            if topi == n_letters - 1:
+            if topi == alphabet.n - 1:
                 break
             else:
-                letter = all_letters[topi]
+                letter = alphabet.all_letters[topi]
                 output_name += letter
             input = inputTensor(letter)
 
@@ -122,18 +115,19 @@ def samples(category, start_letters='ABC'):
 if __name__=='__main__':
     alphabet        = Alphabet()
     categories      = Categories()
+    categories.load('data/names/*.txt',alphabet)
     timer           = Timer()
     criterion       = NLLLoss()
-
-    learning_rate = 0.0005
-    N       = 100000
-    print_every   = 5000
-    plot_every    = 500
-    all_losses    = []
-    total_loss    = 0
-    for filename in glob('data/names/*.txt'):
-        categories.add(filename,alphabet)
-    rnn           = RNN(alphabet.n, 128, alphabet.n,categories.get_n())
+    learning_rate   = 0.0005
+    N               = 100000
+    print_every     = 5000
+    plot_every      = 500
+    all_losses      = []
+    total_loss      = 0
+    rnn             = RNN(input_size   = alphabet.n,
+                          hidden_size  = 128,
+                          output_size  = alphabet.n,
+                          n_categories = categories.get_n())
     for i in range(1, N + 1):
         output, loss = train(*randomTrainingExample())
         total_loss += loss

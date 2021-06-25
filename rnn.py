@@ -58,6 +58,10 @@ class Categories:
         self.category_lines = {}
         self.all_categories = []
 
+    def load(self,pathname,alphabet):
+        for filename in glob(pathname):
+            self.add(filename,alphabet)
+
     def add(self,filename,alphabet):
         self.all_categories.append(splitext(basename(filename))[0])
         self.category_lines[self.all_categories[-1]] =  readLines(filename,alphabet)
