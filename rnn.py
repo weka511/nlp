@@ -99,7 +99,7 @@ def randomChoice(l):
     return l[randint(0, len(l) - 1)]
 
 
-def train(model,category_tensor, line_tensor, criterion):
+def train(model,category_tensor, line_tensor, criterion, learning_rate=0.001):
     hidden = model.initHidden()
     model.zero_grad()
 
@@ -115,58 +115,61 @@ def train(model,category_tensor, line_tensor, criterion):
 
     return output, loss.item()
 
-def evaluate(line_tensor):
-    hidden = rnn.initHidden()
+def evaluate(model, line_tensor):
+    hidden = model.initHidden()
 
     for i in range(line_tensor.size()[0]):
-        output, hidden = rnn(line_tensor[i], hidden)
+        output, hidden = model(line_tensor[i], hidden)
 
     return output
 
 if __name__=='__main__':
+
     # Hyperparameters
+    LEARNING_RATE   = 0.005
+    N               = 100000
+    PRINT_FREQUENCY = 5000
+    PLOT_FREQUENCY  = 1000
+    N_CONFUSION     = 10000
+    N_HIDDEN        = 128
+    DECAY_RATE      = 0.0
 
-    criterion     = NLLLoss()
-    learning_rate = 0.005
-    n_iters       = 100000
-    print_every   = 5000
-    plot_every    = 1000
-    n_confusion   = 10000
-    n_hidden      = 128
-
-    alphabet   = Alphabet()
-    categories = Categories()
-    timer      = Timer()
+    alphabet        = Alphabet()
+    categories      = Categories()
+    timer           = Timer()
+    criterion       = NLLLoss()
 
     for filename in glob('data/names/*.txt'):
         categories.add(filename)
 
-    rnn           = RNN(alphabet.n, n_hidden, categories.get_n())
+    rnn           = RNN(alphabet.n, N_HIDDEN, categories.get_n())
     current_loss  = 0
     all_losses    = []
-
-    for iter in range(1, n_iters + 1):
+    learning_rate = LEARNING_RATE
+    for i in range(1, N + 1):
         category, line, category_tensor, line_tensor = categories.get_random(alphabet)
-        output, loss                                 = train(rnn, category_tensor, line_tensor, criterion)
+        output, loss                                 = train(rnn, category_tensor, line_tensor, criterion, learning_rate=learning_rate)
         current_loss                                += loss
 
-        if iter % print_every == 0:
+        if i % PRINT_FREQUENCY == 0:
             guess, guess_i = categories.fromOutput(output)
             correct = '✓' if guess == category else f'✗ ({category})'
             m,s     = timer.since()
-            print (f'{iter}, {int((iter / n_iters) * 100)}%, {m}m {s:.0f}s, {loss:.4f}, {line}, {guess}, {correct}')
+            print (f'{i}, {int((i / N) * 100)}%, {m}m {s:.0f}s, {loss:.4f}, {line}, {guess}, {correct}')
 
-        if iter % plot_every == 0:
-            all_losses.append(current_loss / plot_every)
+        if i % PLOT_FREQUENCY == 0:
+            all_losses.append(current_loss / PLOT_FREQUENCY)
             current_loss = 0
+
+        learning_rate *= (1 - DECAY_RATE)
 
     # Keep track of correct guesses in a confusion matrix
     confusion   = zeros(categories.get_n(), categories.get_n())
 
     # Go through a bunch of examples and record which are correctly guessed
-    for i in range(n_confusion):
+    for i in range(N_CONFUSION):
         category, line, category_tensor, line_tensor        = categories.get_random(alphabet)
-        output                                              = evaluate(line_tensor)
+        output                                              = evaluate(rnn, line_tensor)
         guess, guess_i                                      = categories.fromOutput(output)
         confusion[categories.get_index(category)][guess_i] += 1
 

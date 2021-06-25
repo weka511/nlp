@@ -6,13 +6,13 @@ from __future__ import unicode_literals, print_function, division
 from glob              import glob
 from io                import open
 from matplotlib.pyplot import figure, plot, show
-from os.path  import basename, splitext
-from random import randint
-from rnn import Timer
+from os.path           import basename, splitext
+from random            import randint
+from rnn               import Timer
 import unicodedata
 import string
-from torch import cat, zeros, LongTensor
-from torch.nn import Dropout, Linear, LogSoftmax, Module, NLLLoss
+from torch             import cat, zeros, LongTensor, no_grad
+from torch.nn          import Dropout, Linear, LogSoftmax, Module, NLLLoss
 
 class RNN(Module):
     def __init__(self, input_size, hidden_size, output_size):
@@ -115,18 +115,17 @@ def train(category_tensor, input_line_tensor, target_line_tensor):
     return output, loss.item() / input_line_tensor.size(0)
 
 # Sample from a category and starting letter
-def sample(category, start_letter='A'):
-    with torch.no_grad():  # no need to track history in sampling
+def sample(category, start_letter='A',max_length = 20):
+    with no_grad():  # no need to track history in sampling
         category_tensor = categoryTensor(category)
-        input = inputTensor(start_letter)
-        hidden = rnn.initHidden()
-
-        output_name = start_letter
+        input           = inputTensor(start_letter)
+        hidden          = rnn.initHidden()
+        output_name     = start_letter
 
         for i in range(max_length):
             output, hidden = rnn(category_tensor, input[0], hidden)
-            topv, topi = output.topk(1)
-            topi = topi[0][0]
+            topv, topi     = output.topk(1)
+            topi           = topi[0][0]
             if topi == n_letters - 1:
                 break
             else:
@@ -160,22 +159,15 @@ if __name__=='__main__':
             'from https://download.pytorch.org/tutorial/data.zip and extract it to '
             'the current directory.')
 
-    print('# categories:', n_categories, all_categories)
-    print(unicodeToAscii("O'NÈ‡l"))
-
-    criterion = NLLLoss()
-
+    criterion     = NLLLoss()
     learning_rate = 0.0005
-
-    timer = Timer()
-
-    rnn = RNN(n_letters, 128, n_letters)
-
-    n_iters = 100000
-    print_every = 5000
-    plot_every = 500
-    all_losses = []
-    total_loss = 0 # Reset every plot_every iters
+    rnn           = RNN(n_letters, 128, n_letters)
+    n_iters       = 100000
+    print_every   = 5000
+    plot_every    = 500
+    all_losses    = []
+    total_loss    = 0
+    timer         = Timer()
 
     for iter in range(1, n_iters + 1):
         output, loss = train(*randomTrainingExample())
@@ -183,24 +175,17 @@ if __name__=='__main__':
 
         if iter % print_every == 0:
             m,s     = timer.since()
-            print (f'{m} {s:.0f} {iter}, {iter / n_iters * 100:0f}, {loss}')
+            print (f'{m} {s:.0f} {iter}, {iter / n_iters * 100:.0f}%, {loss}')
 
         if iter % plot_every == 0:
             all_losses.append(total_loss / plot_every)
             total_loss = 0
 
-
+    samples('Russian', 'RUS')
+    samples('German', 'GER')
+    samples('Spanish', 'SPA')
+    samples('Chinese', 'CHI')
 
     figure()
     plot(all_losses)
-
-    max_length = 20
-    samples('Russian', 'RUS')
-
-    samples('German', 'GER')
-
-    samples('Spanish', 'SPA')
-
-    samples('Chinese', 'CHI')
-
     show()
