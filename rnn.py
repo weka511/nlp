@@ -74,9 +74,14 @@ class Categories:
         category_i   = top_i[0].item()
         return self.all_categories[category_i], category_i
 
+    # Get a random category and random line from that category
+    def get_random_pair(self):
+        category = randomChoice(self.all_categories)
+        line     = randomChoice(self.category_lines[category])
+        return category, line
+
     def get_random(self,alphabet):
-        category        = randomChoice(self.all_categories)
-        line            = randomChoice(self.category_lines[category])
+        category,line   = self.get_random_pair()
         category_tensor = tensor([self.all_categories.index(category)], dtype=long)
         line_tensor     = alphabet.lineToTensor(line)
         return category, line, category_tensor, line_tensor

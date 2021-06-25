@@ -1,7 +1,6 @@
 # https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html
 from __future__        import unicode_literals, print_function, division
 from matplotlib.pyplot import figure, plot, show
-from random            import randint
 from rnn               import Alphabet, Categories, Timer
 from torch             import cat, zeros, LongTensor, no_grad
 from torch.nn          import Dropout, Linear, LogSoftmax, Module, NLLLoss
@@ -30,20 +29,11 @@ class RNN(Module):
         return zeros(1, self.hidden_size)
 
 
-# Random item from a list
-def randomChoice(l):
-    return l[randint(0, len(l) - 1)]
-
-# Get a random category and random line from that category
-def randomTrainingPair():
-    category = randomChoice(categories.all_categories)
-    line     = randomChoice(categories.category_lines[category])
-    return category, line
 
 # One-hot vector for category
 def categoryTensor(category):
-    li = categories.all_categories.index(category)
-    tensor = zeros(1, categories.get_n())
+    li            = categories.get_index(category)
+    tensor        = zeros(1, categories.get_n())
     tensor[0][li] = 1
     return tensor
 
@@ -63,9 +53,9 @@ def targetTensor(line):
 
 # Make category, input, and target tensors from a random category, line pair
 def randomTrainingExample():
-    category, line = randomTrainingPair()
-    category_tensor = categoryTensor(category)
-    input_line_tensor = inputTensor(line)
+    category, line     = categories.get_random_pair()
+    category_tensor    = categoryTensor(category)
+    input_line_tensor  = inputTensor(line)
     target_line_tensor = targetTensor(line)
     return category_tensor, input_line_tensor, target_line_tensor
 
