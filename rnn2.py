@@ -1,21 +1,14 @@
-# -*- coding: iso-8859-15 -*-
-
 # https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html
-from __future__ import unicode_literals, print_function, division
-
+from __future__        import unicode_literals, print_function, division
 from glob              import glob
-from io                import open
 from matplotlib.pyplot import figure, plot, show
-from os.path           import basename, splitext
 from random            import randint
-from rnn               import Timer
-import unicodedata
-import string
+from rnn               import Alphabet, Categories, Timer
 from torch             import cat, zeros, LongTensor, no_grad
 from torch.nn          import Dropout, Linear, LogSoftmax, Module, NLLLoss
 
 class RNN(Module):
-    def __init__(self, input_size, hidden_size, output_size):
+    def __init__(self, input_size, hidden_size, output_size,n_categories):
         super().__init__()
         self.hidden_size = hidden_size
         self.i2h         = Linear(n_categories + input_size + hidden_size, hidden_size)
@@ -44,46 +37,32 @@ def randomChoice(l):
 
 # Get a random category and random line from that category
 def randomTrainingPair():
-    category = randomChoice(all_categories)
-    line = randomChoice(category_lines[category])
+    category = randomChoice(categories.all_categories)
+    line     = randomChoice(categories.category_lines[category])
     return category, line
 
 
 
-def findFiles(path): return glob(path)
-
-# Turn a Unicode string to plain ASCII, thanks to https://stackoverflow.com/a/518232/2809427
-def unicodeToAscii(s):
-    return ''.join(
-        c for c in unicodedata.normalize('NFD', s)
-        if unicodedata.category(c) != 'Mn'
-        and c in all_letters
-    )
-
-# Read a file and split into lines
-def readLines(filename):
-    with open(filename, encoding='utf-8') as some_file:
-        return [unicodeToAscii(line.strip()) for line in some_file]
 
 # One-hot vector for category
 def categoryTensor(category):
-    li = all_categories.index(category)
-    tensor = zeros(1, n_categories)
+    li = categories.all_categories.index(category)
+    tensor = zeros(1, categories.get_n())
     tensor[0][li] = 1
     return tensor
 
 # One-hot matrix of first to last letters (not including EOS) for input
 def inputTensor(line):
-    tensor = zeros(len(line), 1, n_letters)
+    tensor = zeros(len(line), 1, alphabet.n)
     for li in range(len(line)):
         letter = line[li]
-        tensor[li][0][all_letters.find(letter)] = 1
+        tensor[li][0][alphabet.all_letters.find(letter)] = 1
     return tensor
 
 # LongTensor of second letter to end (EOS) for target
 def targetTensor(line):
-    letter_indexes = [all_letters.find(line[li]) for li in range(1, len(line))]
-    letter_indexes.append(n_letters - 1) # EOS
+    letter_indexes = [alphabet.all_letters.find(line[li]) for li in range(1, len(line))]
+    letter_indexes.append(alphabet.n - 1) # EOS
     return LongTensor(letter_indexes)
 
 # Make category, input, and target tensors from a random category, line pair
@@ -141,43 +120,29 @@ def samples(category, start_letters='ABC'):
         print(sample(category, start_letter))
 
 if __name__=='__main__':
-    all_letters = string.ascii_letters + " .,;'-"
-    n_letters = len(all_letters) + 1 # Plus EOS marker
-    # Build the category_lines dictionary, a list of lines per category
-    category_lines = {}
-    all_categories = []
-    for filename in findFiles('data/names/*.txt'):
-        category = splitext(basename(filename))[0]
-        all_categories.append(category)
-        lines = readLines(filename)
-        category_lines[category] = lines
+    alphabet        = Alphabet()
+    categories      = Categories()
+    timer           = Timer()
+    criterion       = NLLLoss()
 
-    n_categories = len(all_categories)
-
-    if n_categories == 0:
-        raise RuntimeError('Data not found. Make sure that you downloaded data '
-            'from https://download.pytorch.org/tutorial/data.zip and extract it to '
-            'the current directory.')
-
-    criterion     = NLLLoss()
     learning_rate = 0.0005
-    rnn           = RNN(n_letters, 128, n_letters)
-    n_iters       = 100000
+    N       = 100000
     print_every   = 5000
     plot_every    = 500
     all_losses    = []
     total_loss    = 0
-    timer         = Timer()
-
-    for iter in range(1, n_iters + 1):
+    for filename in glob('data/names/*.txt'):
+        categories.add(filename,alphabet)
+    rnn           = RNN(alphabet.n, 128, alphabet.n,categories.get_n())
+    for i in range(1, N + 1):
         output, loss = train(*randomTrainingExample())
         total_loss += loss
 
-        if iter % print_every == 0:
+        if i % print_every == 0:
             m,s     = timer.since()
-            print (f'{m} {s:.0f} {iter}, {iter / n_iters * 100:.0f}%, {loss}')
+            print (f'{m} {s:.0f} {i}, {i / N * 100:.0f}%, {loss}')
 
-        if iter % plot_every == 0:
+        if i % plot_every == 0:
             all_losses.append(total_loss / plot_every)
             total_loss = 0
 

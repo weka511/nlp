@@ -58,7 +58,7 @@ class Categories:
         self.category_lines = {}
         self.all_categories = []
 
-    def add(self,filename):
+    def add(self,filename,alphabet):
         self.all_categories.append(splitext(basename(filename))[0])
         self.category_lines[self.all_categories[-1]] =  readLines(filename,alphabet)
 
@@ -140,7 +140,7 @@ if __name__=='__main__':
     criterion       = NLLLoss()
 
     for filename in glob('data/names/*.txt'):
-        categories.add(filename)
+        categories.add(filename,alphabet)
 
     rnn           = RNN(alphabet.n, N_HIDDEN, categories.get_n())
     current_loss  = 0
