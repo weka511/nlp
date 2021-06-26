@@ -3,9 +3,10 @@
 
 from __future__          import unicode_literals, print_function, division
 from argparse            import ArgumentParser
+from hashlib             import sha1
 from io                  import open
-from matplotlib.pyplot   import figure, matshow, plot, show, subplots
-from matplotlib.ticker   import MultipleLocator
+from matplotlib.pyplot   import figure, matshow, plot, savefig, show, title, subplots, xlabel, ylabel
+from matplotlib.ticker   import FixedLocator, MaxNLocator
 from random              import choice, random
 from re                  import sub
 from rnn                 import Timer
@@ -240,15 +241,30 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
 
     return loss.item() / target_length
 
-def showPlot(points):
-    figure()
-    fig, ax = subplots()
-    # this locator puts ticks at regular intervals
-    loc = MultipleLocator(base=0.2)
-    ax.yaxis.set_major_locator(loc)
-    plot(points)
+def showPlot(points,
+             output        = 'rnn',
+             learning_rate = 0.01,
+             N             = 100000):
 
-def trainIters(encoder, decoder, N, print_every=1000, plot_every=100, learning_rate=0.01):
+    fig, ax = subplots()
+
+    # this locator puts ticks at regular intervals
+    # see https://stackoverflow.com/questions/63723514/userwarning-fixedformatter-should-only-be-used-together-with-fixedlocator
+    ax.yaxis.set_major_locator(MaxNLocator('auto'))
+    yticks_loc = ax.get_yticks().tolist()
+    ax.yaxis.set_major_locator(FixedLocator(yticks_loc))
+    ax.set_xticklabels([f'{y:.1f}' for y in yticks_loc])
+    plot(points)
+    xlabel('Epoch')
+    ylabel('Loss')
+    title(f'N={N}, Learning Rate = {learning_rate}')
+    savefig(f'{output}.png')
+
+def trainIters(encoder, decoder, N,
+               print_every   = 1000,
+               plot_every    = 100,
+               learning_rate = 0.01,
+               output        = 'rnn'):
     timer             = Timer()
     plot_losses       = []
     print_loss_total  = 0  # Reset every print_every
@@ -256,7 +272,7 @@ def trainIters(encoder, decoder, N, print_every=1000, plot_every=100, learning_r
     encoder_optimizer = SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = SGD(decoder.parameters(), lr=learning_rate)
     training_pairs    = [tensorsFromPair(choice(pairs)) for i in range(N)]
-    criterion = NLLLoss()
+    criterion         = NLLLoss()
 
     for i in range(1, N + 1):
         training_pair     = training_pairs[i - 1]
@@ -277,7 +293,10 @@ def trainIters(encoder, decoder, N, print_every=1000, plot_every=100, learning_r
             plot_losses.append(plot_loss_avg)
             plot_loss_total = 0
 
-    showPlot(plot_losses)
+    showPlot(plot_losses,
+             output        = output,
+             N             = N,
+             learning_rate = learning_rate)
 
 def evaluate(encoder, decoder, sentence, max_length=10,device='cpu'):
     with no_grad():
@@ -317,14 +336,13 @@ def evaluate(encoder, decoder, sentence, max_length=10,device='cpu'):
 def evaluateRandomly(encoder, decoder, n=10):
     for i in range(n):
         pair = choice(pairs)
-        print('>', pair[0])
-        print('=', pair[1])
+        print(f'>{pair[0]}')
+        print(f'={pair[1]}')
         output_words, attentions = evaluate(encoder, decoder, pair[0])
-        output_sentence = ' '.join(output_words)
-        print('<', output_sentence)
-        print('')
+        output_sentence          = ' '.join(output_words)
+        print(f'<{output_sentence}\n', output_sentence)
 
-def showAttention(input_sentence, output_words, attentions):
+def showAttention(input_sentence, output_words, attentions, seq=666, outfile='rnn'):
     # Set up figure with colorbar
     fig = figure()
     ax  = fig.add_subplot(111)
@@ -336,38 +354,56 @@ def showAttention(input_sentence, output_words, attentions):
     ax.set_yticklabels([''] + output_words)
 
     # Show label at every tick
-    ax.xaxis.set_major_locator(MultipleLocator(1))
-    ax.yaxis.set_major_locator(MultipleLocator(1))
+    # see https://stackoverflow.com/questions/63723514/userwarning-fixedformatter-should-only-be-used-together-with-fixedlocator
 
-def evaluateAndShowAttention(input_sentence,encoder, decoder):
+    ax.xaxis.set_major_locator(MaxNLocator('auto'))
+    xticks_loc = ax.get_xticks().tolist()
+    ax.xaxis.set_major_locator(FixedLocator(xticks_loc))
+    ax.set_xticklabels([f'{x:.1f}' for x in xticks_loc])
+
+    ax.yaxis.set_major_locator(MaxNLocator('auto'))
+    yticks_loc = ax.get_yticks().tolist()
+    ax.yaxis.set_major_locator(FixedLocator(yticks_loc))
+    ax.set_yticklabels([f'{y:.1f}' for y in yticks_loc])
+    title(input_sentence)
+    savefig(f'{outfile}{seq}.png')
+
+def evaluateAndShowAttention(input_sentence,encoder, decoder,output='rnn'):
     output_words, attentions = evaluate(encoder, decoder, input_sentence)
     print(f'input = {input_sentence}')
     print('output = {" ".join(output_words)}')
-    showAttention(input_sentence, output_words, attentions)
+    showAttention(input_sentence, output_words, attentions,
+                  outfile = output,
+                  seq     = sha1(input_sentence.encode('utf-8')).hexdigest())
 
 if __name__ =='__main__':
     parser = ArgumentParser('Translation with a Sequence to Sequence Network and Attention')
-    parser.add_argument('--N',         type = int,   default = 75000)
-    parser.add_argument('--Frequency', type = int,   default = 5000)
-    parser.add_argument('--Plot',      type = int,   default = 100)
-    parser.add_argument('--hidden',    type = int,   default = 256)
-    parser.add_argument('--lr',        type = float, default = 0.01)
-    parser.add_argument('--dropout',   type = float, default = 0.01)
+    parser.add_argument('--N',         type = int,   default = 75000, help ='Number of iterations while training')
+    parser.add_argument('--printf',    type = int,   default = 5000,  help = 'Frequency for printing')
+    parser.add_argument('--frequency', type = int,   default = 100,   help = 'Frequency for plotting')
+    parser.add_argument('--hidden',    type = int,   default = 256,   help = 'Number of hidden units')
+    parser.add_argument('--lr',        type = float, default = 0.01,  help = 'Learning Rate')
+    parser.add_argument('--dropout',   type = float, default = 0.01,  help = 'Dropout probability')
+    parser.add_argument('--output',    type = str,   default = 'rnn', help = 'Base name for plotting')
     args                           = parser.parse_args()
 
     input_lang, output_lang, pairs = prepareData('eng', 'fra', True)
     encoder                        = Encoder(input_lang.n_words, hidden_size=args.hidden)#.to(device)
-    decoder                        = AttentionDecoder(hidden_size=args.hidden, output_size=output_lang.n_words, dropout_p=args.dropout)#.to(device)
+    decoder                        = AttentionDecoder(hidden_size = args.hidden,
+                                                      output_size = output_lang.n_words,
+                                                      dropout_p   = args.dropout)#.to(device)
 
-    trainIters(encoder, decoder, args.N, print_every=args.Frequency,plot_every=args.Plot,learning_rate=args.lr)
-    # evaluateRandomly(encoder, decoder)
+    trainIters(encoder, decoder, args.N,
+               print_every   = args.printf,
+               plot_every    = args.frequency,
+               learning_rate = args.lr,
+               output        = args.output)
+
+    evaluateRandomly(encoder, decoder)
 
     evaluateAndShowAttention('elle a cinq ans de moins que moi .',encoder, decoder)
-
     evaluateAndShowAttention('elle est trop petit .',encoder, decoder)
-
     evaluateAndShowAttention('je ne crains pas de mourir .',encoder, decoder)
-
     evaluateAndShowAttention('c est un jeune directeur plein de talent .',encoder, decoder)
 
     show()
