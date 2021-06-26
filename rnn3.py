@@ -1,9 +1,9 @@
 # https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html
 
 from __future__          import unicode_literals, print_function, division
+from argparse            import ArgumentParser
 from io                  import open
-from matplotlib.pyplot   import figure, plot, show, subplots
-#plt.switch_backend('agg')
+from matplotlib.pyplot   import figure, matshow, plot, show, subplots
 from matplotlib.ticker   import MultipleLocator
 from random              import choice, random
 from re                  import sub
@@ -40,7 +40,7 @@ class Language:
             self.word2count[word]        += 1
 
 class Encoder(Module):
-    def __init__(self, input_size, hidden_size):
+    def __init__(self, input_size, hidden_size=256):
         super().__init__()
         self.device      = device('cuda' if cuda.is_available() else 'cpu')
         self.hidden_size = hidden_size
@@ -57,7 +57,7 @@ class Encoder(Module):
         return zeros(1, 1, self.hidden_size, device=self.device)
 
 class Decoder(Module):
-    def __init__(self, hidden_size, output_size):
+    def __init__(self, hidden_size=256, output_size=256):
         super().__init__()
         self.device      = device('cuda' if cuda.is_available() else 'cpu')
         self.hidden_size = hidden_size
@@ -78,7 +78,7 @@ class Decoder(Module):
 
 
 class AttentionDecoder(Module):
-    def __init__(self, hidden_size, output_size, dropout_p=0.1, max_length=10):
+    def __init__(self, hidden_size=256, output_size=256, dropout_p=0.1, max_length=10):
         super().__init__()
         self.device       = device('cuda' if cuda.is_available() else 'cpu')
         self.hidden_size  = hidden_size
@@ -291,7 +291,7 @@ def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, lear
 
     showPlot(plot_losses)
 
-def evaluate(encoder, decoder, sentence, max_length=10):
+def evaluate(encoder, decoder, sentence, max_length=10,device='cpu'):
     with no_grad():
         input_tensor = tensorFromSentence(input_lang, sentence)
         input_length = input_tensor.size()[0]
@@ -336,13 +336,53 @@ def evaluateRandomly(encoder, decoder, n=10):
         print('<', output_sentence)
         print('')
 
-if __name__ =='__main__':
+def showAttention(input_sentence, output_words, attentions):
+    # Set up figure with colorbar
+    fig = figure()
+    ax  = fig.add_subplot(111)
+    cax = ax.matshow(attentions.numpy(), cmap='bone')
+    fig.colorbar(cax)
 
+    # Set up axes
+    ax.set_xticklabels([''] + input_sentence.split(' ') +
+                       ['<EOS>'], rotation=90)
+    ax.set_yticklabels([''] + output_words)
+
+    # Show label at every tick
+    ax.xaxis.set_major_locator(MultipleLocator(1))
+    ax.yaxis.set_major_locator(MultipleLocator(1))
+
+
+
+def evaluateAndShowAttention(input_sentence,encoder, decoder):
+    output_words, attentions = evaluate(encoder, decoder, input_sentence)
+    print('input =', input_sentence)
+    print('output =', ' '.join(output_words))
+    showAttention(input_sentence, output_words, attentions)
+
+if __name__ =='__main__':
+    parser = ArgumentParser('Translation with a Sequence to Sequence Network and Attention')
+    parser.add_argument('--N',         type = int,   default = 75000)
+    parser.add_argument('--Frequency', type = int,   default = 5000)
+    parser.add_argument('--Plot',      type = int,   default = 100)
+    parser.add_argument('--hidden',    type = int,   default = 256)
+    parser.add_argument('--lr',        type = float, default = 0.01)
+    parser.add_argument('--dropout',   type = float, default = 0.01)
+    args                           = parser.parse_args()
     input_lang, output_lang, pairs = prepareData('eng', 'fra', True)
     print(choice(pairs))
-    hidden_size = 256
-    encoder = Encoder(input_lang.n_words, hidden_size)#.to(device)
-    decoder = AttentionDecoder(hidden_size, output_lang.n_words, dropout_p=0.1)#.to(device)
+    encoder = Encoder(input_lang.n_words, hidden_size=args.hidden)#.to(device)
+    decoder = AttentionDecoder(hidden_size=args.hidden, output_size=output_lang.n_words, dropout_p=args.dropout)#.to(device)
 
-    trainIters(encoder, decoder, 750, print_every=5,plot_every=10)
+    trainIters(encoder, decoder, args.N, print_every=args.Frequency,plot_every=args.Plot,learning_rate=args.lr)
+    # evaluateRandomly(encoder, decoder)
+
+    evaluateAndShowAttention('elle a cinq ans de moins que moi .',encoder, decoder)
+
+    evaluateAndShowAttention('elle est trop petit .',encoder, decoder)
+
+    evaluateAndShowAttention('je ne crains pas de mourir .',encoder, decoder)
+
+    evaluateAndShowAttention('c est un jeune directeur plein de talent .',encoder, decoder)
+
     show()
