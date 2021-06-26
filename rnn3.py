@@ -1,3 +1,4 @@
+# Sean Robertsons's NLP demo: Translation with a Sequence to Sequence Network and Attention
 # https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html
 
 from __future__          import unicode_literals, print_function, division

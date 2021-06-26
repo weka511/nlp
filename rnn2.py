@@ -1,3 +1,4 @@
+# Sean Robertsons's NLP demo: Generating Names with a Character-Level RNN
 # https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html
 from __future__        import unicode_literals, print_function, division
 from matplotlib.pyplot import figure, plot, show

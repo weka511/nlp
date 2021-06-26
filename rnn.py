@@ -1,3 +1,4 @@
+# Sean Robertsons's NLP demo: Classifying Names with a Character-Level RNN
 # https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html
 
 from __future__        import unicode_literals, print_function, division
