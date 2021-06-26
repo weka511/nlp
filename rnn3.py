@@ -201,10 +201,7 @@ def tensorsFromPair(pair):
     target_tensor = tensorFromSentence(output_lang, pair[1])
     return (input_tensor, target_tensor)
 
-
-
-
-def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion,
+def step(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion,
           max_length            = 10,
           teacher_forcing_ratio = 0.5,
           device                = 'cpu'):
@@ -256,7 +253,7 @@ def showPlot(points,
              N                   = 100000,
              decoder_description = None):
 
-    fig, ax = subplots()
+    fig, ax = subplots(figsize=(15,15))
 
     # this locator puts ticks at regular intervals
     # see https://stackoverflow.com/questions/63723514/userwarning-fixedformatter-should-only-be-used-together-with-fixedlocator
@@ -270,7 +267,7 @@ def showPlot(points,
     title(f'N={N}: {decoder_description}')
     savefig(f'{output}.png')
 
-def trainIters(encoder, decoder, N,
+def train(encoder, decoder, N,
                print_every   = 1000,
                plot_every    = 100,
                learning_rate = 0.01,
@@ -288,7 +285,7 @@ def trainIters(encoder, decoder, N,
         training_pair     = training_pairs[i - 1]
         input_tensor      = training_pair[0]
         target_tensor     = training_pair[1]
-        loss              = train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion)
+        loss              = step(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion)
         print_loss_total += loss
         plot_loss_total  += loss
 
@@ -413,11 +410,11 @@ if __name__ =='__main__':
     encoder                        = Encoder(input_lang.n_words, hidden_size=args.hidden)#.to(device)
     decoder                        = create_decoder(args)#.to(device)
 
-    trainIters(encoder, decoder, args.N,
-               print_every   = args.printf,
-               plot_every    = args.frequency,
-               learning_rate = args.lr,
-               output        = args.output)
+    train(encoder, decoder, args.N,
+          print_every   = args.printf,
+          plot_every    = args.frequency,
+          learning_rate = args.lr,
+          output        = args.output)
 
     evaluateRandomly(encoder, decoder)
 
