@@ -198,26 +198,21 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
           teacher_forcing_ratio = 0.5,
           device                = 'cpu'):
     encoder_hidden = encoder.initHidden()
-
     encoder_optimizer.zero_grad()
     decoder_optimizer.zero_grad()
 
-    input_length = input_tensor.size(0)
-    target_length = target_tensor.size(0)
-
+    input_length    = input_tensor.size(0)
+    target_length   = target_tensor.size(0)
     encoder_outputs = zeros(max_length, encoder.hidden_size, device = device)
-
-    loss = 0
+    loss            = 0
 
     for ei in range(input_length):
         encoder_output, encoder_hidden = encoder(
             input_tensor[ei], encoder_hidden)
         encoder_outputs[ei] = encoder_output[0, 0]
 
-    decoder_input = tensor([[Language.SOS_token]], device=device)
-
-    decoder_hidden = encoder_hidden
-
+    decoder_input       = tensor([[Language.SOS_token]], device=device)
+    decoder_hidden      = encoder_hidden
     use_teacher_forcing = random() < teacher_forcing_ratio
 
     if use_teacher_forcing:
@@ -231,12 +226,10 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
     else:
         # Without teacher forcing: use its own predictions as the next input
         for di in range(target_length):
-            decoder_output, decoder_hidden, decoder_attention = decoder(
-                decoder_input, decoder_hidden, encoder_outputs)
-            topv, topi = decoder_output.topk(1)
-            decoder_input = topi.squeeze().detach()  # detach from history as input
-
-            loss += criterion(decoder_output, target_tensor[di])
+            decoder_output, decoder_hidden, decoder_attention = decoder(decoder_input, decoder_hidden, encoder_outputs)
+            topv, topi                                        = decoder_output.topk(1)
+            decoder_input                                     = topi.squeeze().detach()  # detach from history as input
+            loss                                             += criterion(decoder_output, target_tensor[di])
             if decoder_input.item() == Language.EOS_token:
                 break
 
@@ -255,37 +248,31 @@ def showPlot(points):
     ax.yaxis.set_major_locator(loc)
     plot(points)
 
-def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, learning_rate=0.01):
-    timer = Timer()
-    plot_losses = []
-    print_loss_total = 0  # Reset every print_every
-    plot_loss_total = 0  # Reset every plot_every
-
+def trainIters(encoder, decoder, N, print_every=1000, plot_every=100, learning_rate=0.01):
+    timer             = Timer()
+    plot_losses       = []
+    print_loss_total  = 0  # Reset every print_every
+    plot_loss_total   = 0  # Reset every plot_every
     encoder_optimizer = SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = SGD(decoder.parameters(), lr=learning_rate)
-    training_pairs = [tensorsFromPair(choice(pairs))
-                      for i in range(n_iters)]
+    training_pairs    = [tensorsFromPair(choice(pairs)) for i in range(N)]
     criterion = NLLLoss()
 
-    for iter in range(1, n_iters + 1):
-        training_pair = training_pairs[iter - 1]
-        input_tensor = training_pair[0]
-        target_tensor = training_pair[1]
-
-        loss = train(input_tensor, target_tensor, encoder,
-                     decoder, encoder_optimizer, decoder_optimizer, criterion)
+    for i in range(1, N + 1):
+        training_pair     = training_pairs[i - 1]
+        input_tensor      = training_pair[0]
+        target_tensor     = training_pair[1]
+        loss              = train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion)
         print_loss_total += loss
-        plot_loss_total += loss
+        plot_loss_total  += loss
 
-        if iter % print_every == 0:
-            print_loss_avg = print_loss_total / print_every
+        if i % print_every == 0:
+            print_loss_avg   = print_loss_total / print_every
             print_loss_total = 0
-            m,s = timer.since()
-            print (f'{m}m {s}s {iter}, {iter / n_iters * 100:.0f}, {print_loss_avg}')
-            # print('%s (%d %d%%) %.4f' % (timeSince(start, iter / n_iters),
-                                         # iter, iter / n_iters * 100, print_loss_avg))
+            m,s              = timer.since()
+            print (f'{m}m {s:.0f}s, {i}, {i / N * 100:.0f}%, {print_loss_avg}')
 
-        if iter % plot_every == 0:
+        if i % plot_every == 0:
             plot_loss_avg = plot_loss_total / plot_every
             plot_losses.append(plot_loss_avg)
             plot_loss_total = 0
@@ -345,20 +332,17 @@ def showAttention(input_sentence, output_words, attentions):
     fig.colorbar(cax)
 
     # Set up axes
-    ax.set_xticklabels([''] + input_sentence.split(' ') +
-                       ['<EOS>'], rotation=90)
+    ax.set_xticklabels([''] + input_sentence.split(' ') + ['<EOS>'], rotation=90)
     ax.set_yticklabels([''] + output_words)
 
     # Show label at every tick
     ax.xaxis.set_major_locator(MultipleLocator(1))
     ax.yaxis.set_major_locator(MultipleLocator(1))
 
-
-
 def evaluateAndShowAttention(input_sentence,encoder, decoder):
     output_words, attentions = evaluate(encoder, decoder, input_sentence)
-    print('input =', input_sentence)
-    print('output =', ' '.join(output_words))
+    print(f'input = {input_sentence}')
+    print('output = {" ".join(output_words)}')
     showAttention(input_sentence, output_words, attentions)
 
 if __name__ =='__main__':
@@ -370,10 +354,10 @@ if __name__ =='__main__':
     parser.add_argument('--lr',        type = float, default = 0.01)
     parser.add_argument('--dropout',   type = float, default = 0.01)
     args                           = parser.parse_args()
+
     input_lang, output_lang, pairs = prepareData('eng', 'fra', True)
-    print(choice(pairs))
-    encoder = Encoder(input_lang.n_words, hidden_size=args.hidden)#.to(device)
-    decoder = AttentionDecoder(hidden_size=args.hidden, output_size=output_lang.n_words, dropout_p=args.dropout)#.to(device)
+    encoder                        = Encoder(input_lang.n_words, hidden_size=args.hidden)#.to(device)
+    decoder                        = AttentionDecoder(hidden_size=args.hidden, output_size=output_lang.n_words, dropout_p=args.dropout)#.to(device)
 
     trainIters(encoder, decoder, args.N, print_every=args.Frequency,plot_every=args.Plot,learning_rate=args.lr)
     # evaluateRandomly(encoder, decoder)
