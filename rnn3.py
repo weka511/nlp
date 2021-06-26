@@ -10,7 +10,7 @@ from matplotlib.ticker   import FixedLocator, MaxNLocator
 from random              import choice, random
 from re                  import sub
 from rnn                 import Timer
-from torch               import bmm, cat, cuda, device, long, no_grad, tensor, zeros
+from torch               import bmm, cat, cuda, device, long, no_grad, save, tensor, zeros
 from torch.nn            import Dropout, Embedding, GRU, Linear, LogSoftmax, Module, NLLLoss
 from torch.nn.functional import log_softmax, relu, softmax
 from torch.optim         import SGD
@@ -394,9 +394,10 @@ def create_decoder(args):
 
 if __name__ =='__main__':
     parser = ArgumentParser('Translation with a Sequence to Sequence Network and Attention')
-    parser.add_argument('--decoder',   choices=['simple',
-                                                'attention'],
-                                                     default='attention', help='Specify whether Attetion is to be used')
+    parser.add_argument('--decoder',   choices = ['simple',
+                                                  'attention'],
+                                       default = 'attention',
+                                       help    = 'Specify whether Attetion is to be used')
     parser.add_argument('--N',         type = int,   default = 75000, help ='Number of iterations while training')
     parser.add_argument('--printf',    type = int,   default = 5000,  help = 'Frequency for printing')
     parser.add_argument('--frequency', type = int,   default = 100,   help = 'Frequency for plotting')
@@ -415,6 +416,14 @@ if __name__ =='__main__':
           plot_every    = args.frequency,
           learning_rate = args.lr,
           output        = args.output)
+
+    save(
+        {
+            'encoder_state_dict' : encoder.state_dict(),
+            'decoder_dict'       : decoder.state_dict(),
+            'args'               : args
+            },
+        f'{args.output}.pt')
 
     evaluateRandomly(encoder, decoder)
 
