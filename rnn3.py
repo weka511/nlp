@@ -59,14 +59,17 @@ class Encoder(Module):
         return zeros(1, 1, self.hidden_size, device=self.device)
 
 class Decoder(Module):
-    def __init__(self, hidden_size=256, output_size=256):
+    def __init__(self,
+                 hidden_size = 256,
+                 output_size = 256):
         super().__init__()
-        self.device      = device('cuda' if cuda.is_available() else 'cpu')
-        self.hidden_size = hidden_size
-        self.embedding   = Embedding(output_size, hidden_size)
-        self.gru         = GRU(hidden_size, hidden_size)
-        self.out         = Linear(hidden_size, output_size)
-        self.softmax     = LogSoftmax(dim=1)
+        self.device       = device('cuda' if cuda.is_available() else 'cpu')
+        self.hidden_size  = hidden_size
+        self.output_size  = output_size
+        self.embedding    = Embedding(output_size, hidden_size)
+        self.gru          = GRU(hidden_size, hidden_size)
+        self.out          = Linear(hidden_size, output_size)
+        self.softmax      = LogSoftmax(dim=1)
 
     def forward(self, input, hidden):
         output         = self.embedding(input).view(1, 1, -1)
@@ -78,9 +81,15 @@ class Decoder(Module):
     def initHidden(self):
         return zeros(1, 1, self.hidden_size, device=self.device)
 
+    def get_description(self):
+        return f'Decoder hidden_size={self.hidden_size}, output_size={self.output_size}'
 
 class AttentionDecoder(Module):
-    def __init__(self, hidden_size=256, output_size=256, dropout_p=0.1, max_length=10):
+    def __init__(self,
+                 hidden_size = 256,
+                 output_size = 256,
+                 dropout_p   = 0.1,
+                 max_length  = 10):
         super().__init__()
         self.device       = device('cuda' if cuda.is_available() else 'cpu')
         self.hidden_size  = hidden_size
@@ -108,6 +117,9 @@ class AttentionDecoder(Module):
 
     def initHidden(self):
         return torch.zeros(1, 1, self.hidden_size, device=self.device)
+
+    def get_description(self):
+        return f'Attention hidden_size={self.hidden_size}, output_size={self.output_size}, max_length ={self.max_length}, Dropout = {self.dropout_p}'
 
 # Turn a Unicode string to plain ASCII, thanks to
 # https://stackoverflow.com/a/518232/2809427
@@ -140,8 +152,6 @@ def readLanguages(lang1, lang2, reverse=False):
         output_lang = Language(lang2)
 
     return input_lang, output_lang, pairs
-
-
 
 eng_prefixes = (
     'i am ',    'i m ',
@@ -242,9 +252,9 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
     return loss.item() / target_length
 
 def showPlot(points,
-             output        = 'rnn',
-             learning_rate = 0.01,
-             N             = 100000):
+             output              = 'rnn',
+             N                   = 100000,
+             decoder_description = None):
 
     fig, ax = subplots()
 
@@ -257,7 +267,7 @@ def showPlot(points,
     plot(points)
     xlabel('Epoch')
     ylabel('Loss')
-    title(f'N={N}, Learning Rate = {learning_rate}')
+    title(f'N={N}: {decoder_description}')
     savefig(f'{output}.png')
 
 def trainIters(encoder, decoder, N,
@@ -294,9 +304,9 @@ def trainIters(encoder, decoder, N,
             plot_loss_total = 0
 
     showPlot(plot_losses,
-             output        = output,
-             N             = N,
-             learning_rate = learning_rate)
+             output              = output,
+             N                   = N,
+             decoder_description = decoder.get_description())
 
 def evaluate(encoder, decoder, sentence, max_length=10,device='cpu'):
     with no_grad():
@@ -366,7 +376,7 @@ def showAttention(input_sentence, output_words, attentions, seq=666, outfile='rn
     ax.yaxis.set_major_locator(FixedLocator(yticks_loc))
     ax.set_yticklabels([f'{y:.1f}' for y in yticks_loc])
     title(input_sentence)
-    savefig(f'{outfile}{seq}.png')
+    savefig(f'{outfile}-{seq}.png')
 
 def evaluateAndShowAttention(input_sentence,encoder, decoder,output='rnn'):
     output_words, attentions = evaluate(encoder, decoder, input_sentence)
@@ -376,8 +386,20 @@ def evaluateAndShowAttention(input_sentence,encoder, decoder,output='rnn'):
                   outfile = output,
                   seq     = sha1(input_sentence.encode('utf-8')).hexdigest())
 
+def create_decoder(args):
+    if args.decoder=='attention':
+        return AttentionDecoder(hidden_size = args.hidden,
+                                output_size = output_lang.n_words,
+                                dropout_p   = args.dropout)#.to(device)
+    if args.decoder=='simple':
+        return Decoder(hidden_size = args.hidden,
+                       output_size = output_lang.n_words)
+
 if __name__ =='__main__':
     parser = ArgumentParser('Translation with a Sequence to Sequence Network and Attention')
+    parser.add_argument('--decoder',   choices=['simple',
+                                                'attention'],
+                                                     default='attention', help='Specify whether Attetion is to be used')
     parser.add_argument('--N',         type = int,   default = 75000, help ='Number of iterations while training')
     parser.add_argument('--printf',    type = int,   default = 5000,  help = 'Frequency for printing')
     parser.add_argument('--frequency', type = int,   default = 100,   help = 'Frequency for plotting')
@@ -389,9 +411,7 @@ if __name__ =='__main__':
 
     input_lang, output_lang, pairs = prepareData('eng', 'fra', True)
     encoder                        = Encoder(input_lang.n_words, hidden_size=args.hidden)#.to(device)
-    decoder                        = AttentionDecoder(hidden_size = args.hidden,
-                                                      output_size = output_lang.n_words,
-                                                      dropout_p   = args.dropout)#.to(device)
+    decoder                        = create_decoder(args)#.to(device)
 
     trainIters(encoder, decoder, args.N,
                print_every   = args.printf,
