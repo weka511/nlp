@@ -1,16 +1,18 @@
 # https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html
 
-from __future__  import unicode_literals, print_function, division
-from io          import open
-from unicodedata import category, normalize
-import string
-from re          import sub
-import random
-
-from torch               import cuda, device, zeros
-from torch.nn            import Dropout, Embedding, GRU, Linear, LogSoftmax, Module
+from __future__          import unicode_literals, print_function, division
+from io                  import open
+from matplotlib.pyplot   import figure, plot, show, subplots
+#plt.switch_backend('agg')
+from matplotlib.ticker   import MultipleLocator
+from random              import choice, random
+from re                  import sub
+from rnn                 import Timer
+from torch               import bmm, cat, cuda, device, long, no_grad, tensor, zeros
+from torch.nn            import Dropout, Embedding, GRU, Linear, LogSoftmax, Module, NLLLoss
 from torch.nn.functional import log_softmax, relu, softmax
-
+from torch.optim         import SGD
+from unicodedata         import category, normalize
 
 class Language:
     SOS_token = 0
@@ -76,7 +78,7 @@ class Decoder(Module):
 
 
 class AttentionDecoder(Module):
-    def __init__(self, hidden_size, output_size, dropout_p=0.1, max_length=MAX_LENGTH):
+    def __init__(self, hidden_size, output_size, dropout_p=0.1, max_length=10):
         super().__init__()
         self.device       = device('cuda' if cuda.is_available() else 'cpu')
         self.hidden_size  = hidden_size
@@ -93,9 +95,9 @@ class AttentionDecoder(Module):
     def forward(self, input, hidden, encoder_outputs):
         embedded       = self.embedding(input).view(1, 1, -1)
         embedded       = self.dropout(embedded)
-        attn_weights   = softmax(self.attn(torch.cat((embedded[0], hidden[0]), 1)), dim=1)
-        attn_applied   = torch.bmm(attn_weights.unsqueeze(0), encoder_outputs.unsqueeze(0))
-        output         = torch.cat((embedded[0], attn_applied[0]), 1)
+        attn_weights   = softmax(self.attn(cat((embedded[0], hidden[0]), 1)), dim=1)
+        attn_applied   = bmm(attn_weights.unsqueeze(0), encoder_outputs.unsqueeze(0))
+        output         = cat((embedded[0], attn_applied[0]), 1)
         output         = self.attn_combine(output).unsqueeze(0)
         output         = relu(output)
         output, hidden = self.gru(output, hidden)
@@ -178,8 +180,8 @@ def indexesFromSentence(lang, sentence):
 
 def tensorFromSentence(lang, sentence):
     indexes = indexesFromSentence(lang, sentence)
-    indexes.append(EOS_token)
-    return torch.tensor(indexes, dtype=torch.long, device=device).view(-1, 1)
+    indexes.append(Language.EOS_token)
+    return tensor(indexes, dtype=long, device='cpu').view(-1, 1)  # FIXME
 
 
 def tensorsFromPair(pair):
@@ -191,8 +193,9 @@ def tensorsFromPair(pair):
 
 
 def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion,
-          max_length            = MAX_LENGTH,
-          teacher_forcing_ratio = 0.5):
+          max_length            = 10,
+          teacher_forcing_ratio = 0.5,
+          device                = 'cpu'):
     encoder_hidden = encoder.initHidden()
 
     encoder_optimizer.zero_grad()
@@ -201,7 +204,7 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
     input_length = input_tensor.size(0)
     target_length = target_tensor.size(0)
 
-    encoder_outputs = torch.zeros(max_length, encoder.hidden_size, device=device)
+    encoder_outputs = zeros(max_length, encoder.hidden_size, device = device)
 
     loss = 0
 
@@ -210,11 +213,11 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
             input_tensor[ei], encoder_hidden)
         encoder_outputs[ei] = encoder_output[0, 0]
 
-    decoder_input = torch.tensor([[SOS_token]], device=device)
+    decoder_input = tensor([[Language.SOS_token]], device=device)
 
     decoder_hidden = encoder_hidden
 
-    use_teacher_forcing = random.random() < teacher_forcing_ratio
+    use_teacher_forcing = random() < teacher_forcing_ratio
 
     if use_teacher_forcing:
         # Teacher forcing: Feed the target as the next input
@@ -233,7 +236,7 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
             decoder_input = topi.squeeze().detach()  # detach from history as input
 
             loss += criterion(decoder_output, target_tensor[di])
-            if decoder_input.item() == EOS_token:
+            if decoder_input.item() == Language.EOS_token:
                 break
 
     loss.backward()
@@ -243,8 +246,103 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
 
     return loss.item() / target_length
 
-if __name__ =='__main__':
-    input_lang, output_lang, pairs = prepareData('eng', 'fra', True)
-    print(random.choice(pairs))
+def showPlot(points):
+    figure()
+    fig, ax = subplots()
+    # this locator puts ticks at regular intervals
+    loc = MultipleLocator(base=0.2)
+    ax.yaxis.set_major_locator(loc)
+    plot(points)
 
-    x=0
+def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, learning_rate=0.01):
+    timer = Timer()
+    plot_losses = []
+    print_loss_total = 0  # Reset every print_every
+    plot_loss_total = 0  # Reset every plot_every
+
+    encoder_optimizer = SGD(encoder.parameters(), lr=learning_rate)
+    decoder_optimizer = SGD(decoder.parameters(), lr=learning_rate)
+    training_pairs = [tensorsFromPair(choice(pairs))
+                      for i in range(n_iters)]
+    criterion = NLLLoss()
+
+    for iter in range(1, n_iters + 1):
+        training_pair = training_pairs[iter - 1]
+        input_tensor = training_pair[0]
+        target_tensor = training_pair[1]
+
+        loss = train(input_tensor, target_tensor, encoder,
+                     decoder, encoder_optimizer, decoder_optimizer, criterion)
+        print_loss_total += loss
+        plot_loss_total += loss
+
+        if iter % print_every == 0:
+            print_loss_avg = print_loss_total / print_every
+            print_loss_total = 0
+            m,s = timer.since()
+            print (f'{m}m {s}s {iter}, {iter / n_iters * 100:.0f}, {print_loss_avg}')
+            # print('%s (%d %d%%) %.4f' % (timeSince(start, iter / n_iters),
+                                         # iter, iter / n_iters * 100, print_loss_avg))
+
+        if iter % plot_every == 0:
+            plot_loss_avg = plot_loss_total / plot_every
+            plot_losses.append(plot_loss_avg)
+            plot_loss_total = 0
+
+    showPlot(plot_losses)
+
+def evaluate(encoder, decoder, sentence, max_length=10):
+    with no_grad():
+        input_tensor = tensorFromSentence(input_lang, sentence)
+        input_length = input_tensor.size()[0]
+        encoder_hidden = encoder.initHidden()
+
+        encoder_outputs = zeros(max_length, encoder.hidden_size, device=device)
+
+        for ei in range(input_length):
+            encoder_output, encoder_hidden = encoder(input_tensor[ei],
+                                                     encoder_hidden)
+            encoder_outputs[ei] += encoder_output[0, 0]
+
+        decoder_input = tensor([[Language.SOS_token]], device=device)  # SOS
+
+        decoder_hidden = encoder_hidden
+
+        decoded_words = []
+        decoder_attentions = zeros(max_length, max_length)
+
+        for di in range(max_length):
+            decoder_output, decoder_hidden, decoder_attention = decoder(
+                decoder_input, decoder_hidden, encoder_outputs)
+            decoder_attentions[di] = decoder_attention.data
+            topv, topi = decoder_output.data.topk(1)
+            if topi.item() == Language.EOS_token:
+                decoded_words.append('<EOS>')
+                break
+            else:
+                decoded_words.append(output_lang.index2word[topi.item()])
+
+            decoder_input = topi.squeeze().detach()
+
+        return decoded_words, decoder_attentions[:di + 1]
+
+def evaluateRandomly(encoder, decoder, n=10):
+    for i in range(n):
+        pair = choice(pairs)
+        print('>', pair[0])
+        print('=', pair[1])
+        output_words, attentions = evaluate(encoder, decoder, pair[0])
+        output_sentence = ' '.join(output_words)
+        print('<', output_sentence)
+        print('')
+
+if __name__ =='__main__':
+
+    input_lang, output_lang, pairs = prepareData('eng', 'fra', True)
+    print(choice(pairs))
+    hidden_size = 256
+    encoder = Encoder(input_lang.n_words, hidden_size)#.to(device)
+    decoder = AttentionDecoder(hidden_size, output_lang.n_words, dropout_p=0.1)#.to(device)
+
+    trainIters(encoder, decoder, 750, print_every=5,plot_every=10)
+    show()
