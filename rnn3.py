@@ -1,5 +1,5 @@
 # Sean Robertsons's NLP demo: Translation with a Sequence to Sequence Network and Attention
-# https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html
+# https://pytorch.org/tutorials/intermediate/seq2seq_translation_tutorial.html
 
 from __future__          import unicode_literals, print_function, division
 from argparse            import ArgumentParser
@@ -23,10 +23,11 @@ class Language:
         self.name       = name
         self.word2index = {}
         self.word2count = {}
-        self.index2word = {Language.SOS_token: 'SOS',
-                           Language.EOS_token: 'EOS'
-                           }
-        self.n_words    = len(self.index2word)  # Count SOS and EOS
+        self.index2word = {
+            Language.SOS_token: 'SOS',
+            Language.EOS_token: 'EOS'
+        }
+        self.n    = len(self.index2word)
 
     def addSentence(self, sentence):
         for word in sentence.split(' '):
@@ -34,20 +35,32 @@ class Language:
 
     def addWord(self, word):
         if word not in self.word2index:
-            self.word2index[word]         = self.n_words
-            self.word2count[word]         = 1
-            self.index2word[self.n_words] = word
-            self.n_words                 += 1
+            self.word2index[word]   = self.n
+            self.word2count[word]   = 1
+            self.index2word[self.n] = word
+            self.n                 += 1
         else:
-            self.word2count[word]        += 1
+            self.word2count[word]  += 1
 
+    def get_n(self):
+        return self.n
+
+# Encoder
+#
+# The encoder of a seq2seq network is a RNN that outputs some value
+# for every word from the input sentence. For every input word the
+# encoder outputs a vector and a hidden state, and uses the hidden state for the next input word.
+#
+# see Learning Phrase Representations using RNN Encoder-Decoder for Statistical Machine Translation
+# Cho et al https://arxiv.org/abs/1406.1078
 class Encoder(Module):
-    def __init__(self, input_size, hidden_size=256):
+    def __init__(self, input_size,
+                 hidden_size = 256):
         super().__init__()
         self.device      = device('cuda' if cuda.is_available() else 'cpu')
         self.hidden_size = hidden_size
         self.embedding   = Embedding(input_size, hidden_size)
-        self.gru         = GRU(hidden_size, hidden_size)
+        self.gru         = GRU(hidden_size, hidden_size)       # see Cho et al and https://pytorch.org/docs/stable/generated/torch.nn.GRU.html
 
     def forward(self, input, hidden):
         embedded       = self.embedding(input).view(1, 1, -1)
@@ -58,6 +71,10 @@ class Encoder(Module):
     def initHidden(self):
         return zeros(1, 1, self.hidden_size, device=self.device)
 
+# Decoder
+#
+# see Learning Phrase Representations using RNN Encoder-Decoder for Statistical Machine Translation
+# Cho et al https://arxiv.org/abs/1406.1078
 class Decoder(Module):
     def __init__(self,
                  hidden_size = 256,
@@ -75,7 +92,7 @@ class Decoder(Module):
         output         = self.embedding(input).view(1, 1, -1)
         output         = relu(output)
         output, hidden = self.gru(output, hidden)
-        output          = self.softmax(self.out(output[0]))
+        output         = self.softmax(self.out(output[0]))
         return output, hidden
 
     def initHidden(self):
@@ -119,7 +136,10 @@ class AttentionDecoder(Module):
         return torch.zeros(1, 1, self.hidden_size, device=self.device)
 
     def get_description(self):
-        return f'Attention hidden_size={self.hidden_size}, output_size={self.output_size}, max_length ={self.max_length}, Dropout = {self.dropout_p}'
+        return f'Attention hidden_size = {self.hidden_size}, '\
+               f'output_size = {self.output_size}, '          \
+               f'max_length = {self.max_length}, '           \
+               f'dropout = {self.dropout_p}'
 
 # Turn a Unicode string to plain ASCII, thanks to
 # https://stackoverflow.com/a/518232/2809427
@@ -133,7 +153,7 @@ def normalizeString(s):
     return s
 
 def readLanguages(lang1, lang2, reverse=False):
-    file_name = 'data/%s-%s.txt' % (lang1, lang2)
+    file_name = f'data/{lang1}-{lang2}.txt'
     print(f'Reading lines {file_name}')
 
     # Read the file and split into lines
@@ -153,23 +173,27 @@ def readLanguages(lang1, lang2, reverse=False):
 
     return input_lang, output_lang, pairs
 
-eng_prefixes = (
-    'i am ',    'i m ',
-    'he is',    'he s ',
-    'she is',   'she s ',
-    'you are',  'you re ',
-    'we are',   'we re ',
-    'they are', 'they re '
-)
 
-
-def filterPair(p,MAX_LENGTH = 10):
-    return len(p[0].split(' ')) < MAX_LENGTH and \
-        len(p[1].split(' ')) < MAX_LENGTH and \
-        p[1].startswith(eng_prefixes)
-
+# Since there are a lot of example sentences and we want to train something quickly,
+# we'll trim the data set to only relatively short and simple sentences. Here the maximum length
+# is 10 words (that includes ending punctuation) and we are filtering to sentences that translate
+# to the form 'I am' or 'He is' etc. (accounting for apostrophes replaced earlier)
 
 def filterPairs(pairs):
+    def filterPair(p,
+                   max_length   = 10,
+                   eng_prefixes = (
+                       'i am ',    'i m ',
+                       'he is',    'he s ',
+                       'she is',   'she s ',
+                       'you are',  'you re ',
+                       'we are',   'we re ',
+                       'they are', 'they re '
+                   )               ):
+        return len(p[0].split(' ')) < max_length and \
+               len(p[1].split(' ')) < max_length and \
+               p[1].startswith(eng_prefixes)
+
     return [pair for pair in pairs if filterPair(pair)]
 
 def prepareData(lang1, lang2, reverse=False):
@@ -182,8 +206,8 @@ def prepareData(lang1, lang2, reverse=False):
         input_lang.addSentence(pair[0])
         output_lang.addSentence(pair[1])
     print('Counted words:')
-    print(input_lang.name, input_lang.n_words)
-    print(output_lang.name, output_lang.n_words)
+    print(input_lang.name, input_lang.get_n())
+    print(output_lang.name, output_lang.get_n())
     return input_lang, output_lang, pairs
 
 def indexesFromSentence(lang, sentence):
@@ -248,23 +272,25 @@ def step(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decod
 
     return loss.item() / target_length
 
-def showPlot(points,
-             output              = 'rnn',
-             N                   = 100000,
-             decoder_description = None):
+# plotLosses
+
+def plotLosses(Epochs,Losses,
+               output      = 'rnn',
+               N           = 100000,
+               description = None):
 
     fig, ax = subplots(figsize=(15,15))
 
     # this locator puts ticks at regular intervals
     # see https://stackoverflow.com/questions/63723514/userwarning-fixedformatter-should-only-be-used-together-with-fixedlocator
-    ax.yaxis.set_major_locator(MaxNLocator('auto'))
-    yticks_loc = ax.get_yticks().tolist()
-    ax.yaxis.set_major_locator(FixedLocator(yticks_loc))
-    ax.set_xticklabels([f'{y:.1f}' for y in yticks_loc])
-    plot(points)
+    # ax.yaxis.set_major_locator(MaxNLocator('auto'))
+    # yticks_loc = ax.get_yticks().tolist()
+    # ax.yaxis.set_major_locator(FixedLocator(yticks_loc))
+    # ax.set_xticklabels([f'{y:.1f}' for y in yticks_loc])
+    plot(Epochs,Losses)
     xlabel('Epoch')
     ylabel('Loss')
-    title(f'N={N}: {decoder_description}')
+    title(f'N={N}: {description}')
     savefig(f'{output}.png')
 
 def train(encoder, decoder, N,
@@ -273,7 +299,8 @@ def train(encoder, decoder, N,
                learning_rate = 0.01,
                output        = 'rnn'):
     timer             = Timer()
-    plot_losses       = []
+    Losses            = []
+    Epochs            = []
     print_loss_total  = 0  # Reset every print_every
     plot_loss_total   = 0  # Reset every plot_every
     encoder_optimizer = SGD(encoder.parameters(), lr=learning_rate)
@@ -296,14 +323,14 @@ def train(encoder, decoder, N,
             print (f'{m}m {s:.0f}s, {i}, {i / N * 100:.0f}%, {print_loss_avg}')
 
         if i % plot_every == 0:
-            plot_loss_avg = plot_loss_total / plot_every
-            plot_losses.append(plot_loss_avg)
+            Losses.append( plot_loss_total / plot_every)
+            Epochs.append(i)
             plot_loss_total = 0
 
-    showPlot(plot_losses,
-             output              = output,
-             N                   = N,
-             decoder_description = decoder.get_description())
+    plotLosses(Epochs,Losses,
+             output      = output,
+             N           = N,
+             description = decoder.get_description())
 
 def evaluate(encoder, decoder, sentence, max_length=10,device='cpu'):
     with no_grad():
@@ -357,8 +384,8 @@ def showAttention(input_sentence, output_words, attentions, seq=666, outfile='rn
     fig.colorbar(cax)
 
     # Set up axes
-    ax.set_xticklabels([''] + input_sentence.split(' ') + ['<EOS>'], rotation=90)
-    ax.set_yticklabels([''] + output_words)
+    # ax.set_xticklabels([''] + input_sentence.split(' ') + ['<EOS>'], rotation=90)
+    # ax.set_yticklabels([''] + output_words)
 
     # Show label at every tick
     # see https://stackoverflow.com/questions/63723514/userwarning-fixedformatter-should-only-be-used-together-with-fixedlocator
@@ -378,7 +405,7 @@ def showAttention(input_sentence, output_words, attentions, seq=666, outfile='rn
 def evaluateAndShowAttention(input_sentence,encoder, decoder,output='rnn'):
     output_words, attentions = evaluate(encoder, decoder, input_sentence)
     print(f'input = {input_sentence}')
-    print('output = {" ".join(output_words)}')
+    print(f'output = {" ".join(output_words)}')
     showAttention(input_sentence, output_words, attentions,
                   outfile = output,
                   seq     = sha1(input_sentence.encode('utf-8')).hexdigest())
@@ -386,29 +413,33 @@ def evaluateAndShowAttention(input_sentence,encoder, decoder,output='rnn'):
 def create_decoder(args):
     if args.decoder=='attention':
         return AttentionDecoder(hidden_size = args.hidden,
-                                output_size = output_lang.n_words,
-                                dropout_p   = args.dropout)#.to(device)
+                                output_size = output_lang.get_n(),
+                                dropout_p   = args.dropout,
+                                max_length  = args.max_length)#.to(device)
     if args.decoder=='simple':
         return Decoder(hidden_size = args.hidden,
-                       output_size = output_lang.n_words)
+                       output_size = output_lang.get_n())
 
 if __name__ =='__main__':
     parser = ArgumentParser('Translation with a Sequence to Sequence Network and Attention')
-    parser.add_argument('--decoder',   choices = ['simple',
-                                                  'attention'],
-                                       default = 'attention',
-                                       help    = 'Specify whether Attetion is to be used')
-    parser.add_argument('--N',         type = int,   default = 75000, help ='Number of iterations while training')
-    parser.add_argument('--printf',    type = int,   default = 5000,  help = 'Frequency for printing')
-    parser.add_argument('--frequency', type = int,   default = 100,   help = 'Frequency for plotting')
-    parser.add_argument('--hidden',    type = int,   default = 256,   help = 'Number of hidden units')
-    parser.add_argument('--lr',        type = float, default = 0.01,  help = 'Learning Rate')
-    parser.add_argument('--dropout',   type = float, default = 0.01,  help = 'Dropout probability')
-    parser.add_argument('--output',    type = str,   default = 'rnn', help = 'Base name for plotting')
+    parser.add_argument('--decoder',    choices = ['simple',
+                                                   'attention'],
+                                        default = 'attention',
+                                        help    = 'Specify whether Attetion is to be used')
+    parser.add_argument('--N',          type = int,            default = 75000, help ='Number of iterations while training')
+    parser.add_argument('--printf',     type = int,            default = 5000,  help = 'Frequency for printing')
+    parser.add_argument('--frequency',  type = int,            default = 100,   help = 'Frequency for plotting')
+    parser.add_argument('--max_length', type = int,            default = 10,    help = 'Maximum length for Attention Decoder')
+    parser.add_argument('--hidden',     type = int,            default = 256,   help = 'Number of hidden units')
+    parser.add_argument('--lr',         type = float,          default = 0.01,  help = 'Learning Rate')
+    parser.add_argument('--dropout',    type = float,          default = 0.1,   help = 'Dropout probability')
+    parser.add_argument('--output',     type = str,            default = 'rnn', help = 'Base name for plotting')
+    parser.add_argument('--show',       action = 'store_true', default = False, help = 'Show plots at end of run')
     args                           = parser.parse_args()
 
     input_lang, output_lang, pairs = prepareData('eng', 'fra', True)
-    encoder                        = Encoder(input_lang.n_words, hidden_size=args.hidden)#.to(device)
+    encoder                        = Encoder(input_lang.get_n(),
+                                             hidden_size = args.hidden)#.to(device)
     decoder                        = create_decoder(args)#.to(device)
 
     train(encoder, decoder, args.N,
@@ -427,9 +458,12 @@ if __name__ =='__main__':
 
     evaluateRandomly(encoder, decoder)
 
-    evaluateAndShowAttention('elle a cinq ans de moins que moi .',encoder, decoder)
-    evaluateAndShowAttention('elle est trop petit .',encoder, decoder)
-    evaluateAndShowAttention('je ne crains pas de mourir .',encoder, decoder)
-    evaluateAndShowAttention('c est un jeune directeur plein de talent .',encoder, decoder)
+    for sentence in {
+        'elle a cinq ans de moins que moi .',
+        'elle est trop petit .',
+        'je ne crains pas de mourir .',
+        'c est un jeune directeur plein de talent .' }:
+        evaluateAndShowAttention(sentence, encoder, decoder, output=args.output)
 
-    show()
+    if args.show:
+        show()
