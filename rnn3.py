@@ -1,4 +1,5 @@
-# Sean Robertsons's NLP demo: Translation with a Sequence to Sequence Network and Attention
+# This code has been adapted from Sean Robertsons's NLP demo:
+# Translation with a Sequence to Sequence Network and Attention
 # https://pytorch.org/tutorials/intermediate/seq2seq_translation_tutorial.html
 
 from __future__          import unicode_literals, print_function, division
@@ -22,6 +23,7 @@ from unicodedata         import category, normalize
 class Language:
     SOS_token = 0
     EOS_token = 1
+
     def __init__(self, name):
         self.name       = name
         self.word2index = {}
@@ -152,18 +154,22 @@ class AttentionDecoder(Module):
                f'max_length = {self.max_length}, '           \
                f'dropout = {self.dropout_p}'
 
-# Turn a Unicode string to plain ASCII, thanks to
-# https://stackoverflow.com/a/518232/2809427
-def unicodeToAscii(s):
-    return ''.join(c for c in normalize('NFD', s) if category(c) != 'Mn')
-
-def normalizeString(s):
-    s = unicodeToAscii(s.lower().strip())
-    s = sub(r'([.!?])', r' \1', s)
-    s = sub(r'[^a-zA-Z.!?]+', r' ', s)
-    return s
+# readLanguages
+#
+# Create language pair
 
 def readLanguages(lang1, lang2, reverse=False):
+    # Turn a Unicode string to plain ASCII, thanks to
+    # https://stackoverflow.com/a/518232/2809427
+    def unicodeToAscii(s):
+        return ''.join(c for c in normalize('NFD', s) if category(c) != 'Mn')
+
+    def normalize(s):
+        s = unicodeToAscii(s.lower().strip())
+        s = sub(r'([.!?])', r' \1', s)
+        s = sub(r'[^a-zA-Z.!?]+', r' ', s)
+        return s
+
     file_name = f'data/{lang1}-{lang2}.txt'
     print(f'Reading lines {file_name}')
 
@@ -171,7 +177,7 @@ def readLanguages(lang1, lang2, reverse=False):
     lines = open(file_name, encoding='utf-8').read().strip().split('\n')
 
     # Split every line into pairs and normalize
-    pairs = [[normalizeString(s) for s in l.split('\t')] for l in lines]
+    pairs = [[normalize(s) for s in l.split('\t')] for l in lines]
 
     # Reverse pairs, make Lang instances
     if reverse:
@@ -191,7 +197,7 @@ def readLanguages(lang1, lang2, reverse=False):
 # to the form 'I am' or 'He is' etc. (accounting for apostrophes replaced earlier)
 
 def filterPairs(pairs):
-    def filterPair(p,
+    def filterPair(pair,
                    max_length   = 10,
                    eng_prefixes = (
                        'i am ',    'i m ',
@@ -201,9 +207,9 @@ def filterPairs(pairs):
                        'we are',   'we re ',
                        'they are', 'they re '
                    )               ):
-        return len(p[0].split(' ')) < max_length and \
-               len(p[1].split(' ')) < max_length and \
-               p[1].startswith(eng_prefixes)
+        return len(pair[0].split(' ')) < max_length and \
+               len(pair[1].split(' ')) < max_length and \
+               pair[1].startswith(eng_prefixes)
 
     return [pair for pair in pairs if filterPair(pair)]
 
@@ -221,18 +227,15 @@ def prepareData(lang1, lang2, reverse=False):
     print(output_language.name, output_language.get_n())
     return input_language, output_language, pairs
 
-def indexesFromSentence(lang, sentence):
-    return [lang.get_index(word) for word in sentence.split(' ')]
 
 
 def tensorFromSentence(lang, sentence):
-    indexes = indexesFromSentence(lang, sentence)
-    indexes.append(Language.EOS_token)
-    return tensor(indexes, dtype=long, device='cpu').view(-1, 1)  # FIXME
-
+    return tensor([lang.get_index(word) for word in sentence.split(' ')] + [Language.EOS_token],
+                  dtype  = long,
+                  device = 'cpu').view(-1, 1)  # FIXME
 
 def tensorsFromPair(pair):
-    input_tensor = tensorFromSentence(input_language, pair[0])
+    input_tensor  = tensorFromSentence(input_language, pair[0])
     target_tensor = tensorFromSentence(output_language, pair[1])
     return (input_tensor, target_tensor)
 
@@ -291,12 +294,6 @@ def plotLosses(Epochs,Losses,
 
     fig, ax = subplots(figsize=(15,15))
 
-    # this locator puts ticks at regular intervals
-    # see https://stackoverflow.com/questions/63723514/userwarning-fixedformatter-should-only-be-used-together-with-fixedlocator
-    # ax.yaxis.set_major_locator(MaxNLocator('auto'))
-    # yticks_loc = ax.get_yticks().tolist()
-    # ax.yaxis.set_major_locator(FixedLocator(yticks_loc))
-    # ax.set_xticklabels([f'{y:.1f}' for y in yticks_loc])
     plot(Epochs,Losses)
     xlabel('Epoch')
     ylabel('Loss')
@@ -401,8 +398,8 @@ def showAttention(input_sentence, output_words, attentions,
     fig.colorbar(cax)
 
     # Set up axes
-    # ax.set_xticklabels([''] + input_sentence.split(' ') + ['<EOS>'], rotation=90)
-    # ax.set_yticklabels([''] + output_words)
+    ax.set_xticklabels([''] + input_sentence.split(' ') + ['<EOS>'], rotation=90)
+    ax.set_yticklabels([''] + output_words)
 
     # Show label at every tick
     # see https://stackoverflow.com/questions/63723514/userwarning-fixedformatter-should-only-be-used-together-with-fixedlocator
@@ -410,14 +407,15 @@ def showAttention(input_sentence, output_words, attentions,
     ax.xaxis.set_major_locator(MaxNLocator('auto'))
     xticks_loc = ax.get_xticks().tolist()
     ax.xaxis.set_major_locator(FixedLocator(xticks_loc))
-    ax.set_xticklabels([f'{x:.1f}' for x in xticks_loc])
 
     ax.yaxis.set_major_locator(MaxNLocator('auto'))
     yticks_loc = ax.get_yticks().tolist()
     ax.yaxis.set_major_locator(FixedLocator(yticks_loc))
-    ax.set_yticklabels([f'{y:.1f}' for y in yticks_loc])
+
     title(input_sentence)
     savefig(f'{outfile}-{seq}.png')
+
+# evaluateAndShowAttention
 
 def evaluateAndShowAttention(input_sentence,encoder, decoder,
                              output          = 'rnn',
@@ -444,6 +442,10 @@ def create_decoder(args,output_size=0):
     if args.decoder=='simple':
         return Decoder(hidden_size = args.hidden,
                        output_size = output_size)
+
+# load_model
+#
+# Load encode and decoder from saved file
 
 def load_model(load_file):
     loaded             = load(load_file)
