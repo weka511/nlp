@@ -10,12 +10,15 @@ from matplotlib.ticker   import FixedLocator, MaxNLocator
 from random              import choice, random
 from re                  import sub
 from rnn                 import Timer
-from torch               import bmm, cat, cuda, device, long, no_grad, save, tensor, zeros
+from torch               import bmm, cat, cuda, device, load, long, no_grad, save, tensor, zeros
 from torch.nn            import Dropout, Embedding, GRU, Linear, LogSoftmax, Module, NLLLoss
 from torch.nn.functional import log_softmax, relu, softmax
 from torch.optim         import SGD
 from unicodedata         import category, normalize
 
+# Language
+#
+# A container for all words in corpus from one language, e.g. 'eng', 'fra',...
 class Language:
     SOS_token = 0
     EOS_token = 1
@@ -44,6 +47,12 @@ class Language:
 
     def get_n(self):
         return self.n
+
+    def get_index(self,word):
+        return self.word2index[word]
+
+    def get_word(self,index):
+        return self.index2word[index]
 
 # Encoder
 #
@@ -100,6 +109,8 @@ class Decoder(Module):
 
     def get_description(self):
         return f'Decoder hidden_size={self.hidden_size}, output_size={self.output_size}'
+
+# AttentionDecoder
 
 class AttentionDecoder(Module):
     def __init__(self,
@@ -164,14 +175,14 @@ def readLanguages(lang1, lang2, reverse=False):
 
     # Reverse pairs, make Lang instances
     if reverse:
-        pairs       = [list(reversed(p)) for p in pairs]
-        input_lang  = Language(lang2)
-        output_lang = Language(lang1)
+        pairs           = [list(reversed(p)) for p in pairs]
+        input_language  = Language(lang2)
+        output_language = Language(lang1)
     else:
-        input_lang =  Language(lang1)
-        output_lang = Language(lang2)
+        input_language =  Language(lang1)
+        output_language = Language(lang2)
 
-    return input_lang, output_lang, pairs
+    return input_language, output_language, pairs
 
 
 # Since there are a lot of example sentences and we want to train something quickly,
@@ -197,21 +208,21 @@ def filterPairs(pairs):
     return [pair for pair in pairs if filterPair(pair)]
 
 def prepareData(lang1, lang2, reverse=False):
-    input_lang, output_lang, pairs = readLanguages(lang1, lang2, reverse)
+    input_language, output_language, pairs = readLanguages(lang1, lang2, reverse)
     print(f'Read {len(pairs)} sentence pairs')
     pairs = filterPairs(pairs)
     print(f'Trimmed to {len(pairs)} sentence pairs')
     print('Counting words...')
     for pair in pairs:
-        input_lang.addSentence(pair[0])
-        output_lang.addSentence(pair[1])
+        input_language.addSentence(pair[0])
+        output_language.addSentence(pair[1])
     print('Counted words:')
-    print(input_lang.name, input_lang.get_n())
-    print(output_lang.name, output_lang.get_n())
-    return input_lang, output_lang, pairs
+    print(input_language.name, input_language.get_n())
+    print(output_language.name, output_language.get_n())
+    return input_language, output_language, pairs
 
 def indexesFromSentence(lang, sentence):
-    return [lang.word2index[word] for word in sentence.split(' ')]
+    return [lang.get_index(word) for word in sentence.split(' ')]
 
 
 def tensorFromSentence(lang, sentence):
@@ -221,8 +232,8 @@ def tensorFromSentence(lang, sentence):
 
 
 def tensorsFromPair(pair):
-    input_tensor = tensorFromSentence(input_lang, pair[0])
-    target_tensor = tensorFromSentence(output_lang, pair[1])
+    input_tensor = tensorFromSentence(input_language, pair[0])
+    target_tensor = tensorFromSentence(output_language, pair[1])
     return (input_tensor, target_tensor)
 
 def step(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion,
@@ -238,10 +249,9 @@ def step(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decod
     encoder_outputs = zeros(max_length, encoder.hidden_size, device = device)
     loss            = 0
 
-    for ei in range(input_length):
-        encoder_output, encoder_hidden = encoder(
-            input_tensor[ei], encoder_hidden)
-        encoder_outputs[ei] = encoder_output[0, 0]
+    for i in range(input_length):
+        encoder_output, encoder_hidden = encoder(input_tensor[i], encoder_hidden)
+        encoder_outputs[i]             = encoder_output[0, 0]
 
     decoder_input       = tensor([[Language.SOS_token]], device=device)
     decoder_hidden      = encoder_hidden
@@ -249,19 +259,19 @@ def step(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decod
 
     if use_teacher_forcing:
         # Teacher forcing: Feed the target as the next input
-        for di in range(target_length):
+        for i in range(target_length):
             decoder_output, decoder_hidden, decoder_attention = decoder(
                 decoder_input, decoder_hidden, encoder_outputs)
-            loss += criterion(decoder_output, target_tensor[di])
-            decoder_input = target_tensor[di]  # Teacher forcing
+            loss += criterion(decoder_output, target_tensor[i])
+            decoder_input = target_tensor[i]  # Teacher forcing
 
     else:
         # Without teacher forcing: use its own predictions as the next input
-        for di in range(target_length):
+        for i in range(target_length):
             decoder_output, decoder_hidden, decoder_attention = decoder(decoder_input, decoder_hidden, encoder_outputs)
             topv, topi                                        = decoder_output.topk(1)
             decoder_input                                     = topi.squeeze().detach()  # detach from history as input
-            loss                                             += criterion(decoder_output, target_tensor[di])
+            loss                                             += criterion(decoder_output, target_tensor[i])
             if decoder_input.item() == Language.EOS_token:
                 break
 
@@ -332,51 +342,58 @@ def train(encoder, decoder, N,
              N           = N,
              description = decoder.get_description())
 
-def evaluate(encoder, decoder, sentence, max_length=10,device='cpu'):
+def evaluate(encoder, decoder, sentence,
+             max_length      = 10,
+             device          = 'cpu',
+             input_language  = None,
+             output_language = None):
     with no_grad():
-        input_tensor = tensorFromSentence(input_lang, sentence)
-        input_length = input_tensor.size()[0]
-        encoder_hidden = encoder.initHidden()
-
+        input_tensor    = tensorFromSentence(input_language, sentence)
+        input_length    = input_tensor.size()[0]
+        encoder_hidden  = encoder.initHidden()
         encoder_outputs = zeros(max_length, encoder.hidden_size, device=device)
 
         for ei in range(input_length):
-            encoder_output, encoder_hidden = encoder(input_tensor[ei],
-                                                     encoder_hidden)
+            encoder_output, encoder_hidden = encoder(input_tensor[ei], encoder_hidden)
             encoder_outputs[ei] += encoder_output[0, 0]
 
-        decoder_input = tensor([[Language.SOS_token]], device=device)  # SOS
-
-        decoder_hidden = encoder_hidden
-
-        decoded_words = []
+        decoder_input      = tensor([[Language.SOS_token]], device=device)  # SOS
+        decoder_hidden     = encoder_hidden
+        decoded_words      = []
         decoder_attentions = zeros(max_length, max_length)
 
-        for di in range(max_length):
-            decoder_output, decoder_hidden, decoder_attention = decoder(
-                decoder_input, decoder_hidden, encoder_outputs)
-            decoder_attentions[di] = decoder_attention.data
-            topv, topi = decoder_output.data.topk(1)
+        for i in range(max_length):
+            decoder_output, decoder_hidden, decoder_attention = decoder(decoder_input, decoder_hidden, encoder_outputs)
+            decoder_attentions[i]                             = decoder_attention.data
+            topv, topi                                        = decoder_output.data.topk(1)
             if topi.item() == Language.EOS_token:
                 decoded_words.append('<EOS>')
                 break
             else:
-                decoded_words.append(output_lang.index2word[topi.item()])
+                decoded_words.append(output_language.get_word(topi.item()))
 
             decoder_input = topi.squeeze().detach()
 
-        return decoded_words, decoder_attentions[:di + 1]
+        return decoded_words, decoder_attentions[:i + 1]
 
-def evaluateRandomly(encoder, decoder, n=10):
+def evaluateRandomly(encoder, decoder,
+                     n=10,
+                     input_language  = None,
+                     output_language = None,
+                     pairs           = []):
     for i in range(n):
         pair = choice(pairs)
         print(f'>{pair[0]}')
         print(f'={pair[1]}')
-        output_words, attentions = evaluate(encoder, decoder, pair[0])
+        output_words, attentions = evaluate(encoder, decoder, pair[0],
+                                            input_language  = input_language,
+                                            output_language = output_language)
         output_sentence          = ' '.join(output_words)
         print(f'<{output_sentence}\n', output_sentence)
 
-def showAttention(input_sentence, output_words, attentions, seq=666, outfile='rnn'):
+def showAttention(input_sentence, output_words, attentions,
+                  seq     = 666,
+                  outfile = 'rnn'):
     # Set up figure with colorbar
     fig = figure()
     ax  = fig.add_subplot(111)
@@ -402,26 +419,47 @@ def showAttention(input_sentence, output_words, attentions, seq=666, outfile='rn
     title(input_sentence)
     savefig(f'{outfile}-{seq}.png')
 
-def evaluateAndShowAttention(input_sentence,encoder, decoder,output='rnn'):
-    output_words, attentions = evaluate(encoder, decoder, input_sentence)
+def evaluateAndShowAttention(input_sentence,encoder, decoder,
+                             output          = 'rnn',
+                             input_language  = None,
+                             output_language = None):
+    output_words, attentions = evaluate(encoder, decoder, input_sentence,
+                                        input_language  = input_language,
+                                        output_language = output_language)
     print(f'input = {input_sentence}')
     print(f'output = {" ".join(output_words)}')
     showAttention(input_sentence, output_words, attentions,
                   outfile = output,
                   seq     = sha1(input_sentence.encode('utf-8')).hexdigest())
+# create_decoder
+#
+# Factory method for creating decoder
 
-def create_decoder(args):
+def create_decoder(args,output_size=0):
     if args.decoder=='attention':
         return AttentionDecoder(hidden_size = args.hidden,
-                                output_size = output_lang.get_n(),
+                                output_size = output_size,
                                 dropout_p   = args.dropout,
                                 max_length  = args.max_length)#.to(device)
     if args.decoder=='simple':
         return Decoder(hidden_size = args.hidden,
-                       output_size = output_lang.get_n())
+                       output_size = output_size)
+
+def load_model(load_file):
+    loaded             = load(load_file)
+    pairs              = loaded['pairs']
+    old_args           = loaded['args']
+    input_language     = loaded['input_language']
+    output_language    = loaded['output_language']
+    encoder            = Encoder(input_language.get_n(), hidden_size = old_args.hidden)
+    decoder            = create_decoder(old_args,  output_size = output_language.get_n())
+    encoder.load_state_dict(loaded['encoder_state_dict'])
+    decoder.load_state_dict(loaded['decoder_dict'])
+    return encoder, decoder, input_language, output_language,pairs
 
 if __name__ =='__main__':
     parser = ArgumentParser('Translation with a Sequence to Sequence Network and Attention')
+    parser.add_argument('action',       choices = ['train', 'evaluate'])
     parser.add_argument('--decoder',    choices = ['simple',
                                                    'attention'],
                                         default = 'attention',
@@ -433,37 +471,52 @@ if __name__ =='__main__':
     parser.add_argument('--hidden',     type = int,            default = 256,   help = 'Number of hidden units')
     parser.add_argument('--lr',         type = float,          default = 0.01,  help = 'Learning Rate')
     parser.add_argument('--dropout',    type = float,          default = 0.1,   help = 'Dropout probability')
-    parser.add_argument('--output',     type = str,            default = 'rnn', help = 'Base name for plotting')
+    parser.add_argument('--output',     type = str,            default = 'rnn', help = 'Base name for plotting (train)')
+    parser.add_argument('--load',       type = str,            default = 'rnn', help = 'Base name for plotting (evaluate)')
     parser.add_argument('--show',       action = 'store_true', default = False, help = 'Show plots at end of run')
-    args                           = parser.parse_args()
+    args = parser.parse_args()
 
-    input_lang, output_lang, pairs = prepareData('eng', 'fra', True)
-    encoder                        = Encoder(input_lang.get_n(),
-                                             hidden_size = args.hidden)#.to(device)
-    decoder                        = create_decoder(args)#.to(device)
+    if args.action=='train':
+        input_language, output_language, pairs = prepareData('eng', 'fra', True)
+        encoder                                = Encoder(input_language.get_n(),
+                                                         hidden_size = args.hidden)#.to(device)
+        decoder                                = create_decoder(args,
+                                                                output_size = output_language.get_n())#.to(device)
 
-    train(encoder, decoder, args.N,
-          print_every   = args.printf,
-          plot_every    = args.frequency,
-          learning_rate = args.lr,
-          output        = args.output)
+        train(encoder, decoder, args.N,
+              print_every   = args.printf,
+              plot_every    = args.frequency,
+              learning_rate = args.lr,
+              output        = args.output)
 
-    save(
-        {
-            'encoder_state_dict' : encoder.state_dict(),
-            'decoder_dict'       : decoder.state_dict(),
-            'args'               : args
-            },
-        f'{args.output}.pt')
+        save(
+            {
+                'encoder_state_dict' : encoder.state_dict(),
+                'decoder_dict'       : decoder.state_dict(),
+                'args'               : args,
+                'pairs'              : pairs,
+                'input_language'     : input_language,
+                'output_language'    : output_language
+                },
+            f'{args.output}.pt')
 
-    evaluateRandomly(encoder, decoder)
+    if args.action=='evaluate':
+        encoder, decoder, input_language, output_language, pairs = load_model(f'{args.load}.pt')
 
-    for sentence in {
-        'elle a cinq ans de moins que moi .',
-        'elle est trop petit .',
-        'je ne crains pas de mourir .',
-        'c est un jeune directeur plein de talent .' }:
-        evaluateAndShowAttention(sentence, encoder, decoder, output=args.output)
+        evaluateRandomly(encoder, decoder,
+                         input_language  = input_language,
+                         output_language = output_language,
+                         pairs           = pairs)
+
+        for sentence in {
+            'elle a cinq ans de moins que moi .',
+            'elle est trop petit .',
+            'je ne crains pas de mourir .',
+            'c est un jeune directeur plein de talent .' }:
+            evaluateAndShowAttention(sentence, encoder, decoder,
+                                     output          = args.output,
+                                     input_language  = input_language,
+                                     output_language = output_language)
 
     if args.show:
         show()
