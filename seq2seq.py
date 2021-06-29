@@ -99,7 +99,7 @@ class Decoder(Module):
         self.out          = Linear(hidden_size, output_size)
         self.softmax      = LogSoftmax(dim=1)
 
-    def forward(self, input, hidden):
+    def forward(self, input, hidden, encoder_outputs):               #FIXME
         output         = self.embedding(input).view(1, 1, -1)
         output         = relu(output)
         output, hidden = self.gru(output, hidden)
@@ -154,6 +154,9 @@ class AttentionDecoder(Module):
                f'max_length = {self.max_length}, '           \
                f'dropout = {self.dropout_p}'
 
+def unicodeToAscii(s):
+    return ''.join(c for c in normalize('NFD', s) if category(c) != 'Mn')
+
 # readLanguages
 #
 # Create language pair
@@ -161,10 +164,9 @@ class AttentionDecoder(Module):
 def readLanguages(lang1, lang2, reverse=False):
     # Turn a Unicode string to plain ASCII, thanks to
     # https://stackoverflow.com/a/518232/2809427
-    def unicodeToAscii(s):
-        return ''.join(c for c in normalize('NFD', s) if category(c) != 'Mn')
 
-    def normalize(s):
+    # Lowercase, trim, and remove non-letter characters
+    def normalizeString(s):
         s = unicodeToAscii(s.lower().strip())
         s = sub(r'([.!?])', r' \1', s)
         s = sub(r'[^a-zA-Z.!?]+', r' ', s)
@@ -177,7 +179,7 @@ def readLanguages(lang1, lang2, reverse=False):
     lines = open(file_name, encoding='utf-8').read().strip().split('\n')
 
     # Split every line into pairs and normalize
-    pairs = [[normalize(s) for s in l.split('\t')] for l in lines]
+    pairs = [[normalizeString(s) for s in l.split('\t')] for l in lines]
 
     # Reverse pairs, make Lang instances
     if reverse:
@@ -387,6 +389,10 @@ def evaluateRandomly(encoder, decoder,
                                             output_language = output_language)
         output_sentence          = ' '.join(output_words)
         print(f'<{output_sentence}\n', output_sentence)
+
+# showAttention
+#
+# Show association between input and output words
 
 def showAttention(input_sentence, output_words, attentions,
                   seq     = 666,
