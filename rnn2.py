@@ -6,6 +6,11 @@ from rnn               import Alphabet, Categories, Timer
 from torch             import cat, zeros, LongTensor, no_grad
 from torch.nn          import Dropout, Linear, LogSoftmax, Module, NLLLoss
 
+# RNN
+#
+# Recurrent neural network for learning association between names and languages,
+# and generating names
+
 class RNN(Module):
     def __init__(self, input_size=None, hidden_size=None, output_size=None,n_categories=None,dropout=0.1):
         super().__init__()
@@ -30,25 +35,30 @@ class RNN(Module):
         return zeros(1, self.hidden_size)
 
 
-
-# One-hot vector for category
+# categoryTensor
+#
+# Create 1-hot vector for category
 def categoryTensor(category):
-    li            = categories.get_index(category)
-    tensor        = zeros(1, categories.get_n())
-    tensor[0][li] = 1
+    i            = categories.get_index(category)
+    tensor       = zeros(1, categories.get_n())
+    tensor[0][i] = 1
     return tensor
 
+# inputTensor
+#
 # One-hot matrix of first to last letters (not including EOS) for input
 def inputTensor(line):
     tensor = zeros(len(line), 1, alphabet.n)
-    for li in range(len(line)):
-        letter = line[li]
-        tensor[li][0][alphabet.all_letters.find(letter)] = 1
+    for i in range(len(line)):
+        tensor[i][0][alphabet.get_index(line[i])] = 1
+
     return tensor
 
+# targetTensor
+#
 # LongTensor of second letter to end (EOS) for target
 def targetTensor(line):
-    letter_indexes = [alphabet.all_letters.find(line[li]) for li in range(1, len(line))]
+    letter_indexes = [alphabet.get_index(line[i]) for i in range(1, len(line))]
     letter_indexes.append(alphabet.n - 1) # EOS
     return LongTensor(letter_indexes)
 
@@ -60,7 +70,18 @@ def randomTrainingExample():
     target_line_tensor = targetTensor(line)
     return category_tensor, input_line_tensor, target_line_tensor
 
-def train(category_tensor, input_line_tensor, target_line_tensor):
+# step
+#
+# Take one training step
+#
+# For each timestep (that is, for each letter in a training word) the inputs of the network will be
+# (category, current letter, hidden state) and the outputs will be (next letter, next hidden state).
+# So for each training set, we'll need the category, a set of input letters, and a set of output/target letters.
+#
+# Since we are predicting the next letter from the current letter for each timestep, the letter pairs
+# are groups of consecutive letters from the line - e.g. for 'ABCD<EOS>' we would create ('A', 'B'), ('B', 'C'), ('C', 'D'), ('D', 'EOS').
+
+def step(category_tensor, input_line_tensor, target_line_tensor):
     target_line_tensor.unsqueeze_(-1)
     hidden = rnn.initHidden()
     rnn.zero_grad()
@@ -77,6 +98,8 @@ def train(category_tensor, input_line_tensor, target_line_tensor):
 
     return output, loss.item() / input_line_tensor.size(0)
 
+# sample
+#
 # Sample from a category and starting letter
 def sample(category, start_letter='A',max_length = 20):
     with no_grad():  # no need to track history in sampling
@@ -98,8 +121,10 @@ def sample(category, start_letter='A',max_length = 20):
 
         return output_name
 
+# get_samples
+#
 # Get multiple samples from one category and multiple starting letters
-def samples(category, start_letters='ABC'):
+def get_samples(category, start_letters='ABC'):
     for start_letter in start_letters:
         print(sample(category, start_letter))
 
@@ -120,7 +145,7 @@ if __name__=='__main__':
                           output_size  = alphabet.n,
                           n_categories = categories.get_n())
     for i in range(1, N + 1):
-        output, loss = train(*randomTrainingExample())
+        output, loss = step(*randomTrainingExample())
         total_loss += loss
 
         if i % print_every == 0:
@@ -131,10 +156,10 @@ if __name__=='__main__':
             all_losses.append(total_loss / plot_every)
             total_loss = 0
 
-    samples('Russian', 'RUS')
-    samples('German', 'GER')
-    samples('Spanish', 'SPA')
-    samples('Chinese', 'CHI')
+    get_samples('Russian', 'RUS')
+    get_samples('German', 'GER')
+    get_samples('Spanish', 'SPA')
+    get_samples('Chinese', 'CHI')
 
     figure()
     plot(all_losses)
