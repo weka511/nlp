@@ -1,4 +1,8 @@
 # Sean Robertsons's NLP demo: Classifying Names with a Character-Level RNN
+#
+# Train on a few thousand surnames from 18 languages of origin, and predict
+# which language a name is from based on the spelling.
+#
 # https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html
 
 from __future__        import unicode_literals, print_function, division
@@ -15,6 +19,9 @@ from torch             import cat, long, tensor, zeros
 from torch.nn          import Module, Linear, LogSoftmax, NLLLoss
 from unicodedata       import normalize,category
 
+# RNN
+#
+# A recurrent network for learning the association between names and languages
 
 class RNN(Module):
     def __init__(self, input_size, hidden_size, output_size):
@@ -34,30 +41,49 @@ class RNN(Module):
     def initHidden(self):
         return zeros(1, self.hidden_size)
 
+# Alphabet
+#
+# This class represents letters as integers, and converts text into 1-hot vectors
+
 class Alphabet:
     def __init__(self):
         self.all_letters = ascii_letters + " .,;'"
         self.n           = len(self.all_letters)
 
+    # unicodeToAscii
+    #
     # Turn a Unicode string to plain ASCII, thanks to https://stackoverflow.com/a/518232/2809427
     def unicodeToAscii(self,s):
         return ''.join(c for c in normalize('NFD', s) if category(c) != 'Mn' and c in self.all_letters)
 
-    def letterToIndex(self,letter):
+    # letterToIndex
+    #
+    # Find index of letter
+    def get_index(self,letter):
         return self.all_letters.find(letter)
 
+    # tensor
+    #
     # Turn a line into a <line_length x 1 x n>,
     # or an array of one-hot letter vectors
-    def lineToTensor(self,line):
+    def tensor(self,line):
         tensor = zeros(len(line), 1, self.n)
-        for li, letter in enumerate(line):
-            tensor[li][0][self.letterToIndex(letter)] = 1
+        for i, letter in enumerate(line):
+            tensor[i][0][self.get_index(letter)] = 1
         return tensor
+
+# Categories
+#
+# Container for categories of names: easch category comprises names from one loaguage
 
 class Categories:
     def __init__(self):
         self.category_lines = {}
         self.all_categories = []
+
+    # load
+    #
+    # Read all files contining names, assigning each set of names to one category
 
     def load(self,pathname,alphabet):
         for filename in glob(pathname):
@@ -84,11 +110,15 @@ class Categories:
     def get_random(self,alphabet):
         category,line   = self.get_random_pair()
         category_tensor = tensor([self.all_categories.index(category)], dtype=long)
-        line_tensor     = alphabet.lineToTensor(line)
+        line_tensor     = alphabet.tensor(line)
         return category, line, category_tensor, line_tensor
 
     def get_index(self,name):
         return self.all_categories.index(name)
+
+# Timer
+#
+# Used to calculate elspsed time for training
 
 class Timer:
     def __init__(self):
@@ -108,8 +138,11 @@ def readLines(filename,alphabet):
 def randomChoice(l):
     return l[randint(0, len(l) - 1)]
 
+# step
+#
+# Execute one trqrining step
 
-def train(model,category_tensor, line_tensor, criterion, learning_rate=0.001):
+def step(model,category_tensor, line_tensor, criterion, learning_rate=0.001):
     hidden = model.initHidden()
     model.zero_grad()
 
@@ -120,16 +153,20 @@ def train(model,category_tensor, line_tensor, criterion, learning_rate=0.001):
     loss.backward()
 
     # Add parameters' gradients to their values, multiplied by learning rate
-    for p in model.parameters():
-        p.data.add_(p.grad.data, alpha=-learning_rate)
+    for param in model.parameters():
+        param.data.add_(param.grad.data, alpha=-learning_rate)
 
     return output, loss.item()
 
-def evaluate(model, line_tensor):
+# evaluate
+#
+# Use model to predict category of a name
+
+def evaluate(model, name_tensor):
     hidden = model.initHidden()
 
     for i in range(line_tensor.size()[0]):
-        output, hidden = model(line_tensor[i], hidden)
+        output, hidden = model(name_tensor[i], hidden)
 
     return output
 
@@ -158,7 +195,7 @@ if __name__=='__main__':
     learning_rate = LEARNING_RATE
     for i in range(1, N + 1):
         category, line, category_tensor, line_tensor = categories.get_random(alphabet)
-        output, loss                                 = train(rnn, category_tensor, line_tensor, criterion, learning_rate=learning_rate)
+        output, loss                                 = step(rnn, category_tensor, line_tensor, criterion, learning_rate=learning_rate)
         current_loss                                += loss
 
         if i % PRINT_FREQUENCY == 0:
@@ -176,10 +213,10 @@ if __name__=='__main__':
     # Keep track of correct guesses in a confusion matrix
     confusion   = zeros(categories.get_n(), categories.get_n())
 
-    # Go through a bunch of examples and record which are correctly guessed
+    # Go through a bunch of examples and record which have been guessed correctly
     for i in range(N_CONFUSION):
-        category, line, category_tensor, line_tensor        = categories.get_random(alphabet)
-        output                                              = evaluate(rnn, line_tensor)
+        category, name, category_tensor, name_tensor        = categories.get_random(alphabet)
+        output                                              = evaluate(rnn, name_tensor)
         guess, guess_i                                      = categories.fromOutput(output)
         confusion[categories.get_index(category)][guess_i] += 1
 
