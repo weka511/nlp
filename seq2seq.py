@@ -112,6 +112,14 @@ class Decoder(Module):
     def get_description(self):
         return f'Decoder hidden_size={self.hidden_size}, output_size={self.output_size}'
 
+    # adapt
+    #
+    # Allow either encoder to be used with minimal disruption to existing code
+
+    def adapt(self,decoded):
+        decoder_output, decoder_hidden= decoded
+        return decoder_output, decoder_hidden
+
 # AttentionDecoder
 
 class AttentionDecoder(Module):
@@ -153,6 +161,14 @@ class AttentionDecoder(Module):
                f'output_size = {self.output_size}, '          \
                f'max_length = {self.max_length}, '           \
                f'dropout = {self.dropout_p}'
+
+    # adapt
+    #
+    # Allow either encoder to be used with minimal disruption to existing code
+
+    def adapt(self,decoded):
+        decoder_output, decoder_hidden, decoder_attention = decoded
+        return decoder_output, decoder_hidden, decoder_attention
 
 def unicodeToAscii(s):
     return ''.join(c for c in normalize('NFD', s) if category(c) != 'Mn')
@@ -198,9 +214,9 @@ def readLanguages(lang1, lang2, reverse=False):
 # is 10 words (that includes ending punctuation) and we are filtering to sentences that translate
 # to the form 'I am' or 'He is' etc. (accounting for apostrophes replaced earlier)
 
-def filterPairs(pairs):
+def filterPairs(pairs,
+                max_length = 10):
     def filterPair(pair,
-                   max_length   = 10,
                    eng_prefixes = (
                        'i am ',    'i m ',
                        'he is',    'he s ',
@@ -215,10 +231,10 @@ def filterPairs(pairs):
 
     return [pair for pair in pairs if filterPair(pair)]
 
-def prepareData(lang1, lang2, reverse=False):
+def prepareData(lang1, lang2, reverse=False,  max_length = 10):
     input_language, output_language, pairs = readLanguages(lang1, lang2, reverse)
     print(f'Read {len(pairs)} sentence pairs')
-    pairs = filterPairs(pairs)
+    pairs = filterPairs(pairs, max_length = max_length)
     print(f'Trimmed to {len(pairs)} sentence pairs')
     print('Counting words...')
     for pair in pairs:
@@ -262,18 +278,18 @@ def step(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decod
     decoder_hidden      = encoder_hidden
     use_teacher_forcing = random() < teacher_forcing_ratio
 
+
     if use_teacher_forcing:
         # Teacher forcing: Feed the target as the next input
         for i in range(target_length):
-            decoder_output, decoder_hidden, decoder_attention = decoder(
-                decoder_input, decoder_hidden, encoder_outputs)
+            decoder_output, decoder_hidden = decoder.adapt(decoder(decoder_input, decoder_hidden, encoder_outputs))
             loss += criterion(decoder_output, target_tensor[i])
             decoder_input = target_tensor[i]  # Teacher forcing
 
     else:
         # Without teacher forcing: use its own predictions as the next input
         for i in range(target_length):
-            decoder_output, decoder_hidden, decoder_attention = decoder(decoder_input, decoder_hidden, encoder_outputs)
+            decoder_output, decoder_hidden = decoder.adapt(decoder(decoder_input, decoder_hidden, encoder_outputs))
             topv, topi                                        = decoder_output.topk(1)
             decoder_input                                     = topi.squeeze().detach()  # detach from history as input
             loss                                             += criterion(decoder_output, target_tensor[i])
@@ -439,14 +455,17 @@ def evaluateAndShowAttention(input_sentence,encoder, decoder,
 #
 # Factory method for creating decoder
 
-def create_decoder(args,output_size=0):
+def create_decoder(output_size = 0,
+                   hidden_size = 0,
+                   max_length  = 0,
+                   dropout     = 0.1):
     if args.decoder=='attention':
-        return AttentionDecoder(hidden_size = args.hidden,
+        return AttentionDecoder(hidden_size = hidden_size,
                                 output_size = output_size,
-                                dropout_p   = args.dropout,
-                                max_length  = args.max_length)#.to(device)
+                                dropout_p   = dropout,
+                                max_length  = max_length)
     if args.decoder=='simple':
-        return Decoder(hidden_size = args.hidden,
+        return Decoder(hidden_size = hidden_size,
                        output_size = output_size)
 
 # load_model
@@ -471,7 +490,7 @@ if __name__ =='__main__':
     parser.add_argument('--decoder',    choices = ['simple',
                                                    'attention'],
                                         default = 'attention',
-                                        help    = 'Specify whether Attetion is to be used')
+                                        help    = 'Specify whether Attention is to be used')
     parser.add_argument('--N',          type = int,            default = 75000, help ='Number of iterations while training')
     parser.add_argument('--printf',     type = int,            default = 5000,  help = 'Frequency for printing')
     parser.add_argument('--frequency',  type = int,            default = 100,   help = 'Frequency for plotting')
@@ -485,11 +504,15 @@ if __name__ =='__main__':
     args = parser.parse_args()
 
     if args.action=='train':
-        input_language, output_language, pairs = prepareData('eng', 'fra', True)
+        input_language, output_language, pairs = prepareData('eng', 'fra',
+                                                             reverse    = True,
+                                                             max_length = args.max_length)
         encoder                                = Encoder(input_language.get_n(),
                                                          hidden_size = args.hidden)#.to(device)
         decoder                                = create_decoder(args,
-                                                                output_size = output_language.get_n())#.to(device)
+                                                                output_size = output_language.get_n(),
+                                                                max_length=args.max_length,
+                                                                hidden_size=args.hidden)#.to(device)
 
         train(encoder, decoder, args.N,
               print_every   = args.printf,
