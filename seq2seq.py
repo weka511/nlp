@@ -57,7 +57,7 @@ class Language:
         return self.index2word[index]
 
     def tensorFromSentence(self, sentence):
-        return tensor([lang.get_index(word) for word in sentence.split(' ')] + [Language.EOS_token],
+        return tensor([self.get_index(word) for word in sentence.split(' ')] + [Language.EOS_token],
                       dtype  = long).view(-1, 1)
 
 # Encoder
@@ -123,8 +123,7 @@ class Decoder(Module):
         if train:
             return decoder_output, decoder_hidden
         else:
-            max_length = 10 # FIXME
-            return decoder_output, decoder_hidden, zeros(max_length, max_length)
+            return decoder_output, decoder_hidden, None
 
 # AttentionDecoder
 
@@ -368,11 +367,11 @@ def evaluate(encoder, decoder, sentence,
         encoder_hidden  = encoder.initHidden()
         encoder_outputs = zeros(max_length, encoder.hidden_size)
 
-        for ei in range(input_length):
-            encoder_output, encoder_hidden = encoder(input_tensor[ei], encoder_hidden)
-            encoder_outputs[ei] += encoder_output[0, 0]
+        for i in range(input_length):
+            encoder_output, encoder_hidden = encoder(input_tensor[i], encoder_hidden)
+            encoder_outputs[i] += encoder_output[0, 0]
 
-        decoder_input      = tensor([[Language.SOS_token]])  # SOS
+        decoder_input      = tensor([[Language.SOS_token]])
         decoder_hidden     = encoder_hidden
         decoded_words      = []
         decoder_attentions = zeros(max_length, max_length)
@@ -380,7 +379,8 @@ def evaluate(encoder, decoder, sentence,
         for i in range(max_length):
             decoder_output, decoder_hidden, decoder_attention = decoder.adapt(decoder(decoder_input, decoder_hidden, encoder_outputs),
                                                                       train=False)
-            decoder_attentions[i]                             = decoder_attention.data
+            if decoder_attention!=None:
+                decoder_attentions[i]                             = decoder_attention.data
             topv, topi                                        = decoder_output.data.topk(1)
             if topi.item() == Language.EOS_token:
                 decoded_words.append('<EOS>')
@@ -390,7 +390,10 @@ def evaluate(encoder, decoder, sentence,
 
             decoder_input = topi.squeeze().detach()
 
-        return decoded_words, decoder_attentions[:i + 1]
+        if decoder_attention==None:
+            return decoded_words, None
+        else:
+            return decoded_words, decoder_attentions[:i + 1]
 
 def evaluateRandomly(encoder, decoder,
                      n               = 10,
@@ -449,6 +452,8 @@ def evaluateAndShowAttention(input_sentence,encoder, decoder,
                                         output_language = output_language)
     print(f'input = {input_sentence}')
     print(f'output = {" ".join(output_words)}')
+    if attentions==None: return
+
     showAttention(input_sentence, output_words, attentions,
                   outfile = output,
                   seq     = sha1(input_sentence.encode('utf-8')).hexdigest())
