@@ -11,7 +11,7 @@ from matplotlib.ticker   import FixedLocator, MaxNLocator
 from random              import choice, random
 from re                  import sub
 from rnn                 import Timer
-from torch               import bmm, cat, cuda, device, load, long, no_grad, save, tensor, zeros
+from torch               import bmm, cat, load, long, no_grad, save, tensor, zeros
 from torch.nn            import Dropout, Embedding, GRU, Linear, LogSoftmax, Module, NLLLoss
 from torch.nn.functional import log_softmax, relu, softmax
 from torch.optim         import SGD
@@ -56,6 +56,10 @@ class Language:
     def get_word(self,index):
         return self.index2word[index]
 
+    def tensorFromSentence(self, sentence):
+        return tensor([lang.get_index(word) for word in sentence.split(' ')] + [Language.EOS_token],
+                      dtype  = long).view(-1, 1)
+
 # Encoder
 #
 # The encoder of a seq2seq network is a RNN that outputs some value
@@ -68,7 +72,6 @@ class Encoder(Module):
     def __init__(self, input_size,
                  hidden_size = 256):
         super().__init__()
-        self.device      = device('cuda' if cuda.is_available() else 'cpu')
         self.hidden_size = hidden_size
         self.embedding   = Embedding(input_size, hidden_size)
         self.gru         = GRU(hidden_size, hidden_size)       # see Cho et al and https://pytorch.org/docs/stable/generated/torch.nn.GRU.html
@@ -80,7 +83,7 @@ class Encoder(Module):
         return output, hidden
 
     def initHidden(self):
-        return zeros(1, 1, self.hidden_size, device=self.device)
+        return zeros(1, 1, self.hidden_size)
 
 # Decoder
 #
@@ -91,7 +94,6 @@ class Decoder(Module):
                  hidden_size = 256,
                  output_size = 256):
         super().__init__()
-        self.device       = device('cuda' if cuda.is_available() else 'cpu')
         self.hidden_size  = hidden_size
         self.output_size  = output_size
         self.embedding    = Embedding(output_size, hidden_size)
@@ -107,7 +109,7 @@ class Decoder(Module):
         return output, hidden
 
     def initHidden(self):
-        return zeros(1, 1, self.hidden_size, device=self.device)
+        return zeros(1, 1, self.hidden_size)
 
     def get_description(self):
         return f'Decoder hidden_size={self.hidden_size}, output_size={self.output_size}'
@@ -116,9 +118,13 @@ class Decoder(Module):
     #
     # Allow either encoder to be used with minimal disruption to existing code
 
-    def adapt(self,decoded):
+    def adapt(self,decoded,train = True):
         decoder_output, decoder_hidden= decoded
-        return decoder_output, decoder_hidden
+        if train:
+            return decoder_output, decoder_hidden
+        else:
+            max_length = 10 # FIXME
+            return decoder_output, decoder_hidden, zeros(max_length, max_length)
 
 # AttentionDecoder
 
@@ -129,7 +135,6 @@ class AttentionDecoder(Module):
                  dropout_p   = 0.1,
                  max_length  = 10):
         super().__init__()
-        self.device       = device('cuda' if cuda.is_available() else 'cpu')
         self.hidden_size  = hidden_size
         self.output_size  = output_size
         self.dropout_p    = dropout_p
@@ -154,7 +159,7 @@ class AttentionDecoder(Module):
         return output, hidden, attn_weights
 
     def initHidden(self):
-        return torch.zeros(1, 1, self.hidden_size, device=self.device)
+        return torch.zeros(1, 1, self.hidden_size)
 
     def get_description(self):
         return f'Attention hidden_size = {self.hidden_size}, '\
@@ -166,9 +171,12 @@ class AttentionDecoder(Module):
     #
     # Allow either encoder to be used with minimal disruption to existing code
 
-    def adapt(self,decoded):
+    def adapt(self,decoded,train = True):
         decoder_output, decoder_hidden, decoder_attention = decoded
-        return decoder_output, decoder_hidden, decoder_attention
+        if train:
+            return decoder_output, decoder_hidden
+        else:
+            decoder_output, decoder_hidden, decoder_attention
 
 def unicodeToAscii(s):
     return ''.join(c for c in normalize('NFD', s) if category(c) != 'Mn')
@@ -246,35 +254,28 @@ def prepareData(lang1, lang2, reverse=False,  max_length = 10):
     return input_language, output_language, pairs
 
 
-
-def tensorFromSentence(lang, sentence):
-    return tensor([lang.get_index(word) for word in sentence.split(' ')] + [Language.EOS_token],
-                  dtype  = long,
-                  device = 'cpu').view(-1, 1)  # FIXME
-
 def tensorsFromPair(pair):
-    input_tensor  = tensorFromSentence(input_language, pair[0])
-    target_tensor = tensorFromSentence(output_language, pair[1])
+    input_tensor  = input_language.tensorFromSentence(pair[0])
+    target_tensor = output_language.tensorFromSentence(pair[1])
     return (input_tensor, target_tensor)
 
 def step(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion,
           max_length            = 10,
-          teacher_forcing_ratio = 0.5,
-          device                = 'cpu'):
+          teacher_forcing_ratio = 0.5):
     encoder_hidden = encoder.initHidden()
     encoder_optimizer.zero_grad()
     decoder_optimizer.zero_grad()
 
     input_length    = input_tensor.size(0)
     target_length   = target_tensor.size(0)
-    encoder_outputs = zeros(max_length, encoder.hidden_size, device = device)
+    encoder_outputs = zeros(max_length, encoder.hidden_size)
     loss            = 0
 
     for i in range(input_length):
         encoder_output, encoder_hidden = encoder(input_tensor[i], encoder_hidden)
         encoder_outputs[i]             = encoder_output[0, 0]
 
-    decoder_input       = tensor([[Language.SOS_token]], device=device)
+    decoder_input       = tensor([[Language.SOS_token]])
     decoder_hidden      = encoder_hidden
     use_teacher_forcing = random() < teacher_forcing_ratio
 
@@ -359,26 +360,26 @@ def train(encoder, decoder, N,
 
 def evaluate(encoder, decoder, sentence,
              max_length      = 10,
-             device          = 'cpu',
              input_language  = None,
              output_language = None):
     with no_grad():
-        input_tensor    = tensorFromSentence(input_language, sentence)
+        input_tensor    = input_language.tensorFromSentence(sentence)
         input_length    = input_tensor.size()[0]
         encoder_hidden  = encoder.initHidden()
-        encoder_outputs = zeros(max_length, encoder.hidden_size, device=device)
+        encoder_outputs = zeros(max_length, encoder.hidden_size)
 
         for ei in range(input_length):
             encoder_output, encoder_hidden = encoder(input_tensor[ei], encoder_hidden)
             encoder_outputs[ei] += encoder_output[0, 0]
 
-        decoder_input      = tensor([[Language.SOS_token]], device=device)  # SOS
+        decoder_input      = tensor([[Language.SOS_token]])  # SOS
         decoder_hidden     = encoder_hidden
         decoded_words      = []
         decoder_attentions = zeros(max_length, max_length)
 
         for i in range(max_length):
-            decoder_output, decoder_hidden, decoder_attention = decoder(decoder_input, decoder_hidden, encoder_outputs)
+            decoder_output, decoder_hidden, decoder_attention = decoder.adapt(decoder(decoder_input, decoder_hidden, encoder_outputs),
+                                                                      train=False)
             decoder_attentions[i]                             = decoder_attention.data
             topv, topi                                        = decoder_output.data.topk(1)
             if topi.item() == Language.EOS_token:
@@ -392,7 +393,7 @@ def evaluate(encoder, decoder, sentence,
         return decoded_words, decoder_attentions[:i + 1]
 
 def evaluateRandomly(encoder, decoder,
-                     n=10,
+                     n               = 10,
                      input_language  = None,
                      output_language = None,
                      pairs           = []):
@@ -455,16 +456,17 @@ def evaluateAndShowAttention(input_sentence,encoder, decoder,
 #
 # Factory method for creating decoder
 
-def create_decoder(output_size = 0,
+def create_decoder(decoder,
+                   output_size = 0,
                    hidden_size = 0,
                    max_length  = 0,
                    dropout     = 0.1):
-    if args.decoder=='attention':
+    if decoder=='attention':
         return AttentionDecoder(hidden_size = hidden_size,
                                 output_size = output_size,
                                 dropout_p   = dropout,
                                 max_length  = max_length)
-    if args.decoder=='simple':
+    if decoder=='simple':
         return Decoder(hidden_size = hidden_size,
                        output_size = output_size)
 
@@ -479,7 +481,12 @@ def load_model(load_file):
     input_language     = loaded['input_language']
     output_language    = loaded['output_language']
     encoder            = Encoder(input_language.get_n(), hidden_size = old_args.hidden)
-    decoder            = create_decoder(old_args,  output_size = output_language.get_n())
+    decoder            = create_decoder(old_args.decoder,
+                                        output_size = output_language.get_n(),
+                                        dropout     = args.dropout,
+                                        max_length  = args.max_length,
+                                        hidden_size = args.hidden)
+
     encoder.load_state_dict(loaded['encoder_state_dict'])
     decoder.load_state_dict(loaded['decoder_dict'])
     return encoder, decoder, input_language, output_language,pairs
@@ -507,12 +514,12 @@ if __name__ =='__main__':
         input_language, output_language, pairs = prepareData('eng', 'fra',
                                                              reverse    = True,
                                                              max_length = args.max_length)
-        encoder                                = Encoder(input_language.get_n(),
-                                                         hidden_size = args.hidden)#.to(device)
-        decoder                                = create_decoder(args,
+        encoder                                = Encoder(input_language.get_n(), hidden_size = args.hidden)
+        decoder                                = create_decoder(args.decoder,
+                                                                dropout     = args.dropout,
                                                                 output_size = output_language.get_n(),
-                                                                max_length=args.max_length,
-                                                                hidden_size=args.hidden)#.to(device)
+                                                                max_length  = args.max_length,
+                                                                hidden_size = args.hidden)
 
         train(encoder, decoder, args.N,
               print_every   = args.printf,
