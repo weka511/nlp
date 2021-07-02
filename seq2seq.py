@@ -175,7 +175,7 @@ class AttentionDecoder(Module):
         if train:
             return decoder_output, decoder_hidden
         else:
-            decoder_output, decoder_hidden, decoder_attention
+            return decoder_output, decoder_hidden, decoder_attention
 
 def unicodeToAscii(s):
     return ''.join(c for c in normalize('NFD', s) if category(c) != 'Mn')
