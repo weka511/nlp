@@ -13,10 +13,12 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>
 #
-#  This program has been written to test my understanding of word2vec -- https://arxiv.org/abs/1301.3781/
+#   This program has been written to test my understanding of word2vec --
+#   Efficient Estimation of Word Representations in Vector Space -- Tomas Mikolov, Kai Chen, Greg Corrado, Jeffrey Dean--
+#   https://arxiv.org/abs/1301.3781/
 #
-# The code is based on Mateusz Bednarski's article, Implementing word2vec in PyTorch (skip-gram model)
-# https://towardsdatascience.com/implementing-word2vec-in-pytorch-skip-gram-model-e6bae040d2fb
+#   The code is based on Mateusz Bednarski's article, Implementing word2vec in PyTorch (skip-gram model)
+#   https://towardsdatascience.com/implementing-word2vec-in-pytorch-skip-gram-model-e6bae040d2fb
 
 from argparse            import ArgumentParser
 from glob                import glob
@@ -29,7 +31,7 @@ from re                  import compile
 from sys                 import float_info
 from time                import time
 from tokenizer           import extract_sentences, extract_tokens, read_text
-from torch               import dot, flip, from_numpy, load, matmul, norm, randn,  save, zeros
+from torch               import dot, flip, from_numpy, load, matmul, norm, randn,  save, zeros, zeros_like
 from torch.autograd      import Variable
 from torch.nn.functional import log_softmax, nll_loss
 
@@ -164,8 +166,8 @@ def train(W1              = Variable(randn(0,0).float(), requires_grad=True),
           checkpoint      = lambda Epochs,Losses: None):
     start  = time()
     rg     = default_rng() if shuffle else None
-    Delta1 = zeros(embedding, vocabulary_size)
-    Delta2 = zeros(vocabulary_size, embedding)
+    Delta1 = zeros_like(W1)
+    Delta2 = zeros_like(W2)
     Losses = []
     Epochs = []
 
@@ -174,10 +176,10 @@ def train(W1              = Variable(randn(0,0).float(), requires_grad=True),
         loss_val      = 0
         learning_rate = lr/(1+decay_rate * epoch)
 
-        for data, target in shuffled(idx_pairs,rg):
-            x           = Variable(create_1hot_vector(data,vocabulary_size)).float()
+        for word_index, target in shuffled(idx_pairs,rg):
             y_true      = Variable(from_numpy(array([target])).long())
-            z1          = matmul(W1, x)
+            z1          = W1[:,word_index] # equivalent to multiplying by 1-hot vector -- 1 = matmul(W1, x), where
+                                           # x = Variable(create_1hot_vector(data,vocabulary_size)).float()
             z2          = matmul(W2, z1)
             y_predicted = log_softmax(z2, dim=0)
             loss        = nll_loss(y_predicted.view(1,-1), y_true)
@@ -209,7 +211,7 @@ def get_similarity(v,u):
 
 # read_corpus
 #
-# Read corpous from file
+# Read corpus from file
 
 def read_corpus(file_name):
     with open(file_name) as f:
@@ -251,7 +253,8 @@ if __name__=='__main__':
     parser = ArgumentParser('Build word2vector')
     parser.add_argument('action', choices=['train',
                                            'test',
-                                           'resume'],                                                help = 'Train weights or test them')
+                                           'resume'],
+                                  help = 'Train weights or test them')
     parser.add_argument('--N',                   type = int,   default = 20001,                      help = 'Number of Epochs for training')
     parser.add_argument('--lr',                  type = float, default = 0.001,                      help = 'Learning rate (before decay)')
     parser.add_argument('--alpha',               type = float, default = 0.0,                        help = 'Momentum')
@@ -259,7 +262,7 @@ if __name__=='__main__':
     parser.add_argument('--frequency',           type = int,   default = 1,                          help = 'Frequency for display')
     parser.add_argument('--window',              type = int,   default = 2,                          help = 'Window size')
     parser.add_argument('--embedding',           type = int,   default = 100,                        help = 'Embedding size')
-    parser.add_argument('--output',                            default = None,                       help = 'Output file name (train or resume)')
+    parser.add_argument('--output',                            default = 'word2vec',                 help = 'Output file name (train or resume)')
     parser.add_argument('--saved',                             default = None,                       help = 'Saved weights (resume or test)')
     parser.add_argument('--burn',                type=int,     default = 0,                          help = 'Burn in')
     parser.add_argument('--show',                              default = False, action='store_true', help = 'Show plots')
@@ -336,15 +339,15 @@ if __name__=='__main__':
         savefig(args.output)
 
     if args.action == 'resume':
-        output_file       = get_output(output=args.output, saved=args.saved)
-        loaded            = load(f'{args.saved}.pt')
-        W1                = loaded['W1']
-        W2                = loaded['W2']
-        word2idx          = loaded['word2idx']
-        idx2word          = loaded['idx2word']
-        idx_pairs         = loaded['idx_pairs']
-        loaded_args       = loaded['args']
-        _,vocabulary_size = W1.shape
+        output_file         = get_output(output=args.output, saved=args.saved)
+        loaded              = load(f'{args.saved}.pt')
+        W1                  = loaded['W1']
+        W2                  = loaded['W2']
+        word2idx            = loaded['word2idx']
+        idx2word            = loaded['idx2word']
+        idx_pairs           = loaded['idx_pairs']
+        loaded_args         = loaded['args']
+        _,vocabulary_size   = W1.shape
         W1,W2,Epochs,Losses = train(W1              = W1,
                                     W2              = W2,
                                     idx_pairs       = idx_pairs,
