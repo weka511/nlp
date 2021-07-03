@@ -22,6 +22,7 @@
 
 from argparse            import ArgumentParser
 from glob                import glob
+from icecream            import ic
 from itertools           import chain
 from matplotlib.pyplot   import figure, legend, plot, savefig, show, title, xlabel, ylabel
 from numpy               import array
@@ -33,7 +34,38 @@ from time                import time
 from tokenizer           import extract_sentences, extract_tokens, read_text
 from torch               import dot, flip, from_numpy, load, matmul, norm, randn,  save, zeros, zeros_like
 from torch.autograd      import Variable
+from torch.nn            import Module
 from torch.nn.functional import log_softmax, nll_loss
+
+class Word2Vec(Module):
+    def __init__(self,embedding_size, vocabulary_size):
+        super().__init__()
+        self.W1     = Variable(randn(embedding_size, vocabulary_size).float(), requires_grad=True)
+        self.W2     = Variable(randn(vocabulary_size, embedding_size).float(), requires_grad=True)
+        self.Delta1 = zeros_like(self.W1)
+        self.Delta2 = zeros_like(self.W2)
+
+    def step(self,word_index,target,
+             alpha         = 0.9,
+             learning_rate = 0.001):
+        y_true       = Variable(from_numpy(array([target])).long())
+        z1           = self.W1[:,word_index]
+        z2           = matmul(self.W2, z1)
+        y_predicted  = log_softmax(z2, dim=0)
+        loss         = nll_loss(y_predicted.view(1,-1), y_true)
+        loss_val     = loss.item()
+        loss.backward()
+        self.Delta1  = alpha * self.Delta1 - learning_rate * self.W1.grad.data
+        self.Delta2  = alpha * self.Delta2 - learning_rate * self.W2.grad.data
+        self.W2.data += self.Delta2
+        self.W1.data += self.Delta1
+        self.W1.grad.data.zero_()
+        self.W2.grad.data.zero_()
+        return loss_val
+
+    def get_similarities(self,idx):
+        word_vector = self.W1[:,idx]
+        return matmul(word_vector,self.W1)/(norm(word_vector)*norm(self.W1))
 
 # tokenize_corpus
 #
@@ -151,8 +183,7 @@ def shuffled(idx_pairs, rg = None):
 #
 # Train neural network
 
-def train(W1              = Variable(randn(0,0).float(), requires_grad=True),
-          W2              = Variable(randn(0,0).float(), requires_grad=True),
+def train(model,
           idx_pairs       = [],
           vocabulary_size = 0,
           lr              = 0.01,
@@ -166,8 +197,6 @@ def train(W1              = Variable(randn(0,0).float(), requires_grad=True),
           checkpoint      = lambda Epochs,Losses: None):
     start  = time()
     rg     = default_rng() if shuffle else None
-    Delta1 = zeros_like(W1)
-    Delta2 = zeros_like(W2)
     Losses = []
     Epochs = []
 
@@ -177,20 +206,9 @@ def train(W1              = Variable(randn(0,0).float(), requires_grad=True),
         learning_rate = lr/(1+decay_rate * epoch)
 
         for word_index, target in shuffled(idx_pairs,rg):
-            y_true      = Variable(from_numpy(array([target])).long())
-            z1          = W1[:,word_index] # equivalent to multiplying by 1-hot vector -- 1 = matmul(W1, x), where
-                                           # x = Variable(create_1hot_vector(data,vocabulary_size)).float()
-            z2          = matmul(W2, z1)
-            y_predicted = log_softmax(z2, dim=0)
-            loss        = nll_loss(y_predicted.view(1,-1), y_true)
-            loss_val   += loss.item()
-            loss.backward()
-            Delta1     = alpha * Delta1 - learning_rate * W1.grad.data
-            Delta2     = alpha * Delta2 - learning_rate * W2.grad.data
-            W2.data    += Delta2
-            W1.data    += Delta1
-            W1.grad.data.zero_()
-            W2.grad.data.zero_()
+            loss_val += model.step(word_index,target,
+                         alpha         = alpha,
+                         learning_rate = learning_rate)
 
         if epoch % frequency == 0:
             print(f'Loss at epoch {epoch}: {loss_val/len(idx_pairs)}. Time/epoch = {(time()-start)/(epoch+1):.0f} seconds')
@@ -199,7 +217,7 @@ def train(W1              = Variable(randn(0,0).float(), requires_grad=True),
                 Losses.append(loss_val/len(idx_pairs))
                 checkpoint(Epochs,Losses)
 
-    return W1,W2,Epochs,Losses
+    return Epochs,Losses
 
 # get_similarity
 #
@@ -286,34 +304,31 @@ if __name__=='__main__':
         minimum_loss = float_info.max
 
         for decay_rate in args.decay:
-            W1 = Variable(randn(args.embedding, vocabulary_size).float(), requires_grad=True)
-            W2 = Variable(randn(vocabulary_size, args.embedding).float(), requires_grad=True)
-            W1,W2,Epochs,Losses = train(
-                                    W1              = W1,
-                                    W2              = W2,
-                                    idx_pairs       = idx_pairs,
-                                    vocabulary_size = vocabulary_size,
-                                    lr              = args.lr,
-                                    decay_rate      = decay_rate,
-                                    burn            = args.burn,
-                                    num_epochs      = args.N,
-                                    embedding       = args.embedding,
-                                    frequency       = args.frequency,
-                                    alpha           = args.alpha,
-                                    shuffle         = args.shuffle,
-                                    checkpoint      = lambda Epochs,Losses: save_checkpoint (
-                                        {   'W1'         : W1,
-                                            'W2'         : W2,
-                                            'word2idx'   : word2idx,
-                                            'idx2word'   : idx2word,
-                                            'decay_rate' : args.decay,
-                                            'idx_pairs'  : idx_pairs,
-                                            'args'       : args,
-                                            'Epochs'     : Epochs,
-                                            'Losses'     : Losses},
-                                       seq             = Epochs[-1],
-                                       base            = args.chk,
-                                       max_checkpoints = args.max_checkpoints))
+            model = Word2Vec(args.embedding, vocabulary_size)
+            Epochs,Losses = train(model,
+                                  idx_pairs       = idx_pairs,
+                                  vocabulary_size = vocabulary_size,
+                                  lr              = args.lr,
+                                  decay_rate      = decay_rate,
+                                  burn            = args.burn,
+                                  num_epochs      = args.N,
+                                  embedding       = args.embedding,
+                                  frequency       = args.frequency,
+                                  alpha           = args.alpha,
+                                  shuffle         = args.shuffle,
+                                  checkpoint      = lambda Epochs,Losses: save_checkpoint (
+                                      {   'model'           : model.state_dict(),
+                                          'word2idx'        : word2idx,
+                                          'idx2word'        : idx2word,
+                                          'decay_rate'      : args.decay,
+                                          'idx_pairs'       : idx_pairs,
+                                          'args'            : args,
+                                          'Epochs'          : Epochs,
+                                          'Losses'          : Losses,
+                                          'vocabulary_size' : vocabulary_size },
+                                     seq             = Epochs[-1],
+                                     base            = args.chk,
+                                     max_checkpoints = args.max_checkpoints))
 
             plot(Epochs,Losses,label=f'Decay rate={decay_rate}')
 
@@ -321,15 +336,15 @@ if __name__=='__main__':
                 minimum_loss = Losses[-1]
                 print (f'Saving weights for Loss={minimum_loss} in {output_file}.pt')
                 save (
-                    {   'W1'         : W1,
-                        'W2'         : W2,
-                        'word2idx'   : word2idx,
-                        'idx2word'   : idx2word,
-                        'decay_rate' : decay_rate,
-                        'idx_pairs'  : idx_pairs,
-                        'args'       : args,
-                        'Epochs'     : Epochs,
-                        'Losses'     : Losses},
+                    {   'model'           : model,
+                        'word2idx'        : word2idx,
+                        'idx2word'        : idx2word,
+                        'decay_rate'      : decay_rate,
+                        'idx_pairs'       : idx_pairs,
+                        'args'            : args,
+                        'Epochs'          : Epochs,
+                        'Losses'          : Losses,
+                        'vocabulary_size' : vocabulary_size  },
                     f'{output_file}.pt')
 
         xlabel('Epoch')
@@ -339,40 +354,40 @@ if __name__=='__main__':
         savefig(args.output)
 
     if args.action == 'resume':
-        output_file         = get_output(output=args.output, saved=args.saved)
-        loaded              = load(f'{args.saved}.pt')
-        W1                  = loaded['W1']
-        W2                  = loaded['W2']
-        word2idx            = loaded['word2idx']
-        idx2word            = loaded['idx2word']
-        idx_pairs           = loaded['idx_pairs']
-        loaded_args         = loaded['args']
-        _,vocabulary_size   = W1.shape
-        W1,W2,Epochs,Losses = train(W1              = W1,
-                                    W2              = W2,
-                                    idx_pairs       = idx_pairs,
-                                    vocabulary_size = vocabulary_size,
-                                    lr              = args.lr,
-                                    decay_rate      = args.decay[0],
-                                    burn            = -1,         # force all data to be stored
-                                    num_epochs      = args.N,
-                                    embedding       = loaded_args.embedding,
-                                    frequency       = args.frequency,
-                                    alpha           = args.alpha,
-                                    shuffle         = loaded_args.shuffle,
-                                    checkpoint      = lambda Epochs,Losses: save_checkpoint (
-                                        {   'W1'         : W1,
-                                            'W2'         : W2,
-                                            'word2idx'   : word2idx,
-                                            'idx2word'   : idx2word,
-                                            'decay_rate' : args.decay,
-                                            'idx_pairs'  : idx_pairs,
-                                            'args'       : loaded_args,
-                                            'Epochs'     : Epochs,
-                                            'Losses'     : Losses},
-                                       seq             = Epochs[-1],
-                                       base            = args.chk,
-                                       max_checkpoints = args.max_checkpoints))
+        output_file     = get_output(output=args.output, saved=args.saved)
+        loaded          = load(f'{args.saved}.pt')
+        state_dict      = model.state_dict()
+        word2idx        = loaded['word2idx']
+        idx2word        = loaded['idx2word']
+        idx_pairs       = loaded['idx_pairs']
+        loaded_args     = loaded['args']
+        vocabulary_size = loaded['vocabulary_size']
+        model           = Word2Vec(loaded_args.embedding, vocabulary_size)
+        model.load_stat_dict(state_dict)
+        Epochs,Losses = train(model,
+                              idx_pairs       = idx_pairs,
+                              vocabulary_size = vocabulary_size,
+                              lr              = args.lr,
+                              decay_rate      = args.decay[0],
+                              burn            = -1,         # force all data to be stored
+                              num_epochs      = args.N,
+                              embedding       = loaded_args.embedding,
+                              frequency       = args.frequency,
+                              alpha           = args.alpha,
+                              shuffle         = loaded_args.shuffle,
+                              checkpoint      = lambda Epochs,Losses: save_checkpoint (
+                                  {   'model'           : model.state_dict(),
+                                      'word2idx'        : word2idx,
+                                      'idx2word'        : idx2word,
+                                      'decay_rate'      : args.decay,
+                                      'idx_pairs'       : idx_pairs,
+                                      'args'            : loaded_args,
+                                      'Epochs'          : Epochs,
+                                      'Losses'          : Losses,
+                                      'vocabulary_size' : vocabulary_size },
+                                 seq             = Epochs[-1],
+                                 base            = args.chk,
+                                 max_checkpoints = args.max_checkpoints))
 
 
         minimum_loss      = Losses[-1]
@@ -380,8 +395,7 @@ if __name__=='__main__':
         loaded_args.lr    = args.lr
         print (f'Saving weights for Loss={minimum_loss} in {output_file}.pt')
         save (
-            {   'W1'         : W1,
-                'W2'         : W2,
+            {   'model'      : model.state_dict(),
                 'word2idx'   : word2idx,
                 'idx2word'   : idx2word,
                 'decay_rate' : args.decay,
@@ -392,31 +406,29 @@ if __name__=='__main__':
             f'{output_file}.pt')
 
     if args.action == 'test':
-        loaded            = load(f'{args.output}.pt')
-        W1                = loaded['W1']
-        W2                = loaded['W2']
-        word2idx          = loaded['word2idx']
-        idx2word          = loaded['idx2word']
-        idx_pairs         = loaded['idx_pairs']
-
-        _,vocabulary_size = W1.shape
+        loaded          = load(f'{args.output}.pt')
+        word2idx        = loaded['word2idx']
+        idx2word        = loaded['idx2word']
+        idx_pairs       = loaded['idx_pairs']
+        vocabulary_size = loaded['vocabulary_size']
+        model           = Word2Vec(loaded_args.embedding, vocabulary_size)
+        model.load_stat_dict(state_dict)
 
         mismatches = []
         for idx, word in idx2word.items():
-            word_vector      = W1[:,idx]
-            sims             = matmul(word_vector,W1)/(norm(word_vector)*norm(W1))
-            most_similar_ids = flip(sims.argsort(),[0]).tolist()[:args.depth]
-            sim_words        = [(idx2word[i],sims[i]) for i in most_similar_ids]
-            first_word,_     = sim_words[0]
+            similarities     = model.get_similarities(idx)
+            most_similar_ids = flip(similarities.argsort(),[0]).tolist()[:args.depth]
+            similar_words    = [(idx2word[i],similarities[i]) for i in most_similar_ids]
+            first_word,_     = similar_words[0]
             if word==first_word:
-                print (f'{" ".join([f"{w}({sim:.3f})" for w,sim in sim_words])} {"Shuffled" if args.shuffle else ""}')
+                print (f'{" ".join([f"{w}({sim:.3f})" for w,sim in similar_words])} {"Shuffled" if args.shuffle else ""}')
             else:
-                mismatches.append((word,sim_words))
+                mismatches.append((word,similar_words))
 
         if len(mismatches)>0:
             print ('There were mismatches')
-            for word,sim_words in mismatches:
-                print (f'{word}\t{" ".join([f"{w}({sim:.3f})" for w,sim in sim_words])} {"Shuffled" if args.shuffle else ""}')
+            for word,similar_words in mismatches:
+                print (f'{word}\t{" ".join([f"{w}({sim:.3f})" for w,sim in similar_words])} {"Shuffled" if args.shuffle else ""}')
 
     if args.show:
         show()
