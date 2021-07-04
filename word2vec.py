@@ -48,15 +48,15 @@ class Word2Vec(Module):
     def step(self,word_index,target,
              alpha         = 0.9,
              learning_rate = 0.001):
-        y_true       = Variable(from_numpy(array([target])).long())
-        z1           = self.W1[:,word_index]
-        z2           = matmul(self.W2, z1)
-        y_predicted  = log_softmax(z2, dim=0)
-        loss         = nll_loss(y_predicted.view(1,-1), y_true)
-        loss_val     = loss.item()
+        y_true        = Variable(from_numpy(array([target])).long())
+        z1            = self.W1[:,word_index]
+        z2            = matmul(self.W2, z1)
+        y_predicted   = log_softmax(z2, dim=0)
+        loss          = nll_loss(y_predicted.view(1,-1), y_true)
+        loss_val      = loss.item()
         loss.backward()
-        self.Delta1  = alpha * self.Delta1 - learning_rate * self.W1.grad.data
-        self.Delta2  = alpha * self.Delta2 - learning_rate * self.W2.grad.data
+        self.Delta1   = alpha * self.Delta1 - learning_rate * self.W1.grad.data
+        self.Delta2   = alpha * self.Delta2 - learning_rate * self.W2.grad.data
         self.W2.data += self.Delta2
         self.W1.data += self.Delta1
         self.W1.grad.data.zero_()
@@ -305,6 +305,7 @@ if __name__=='__main__':
 
         for decay_rate in args.decay:
             model = Word2Vec(args.embedding, vocabulary_size)
+
             Epochs,Losses = train(model,
                                   idx_pairs       = idx_pairs,
                                   vocabulary_size = vocabulary_size,
@@ -335,8 +336,9 @@ if __name__=='__main__':
             if Losses[-1]<minimum_loss:
                 minimum_loss = Losses[-1]
                 print (f'Saving weights for Loss={minimum_loss} in {output_file}.pt')
+
                 save (
-                    {   'model'           : model,
+                    {   'model'           : model.state_dict(),
                         'word2idx'        : word2idx,
                         'idx2word'        : idx2word,
                         'decay_rate'      : decay_rate,
@@ -363,7 +365,8 @@ if __name__=='__main__':
         loaded_args     = loaded['args']
         vocabulary_size = loaded['vocabulary_size']
         model           = Word2Vec(loaded_args.embedding, vocabulary_size)
-        model.load_stat_dict(state_dict)
+        model.load_state_dict(loaded['model'])
+
         Epochs,Losses = train(model,
                               idx_pairs       = idx_pairs,
                               vocabulary_size = vocabulary_size,
@@ -394,6 +397,7 @@ if __name__=='__main__':
         loaded_args.alpha = args.alpha
         loaded_args.lr    = args.lr
         print (f'Saving weights for Loss={minimum_loss} in {output_file}.pt')
+        ic(model)
         save (
             {   'model'      : model.state_dict(),
                 'word2idx'   : word2idx,
@@ -402,17 +406,19 @@ if __name__=='__main__':
                 'idx_pairs'  : idx_pairs,
                 'args'       : loaded_args,
                 'Epochs'     : Epochs,
-                'Losses'     : Losses},
+                'Losses'     : Losses,
+                'vocabulary_size' : vocabulary_size},
             f'{output_file}.pt')
 
     if args.action == 'test':
-        loaded          = load(f'{args.output}.pt')
+        loaded          = load(f'{args.saved}.pt')
+        loaded_args     = loaded['args']
         word2idx        = loaded['word2idx']
         idx2word        = loaded['idx2word']
         idx_pairs       = loaded['idx_pairs']
         vocabulary_size = loaded['vocabulary_size']
         model           = Word2Vec(loaded_args.embedding, vocabulary_size)
-        model.load_stat_dict(state_dict)
+        model.load_state_dict(loaded['model'])
 
         mismatches = []
         for idx, word in idx2word.items():
