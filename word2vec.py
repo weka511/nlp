@@ -49,7 +49,9 @@ class Word2Vec(Module):
              alpha         = 0.9,
              learning_rate = 0.001):
         y_true        = Variable(from_numpy(array([target])).long())
-        z1            = self.W1[:,word_index]
+        x             = Variable(create_1hot_vector(word_index,vocabulary_size)).float()
+        z1            = matmul(self.W1, x)
+        # z1            = self.W1[:,word_index]
         z2            = matmul(self.W2, z1)
         y_predicted   = log_softmax(z2, dim=0)
         loss          = nll_loss(y_predicted.view(1,-1), y_true)
@@ -57,8 +59,8 @@ class Word2Vec(Module):
         loss.backward()
         self.Delta1   = alpha * self.Delta1 - learning_rate * self.W1.grad.data
         self.Delta2   = alpha * self.Delta2 - learning_rate * self.W2.grad.data
-        self.W2.data += self.Delta2
         self.W1.data += self.Delta1
+        self.W2.data += self.Delta2
         self.W1.grad.data.zero_()
         self.W2.grad.data.zero_()
         return loss_val
@@ -287,7 +289,7 @@ if __name__=='__main__':
     parser.add_argument('--shuffle',                           default = False, action='store_true', help = 'Shuffle indices before each epoch')
     parser.add_argument('--corpus',                            default = None,  nargs='+',           help = 'Corpus file name')
     parser.add_argument('--chk',                               default = 'chk',                      help = 'Base for checkpoint file name')
-    parser.add_argument('--depth',               type = int,   default = 16,                         help = 'Number of matches to display when testingt')
+    parser.add_argument('--depth',               type = int,   default = 16,                         help = 'Number of matches to display when testing')
     parser.add_argument('--max_checkpoints',     type = int,   default = 3,                          help = 'Maximum number of checkpoints to be retained')
     args = parser.parse_args()
 
