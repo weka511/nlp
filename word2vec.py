@@ -24,7 +24,7 @@ from argparse            import ArgumentParser
 from glob                import glob
 from icecream            import ic
 from itertools           import chain
-from matplotlib.pyplot   import figure, legend, plot, savefig, show, title, xlabel, ylabel
+from matplotlib.pyplot   import figure, legend, plot, savefig, show, title, xlabel, ylabel, hist
 from numpy               import array
 from numpy.random        import default_rng
 from os                  import remove
@@ -32,7 +32,7 @@ from re                  import compile
 from sys                 import float_info
 from time                import time
 from tokenizer           import extract_sentences, extract_tokens, read_text
-from torch               import dot, flip, from_numpy, load, matmul, norm, randn,  save, zeros, zeros_like
+from torch               import dot, flatten, flip, from_numpy, load, matmul, norm, randn,  save, zeros, zeros_like
 from torch.autograd      import Variable
 from torch.nn            import Module
 from torch.nn.functional import log_softmax, nll_loss
@@ -64,6 +64,11 @@ class Word2Vec(Module):
         self.W1.grad.data.zero_()
         self.W2.grad.data.zero_()
         return loss_val
+
+    def get_weights(self):
+        w1    = flatten(self.W1).detach().numpy()
+        w2    = flatten(self.W2).detach().numpy()
+        return w1,w2
 
     def get_similarities(self,idx):
         word_vector = self.W1[:,idx]
@@ -269,6 +274,31 @@ def get_output(output=None, saved=None, corpus=[]):
         parts = head.split('.')
         return f'{parts[0]}-0'
 
+def plot_weights(model):
+    figure(figsize=(10,10))
+    w1,w2 = model.get_weights()
+    hist(w1, 50,
+         density = True,
+         alpha   = 0.5,
+         label   = 'W1')
+    hist(w2, 50,
+         density = True,
+         alpha   = 0.5,
+         label   = 'W2')
+    legend()
+    xlabel('W1,W2')
+    title('Weights')
+    savefig(f'{args.output}-weights')
+
+def plot_losses(Epochs,Losses,decay_rate,args):
+    figure(figsize=(10,10))
+    plot(Epochs,Losses,label=f'Decay rate={decay_rate}')
+    xlabel('Epoch')
+    ylabel('Loss')
+    legend()
+    title(f'{args.corpus} -- Embedding dimensions={args.embedding}, momentum={args.alpha}')
+    savefig(args.output)
+
 if __name__=='__main__':
     parser = ArgumentParser('Build word2vector')
     parser.add_argument('action', choices=['train',
@@ -301,8 +331,6 @@ if __name__=='__main__':
         idx_pairs                    = create_idx_pairs(tokenized_corpus, word2idx, window_size = args.window)
         print (f'Vocabulary size={vocabulary_size:,d} words. There are {len(idx_pairs):,d} idx pairs')
 
-        figure(figsize=(10,10))
-
         minimum_loss = float_info.max
 
         for decay_rate in args.decay:
@@ -333,8 +361,8 @@ if __name__=='__main__':
                                      base            = args.chk,
                                      max_checkpoints = args.max_checkpoints))
 
-            plot(Epochs,Losses,label=f'Decay rate={decay_rate}')
-
+            plot_losses(Epochs,Losses,decay_rate,args)
+            plot_weights(model)
             if Losses[-1]<minimum_loss:
                 minimum_loss = Losses[-1]
                 print (f'Saving weights for Loss={minimum_loss} in {output_file}.pt')
@@ -351,11 +379,7 @@ if __name__=='__main__':
                         'vocabulary_size' : vocabulary_size  },
                     f'{output_file}.pt')
 
-        xlabel('Epoch')
-        ylabel('Loss')
-        legend()
-        title(f'{args.corpus} -- Embedding dimensions={args.embedding}, momentum={args.alpha}')
-        savefig(args.output)
+
 
     if args.action == 'resume':
         output_file     = get_output(output=args.output, saved=args.saved)
