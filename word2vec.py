@@ -28,6 +28,7 @@ from matplotlib.pyplot   import figure, legend, plot, savefig, show, title, xlab
 from numpy               import array
 from numpy.random        import default_rng
 from os                  import remove
+from random              import sample
 from re                  import compile
 from sys                 import float_info
 from time                import time
@@ -45,9 +46,7 @@ class Word2Vec(Module):
         self.Delta1 = zeros_like(self.W1)
         self.Delta2 = zeros_like(self.W2)
 
-    def step(self,word_index,target,
-             alpha         = 0.9,
-             learning_rate = 0.001):
+    def step(self,word_index,target):
         y_true        = Variable(from_numpy(array([target])).long())
         x             = Variable(create_1hot_vector(word_index,vocabulary_size)).float()
         z1            = matmul(self.W1, x)
@@ -57,13 +56,18 @@ class Word2Vec(Module):
         loss          = nll_loss(y_predicted.view(1,-1), y_true)
         loss_val      = loss.item()
         loss.backward()
+        return loss_val
+
+    def update(self,
+             alpha         = 0.9,
+             learning_rate = 0.001):
         self.Delta1   = alpha * self.Delta1 - learning_rate * self.W1.grad.data
         self.Delta2   = alpha * self.Delta2 - learning_rate * self.W2.grad.data
         self.W1.data += self.Delta1
         self.W2.data += self.Delta2
         self.W1.grad.data.zero_()
         self.W2.grad.data.zero_()
-        return loss_val
+
 
     def get_weights(self):
         w1    = flatten(self.W1).detach().numpy()
@@ -73,6 +77,68 @@ class Word2Vec(Module):
     def get_similarities(self,idx):
         word_vector = self.W1[:,idx]
         return matmul(word_vector,self.W1)/(norm(word_vector)*norm(self.W1))
+
+class GradientDescent:
+
+    def __init__(self,
+                 lr         = 0.001,
+                 decay_rate = 0,
+                 rg         = None,
+                 alpha      = 0.9):
+        self.lr         = lr
+        self.decay_rate = decay_rate
+        self.rg         = rg
+        self.alpha      = alpha
+
+    # shuffled
+    #
+    # Generator for shuffling idx_pairs
+    #
+    # Parameters:
+    #      idx_pairs
+    #      rg   Either a numpy.random.default_rng (shuffle)
+    #           or None                           (no shuffle)
+
+    def shuffled(self,idx_pairs):
+        indices = list(range(len(idx_pairs)))
+        if self.rg!=None:
+            self.rg.shuffle(indices)
+        for index in indices:
+            yield idx_pairs[index]
+
+    def train(self,model,epoch,idx_pairs):
+        loss_val      = 0
+        n             = 0
+        learning_rate = self.lr/(1+self.decay_rate * epoch)
+
+        for word_index, target in self.shuffled(idx_pairs):
+            loss_val += model.step(word_index,target)
+            n += 1
+            model.update(alpha         = self.alpha,
+                         learning_rate = self.lr)
+        return loss_val/n
+
+class StochasticGradient:
+    def __init__(self,
+                 lr         = 0.001,
+                 decay_rate = 0,
+                 alpha      = 0.9,
+                 n          = 18):
+        self.lr         = lr
+        self.decay_rate = decay_rate
+        self.alpha      = alpha
+        self.n          = n
+
+    def train(self,model,epoch,idx_pairs):
+        loss_val      = 0
+        learning_rate = self.lr/(1+self.decay_rate * epoch)
+        for i in sample(range(len(idx_pairs)), self.n):
+            word_index,target = idx_pairs[i]
+            loss_val += model.step(word_index,target)
+        model.update(alpha         = self.alpha,
+                     learning_rate = self.lr)
+        return loss_val/self.n
+
 
 # tokenize_corpus
 #
@@ -170,21 +236,22 @@ def create_1hot_vector(word_idx,vocabulary_size):
     x[word_idx] = 1.0
     return x
 
-# shuffled
-#
-# Generator for shuffling idx_pairs
-#
-# Parameters:
-#      idx_pairs
-#      rg   Either a numpy.random.default_rng (shuffle)
-#           or None                           (no shuffle)
-
-def shuffled(idx_pairs, rg = None):
-    indices = list(range(len(idx_pairs)))
-    if rg!=None:
-        rg.shuffle(indices)
-    for index in indices:
-        yield idx_pairs[index]
+def create_optimizer(name,
+                     lr         = 0.01,
+                     decay_rate = 0,
+                     rg         = None,
+                     alpha      = 0.9,
+                     n          = 8):
+    if name=='gradient':
+        return GradientDescent(lr         = lr,
+                               decay_rate = decay_rate,
+                               rg         = rg,
+                               alpha      = alpha)
+    if name=='stochastic':
+        return StochasticGradient(lr         = lr,
+                                  decay_rate = decay_rate,
+                                  alpha      = alpha,
+                                  n          = n)
 
 # train
 #
@@ -201,27 +268,31 @@ def train(model,
           frequency       = 100,
           alpha           = 0.9,
           shuffle         = False,
-          checkpoint      = lambda Epochs,Losses: None):
+          checkpoint      = lambda Epochs,Losses: None,
+          optimizer_name  = 'gradient',
+          n               = 8):
     start  = time()
-    rg     = default_rng() if shuffle else None
+    # rg     = default_rng() if shuffle else None
     Losses = []
     Epochs = []
 
     print (f'Decay rate={decay_rate}')
-    for epoch in range(num_epochs):
-        loss_val      = 0
-        learning_rate = lr/(1+decay_rate * epoch)
 
-        for word_index, target in shuffled(idx_pairs,rg):
-            loss_val += model.step(word_index,target,
-                         alpha         = alpha,
-                         learning_rate = learning_rate)
+    optimizer = create_optimizer(optimizer_name,
+                                 lr         = lr,
+                                 decay_rate = 0,
+                                 rg         = default_rng() if shuffle else None,
+                                 alpha      = alpha,
+                                 n          = n)
+
+    for epoch in range(num_epochs):
+        mean_loss = optimizer.train(model,epoch,idx_pairs)
 
         if epoch % frequency == 0:
-            print(f'Loss at epoch {epoch}: {loss_val/len(idx_pairs)}. Time/epoch = {(time()-start)/(epoch+1):.0f} seconds')
+            print(f'Mean Loss at Epoch {epoch}: {mean_loss}. Time/epoch = {(time()-start)/(epoch+1):.0f} seconds')
             if epoch >= burn:
                 Epochs.append(epoch)
-                Losses.append(loss_val/len(idx_pairs))
+                Losses.append(mean_loss)
                 checkpoint(Epochs,Losses)
 
     return Epochs,Losses
@@ -321,6 +392,10 @@ if __name__=='__main__':
     parser.add_argument('--chk',                               default = 'chk',                      help = 'Base for checkpoint file name')
     parser.add_argument('--depth',               type = int,   default = 16,                         help = 'Number of matches to display when testing')
     parser.add_argument('--max_checkpoints',     type = int,   default = 3,                          help = 'Maximum number of checkpoints to be retained')
+    parser.add_argument('--optimizer', choices =['gradient',
+                                                 'stochastic'],
+                                                 default='gradient')
+    parser.add_argument('--minibatch',           type = int,  default = 8)
     args = parser.parse_args()
 
     if args.action == 'train':
@@ -359,7 +434,9 @@ if __name__=='__main__':
                                           'vocabulary_size' : vocabulary_size },
                                      seq             = Epochs[-1],
                                      base            = args.chk,
-                                     max_checkpoints = args.max_checkpoints))
+                                     max_checkpoints = args.max_checkpoints),
+                                optimizer_name  = args.optimizer,
+                                n               = args.minibatch)
 
             plot_losses(Epochs,Losses,decay_rate,args)
             plot_weights(model)
