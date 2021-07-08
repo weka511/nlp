@@ -38,7 +38,15 @@ from torch.autograd      import Variable
 from torch.nn            import Module
 from torch.nn.functional import log_softmax, nll_loss
 
+# Word2Vec
+#
+# This class represents the two sets of weights described in Mateusz Bednarski's article
+
 class Word2Vec(Module):
+    # __init__
+    #
+    # Initialize weights and gradients
+
     def __init__(self,embedding_size, vocabulary_size):
         super().__init__()
         self.W1     = Variable(randn(embedding_size, vocabulary_size).float(), requires_grad=True)
@@ -46,11 +54,17 @@ class Word2Vec(Module):
         self.Delta1 = zeros_like(self.W1)
         self.Delta2 = zeros_like(self.W2)
 
-    def step(self,word_index,target):
+    # calculate_loss
+    #
+    # Evaluate wity one datum, compute loss, and update gradients
+
+    def calculate_loss(self,word_index,target,mult=True):
         y_true        = Variable(from_numpy(array([target])).long())
-        x             = Variable(create_1hot_vector(word_index,vocabulary_size)).float()
-        z1            = matmul(self.W1, x)
-        # z1            = self.W1[:,word_index]
+        if mult:
+            x             = Variable(create_1hot_vector(word_index,vocabulary_size)).float()
+            z1            = matmul(self.W1, x)
+        else:
+            z1            = self.W1[:,word_index]
         z2            = matmul(self.W2, z1)
         y_predicted   = log_softmax(z2, dim=0)
         loss          = nll_loss(y_predicted.view(1,-1), y_true)
@@ -58,37 +72,50 @@ class Word2Vec(Module):
         loss.backward()
         return loss_val
 
+    # update
+    #
+    # Use accumulated gradients to update weights
+
     def update(self,
-             alpha         = 0.9,
-             learning_rate = 0.001):
-        self.Delta1   = alpha * self.Delta1 - learning_rate * self.W1.grad.data
-        self.Delta2   = alpha * self.Delta2 - learning_rate * self.W2.grad.data
+             alpha = 0.9,
+             lr    = 0.001):
+        self.Delta1   = alpha * self.Delta1 - lr * self.W1.grad.data
+        self.Delta2   = alpha * self.Delta2 - lr * self.W2.grad.data
         self.W1.data += self.Delta1
         self.W2.data += self.Delta2
         self.W1.grad.data.zero_()
         self.W2.grad.data.zero_()
 
+    # get_weights
+    #
+    # Return weights so they can be plotted
 
     def get_weights(self):
         w1    = flatten(self.W1).detach().numpy()
         w2    = flatten(self.W2).detach().numpy()
         return w1,w2
 
+    # get_similarities
+    #
     def get_similarities(self,idx):
         word_vector = self.W1[:,idx]
         return matmul(word_vector,self.W1)/(norm(word_vector)*norm(self.W1))
 
+# GradientDescent
+#
+# Optimizer, used to train netwrok by Gradient Descent
+
 class GradientDescent:
 
     def __init__(self,
-                 lr         = 0.001,
-                 decay_rate = 0,
-                 rg         = None,
-                 alpha      = 0.9):
-        self.lr         = lr
-        self.decay_rate = decay_rate
-        self.rg         = rg
-        self.alpha      = alpha
+                 lr    = 0.001,
+                 decay = 0,
+                 rg    = None,
+                 alpha = 0.9):
+        self.lr    = lr
+        self.decay = decay
+        self.rg    = rg
+        self.alpha = alpha
 
     # shuffled
     #
@@ -107,36 +134,41 @@ class GradientDescent:
             yield idx_pairs[index]
 
     def train(self,model,epoch,idx_pairs):
-        loss_val      = 0
-        n             = 0
-        learning_rate = self.lr/(1+self.decay_rate * epoch)
+        loss_val = 0
+        n        = 0
+        lr       = self.lr/(1+self.decay * epoch)
 
         for word_index, target in self.shuffled(idx_pairs):
-            loss_val += model.step(word_index,target)
-            n += 1
-            model.update(alpha         = self.alpha,
-                         learning_rate = self.lr)
+            loss_val += model.calculate_loss(word_index,target)
+            n        += 1
+            model.update(alpha = self.alpha, lr = self.lr)
+
         return loss_val/n
+
+# StochasticGradient
+#
+# Optimizer, used to train network by Stochastic Gradient Descent
 
 class StochasticGradient:
     def __init__(self,
-                 lr         = 0.001,
-                 decay_rate = 0,
-                 alpha      = 0.9,
-                 n          = 18):
-        self.lr         = lr
-        self.decay_rate = decay_rate
-        self.alpha      = alpha
-        self.n          = n
+                 lr    = 0.001,
+                 decay = 0,
+                 alpha = 0.9,
+                 n     = 18):
+        self.lr    = lr
+        self.decay = decay
+        self.alpha = alpha
+        self.n     = n
 
     def train(self,model,epoch,idx_pairs):
-        loss_val      = 0
-        learning_rate = self.lr/(1+self.decay_rate * epoch)
+        loss_val = 0
+        lr       = self.lr/(1+self.decay * epoch)
+
         for i in sample(range(len(idx_pairs)), self.n):
             word_index,target = idx_pairs[i]
-            loss_val += model.step(word_index,target)
-        model.update(alpha         = self.alpha,
-                     learning_rate = self.lr)
+            loss_val += model.calculate_loss(word_index,target)
+        model.update(alpha = self.alpha, lr = self.lr)
+
         return loss_val/self.n
 
 
@@ -236,22 +268,26 @@ def create_1hot_vector(word_idx,vocabulary_size):
     x[word_idx] = 1.0
     return x
 
+# create_optimizer
+#
+# Factory method used to set up either GradientDescent or StochasticGradient
+
 def create_optimizer(name,
-                     lr         = 0.01,
-                     decay_rate = 0,
-                     rg         = None,
-                     alpha      = 0.9,
-                     n          = 8):
+                     lr    = 0.01,
+                     decay = 0,
+                     shuffle = False,
+                     alpha = 0.9,
+                     n     = 8):
     if name=='gradient':
-        return GradientDescent(lr         = lr,
-                               decay_rate = decay_rate,
-                               rg         = rg,
-                               alpha      = alpha)
+        return GradientDescent(lr    = lr,
+                               decay = decay,
+                               rg    = default_rng() if shuffle else None,
+                               alpha = alpha)
     if name=='stochastic':
-        return StochasticGradient(lr         = lr,
-                                  decay_rate = decay_rate,
-                                  alpha      = alpha,
-                                  n          = n)
+        return StochasticGradient(lr    = lr,
+                                  decay = decay,
+                                  alpha = alpha,
+                                  n     = n)
 
 # train
 #
@@ -261,7 +297,7 @@ def train(model,
           idx_pairs       = [],
           vocabulary_size = 0,
           lr              = 0.01,
-          decay_rate      = 0,
+          decay           = 0,
           burn            = 0,
           num_epochs      = 1000,
           embedding       = 5,
@@ -272,18 +308,15 @@ def train(model,
           optimizer_name  = 'gradient',
           n               = 8):
     start  = time()
-    # rg     = default_rng() if shuffle else None
     Losses = []
     Epochs = []
 
-    print (f'Decay rate={decay_rate}')
-
     optimizer = create_optimizer(optimizer_name,
-                                 lr         = lr,
-                                 decay_rate = 0,
-                                 rg         = default_rng() if shuffle else None,
-                                 alpha      = alpha,
-                                 n          = n)
+                                 lr      = lr,
+                                 decay   = decay,
+                                 shuffle = shuffle,
+                                 alpha   = alpha,
+                                 n       = n)
 
     for epoch in range(num_epochs):
         mean_loss = optimizer.train(model,epoch,idx_pairs)
@@ -361,13 +394,13 @@ def plot_weights(model):
     title('Weights')
     savefig(f'{args.output}-weights')
 
-def plot_losses(Epochs,Losses,decay_rate,args):
+def plot_losses(Epochs,Losses,args):
     figure(figsize=(10,10))
-    plot(Epochs,Losses,label=f'Decay rate={decay_rate}')
-    xlabel('Epoch')
+    plot(Epochs,Losses)
+    xlabel('Epoch'),
     ylabel('Loss')
-    legend()
-    title(f'{args.corpus} -- Embedding dimensions={args.embedding}, momentum={args.alpha}')
+
+    title(f'{args.corpus} -- Embedding dimensions={args.embedding}, momentum={args.alpha},optimizer={args.optimizer}')
     savefig(args.output)
 
 if __name__=='__main__':
@@ -379,7 +412,7 @@ if __name__=='__main__':
     parser.add_argument('--N',                   type = int,   default = 20001,                      help = 'Number of Epochs for training')
     parser.add_argument('--lr',                  type = float, default = 0.001,                      help = 'Learning rate (before decay)')
     parser.add_argument('--alpha',               type = float, default = 0.0,                        help = 'Momentum')
-    parser.add_argument('--decay',               type = float, default = [0.01], nargs='+',          help = 'Decay rate for learning')
+    parser.add_argument('--decay',               type = float, default = 0.0,                        help = 'Decay rate for learning')
     parser.add_argument('--frequency',           type = int,   default = 1,                          help = 'Frequency for display')
     parser.add_argument('--window',              type = int,   default = 2,                          help = 'Window size')
     parser.add_argument('--embedding',           type = int,   default = 100,                        help = 'Embedding size')
@@ -408,55 +441,52 @@ if __name__=='__main__':
 
         minimum_loss = float_info.max
 
-        for decay_rate in args.decay:
-            model = Word2Vec(args.embedding, vocabulary_size)
+        model = Word2Vec(args.embedding, vocabulary_size)
 
-            Epochs,Losses = train(model,
-                                  idx_pairs       = idx_pairs,
-                                  vocabulary_size = vocabulary_size,
-                                  lr              = args.lr,
-                                  decay_rate      = decay_rate,
-                                  burn            = args.burn,
-                                  num_epochs      = args.N,
-                                  embedding       = args.embedding,
-                                  frequency       = args.frequency,
-                                  alpha           = args.alpha,
-                                  shuffle         = args.shuffle,
-                                  checkpoint      = lambda Epochs,Losses: save_checkpoint (
-                                      {   'model'           : model.state_dict(),
-                                          'word2idx'        : word2idx,
-                                          'idx2word'        : idx2word,
-                                          'decay_rate'      : args.decay,
-                                          'idx_pairs'       : idx_pairs,
-                                          'args'            : args,
-                                          'Epochs'          : Epochs,
-                                          'Losses'          : Losses,
-                                          'vocabulary_size' : vocabulary_size },
-                                     seq             = Epochs[-1],
-                                     base            = args.chk,
-                                     max_checkpoints = args.max_checkpoints),
-                                optimizer_name  = args.optimizer,
-                                n               = args.minibatch)
+        Epochs,Losses = train(model,
+                              idx_pairs       = idx_pairs,
+                              vocabulary_size = vocabulary_size,
+                              lr              = args.lr,
+                              decay           = args.decay,
+                              burn            = args.burn,
+                              num_epochs      = args.N,
+                              embedding       = args.embedding,
+                              frequency       = args.frequency,
+                              alpha           = args.alpha,
+                              shuffle         = args.shuffle,
+                              checkpoint      = lambda Epochs,Losses: save_checkpoint (
+                                  {   'model'           : model.state_dict(),
+                                      'word2idx'        : word2idx,
+                                      'idx2word'        : idx2word,
+                                      'decay'      : args.decay,
+                                      'idx_pairs'       : idx_pairs,
+                                      'args'            : args,
+                                      'Epochs'          : Epochs,
+                                      'Losses'          : Losses,
+                                      'vocabulary_size' : vocabulary_size },
+                                 seq             = Epochs[-1],
+                                 base            = args.chk,
+                                 max_checkpoints = args.max_checkpoints),
+                            optimizer_name  = args.optimizer,
+                            n               = args.minibatch)
 
-            plot_losses(Epochs,Losses,decay_rate,args)
-            plot_weights(model)
-            if Losses[-1]<minimum_loss:
-                minimum_loss = Losses[-1]
-                print (f'Saving weights for Loss={minimum_loss} in {output_file}.pt')
+        plot_losses(Epochs,Losses,args)
+        plot_weights(model)
+        if Losses[-1]<minimum_loss:
+            minimum_loss = Losses[-1]
+            print (f'Saving weights for Loss={minimum_loss} in {output_file}.pt')
 
-                save (
-                    {   'model'           : model.state_dict(),
-                        'word2idx'        : word2idx,
-                        'idx2word'        : idx2word,
-                        'decay_rate'      : decay_rate,
-                        'idx_pairs'       : idx_pairs,
-                        'args'            : args,
-                        'Epochs'          : Epochs,
-                        'Losses'          : Losses,
-                        'vocabulary_size' : vocabulary_size  },
-                    f'{output_file}.pt')
-
-
+            save (
+                {   'model'           : model.state_dict(),
+                    'word2idx'        : word2idx,
+                    'idx2word'        : idx2word,
+                    'decay'           : args.decay,
+                    'idx_pairs'       : idx_pairs,
+                    'args'            : args,
+                    'Epochs'          : Epochs,
+                    'Losses'          : Losses,
+                    'vocabulary_size' : vocabulary_size  },
+                f'{output_file}.pt')
 
     if args.action == 'resume':
         output_file     = get_output(output=args.output, saved=args.saved)
@@ -474,7 +504,7 @@ if __name__=='__main__':
                               idx_pairs       = idx_pairs,
                               vocabulary_size = vocabulary_size,
                               lr              = args.lr,
-                              decay_rate      = args.decay[0],
+                              decay      = args.decay[0],
                               burn            = -1,         # force all data to be stored
                               num_epochs      = args.N,
                               embedding       = loaded_args.embedding,
@@ -485,7 +515,7 @@ if __name__=='__main__':
                                   {   'model'           : model.state_dict(),
                                       'word2idx'        : word2idx,
                                       'idx2word'        : idx2word,
-                                      'decay_rate'      : args.decay,
+                                      'decay'      : args.decay,
                                       'idx_pairs'       : idx_pairs,
                                       'args'            : loaded_args,
                                       'Epochs'          : Epochs,
@@ -505,7 +535,7 @@ if __name__=='__main__':
             {   'model'      : model.state_dict(),
                 'word2idx'   : word2idx,
                 'idx2word'   : idx2word,
-                'decay_rate' : args.decay,
+                'decay' : args.decay,
                 'idx_pairs'  : idx_pairs,
                 'args'       : loaded_args,
                 'Epochs'     : Epochs,
