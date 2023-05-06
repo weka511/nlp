@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#    Copyright (C) 2021=2023 Simon A. Crase
+#    Copyright (C) 2021-2023 Simon A. Crase   simon@greenweaves.nz
 #
 #    This is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -27,20 +27,21 @@ from argparse            import ArgumentParser
 from glob                import glob
 from icecream            import ic
 from itertools           import chain
-from matplotlib.pyplot   import figure, legend, plot, savefig, show, title, xlabel, ylabel, hist
-from numpy               import array
-from numpy.random        import default_rng
 from os                  import remove
 from random              import sample
 from re                  import compile
 from sys                 import float_info
 from time                import time
-from tokenizer           import extract_sentences, extract_tokens, read_text
-from torch               import dot, flatten, flip, from_numpy, load, matmul, norm, randn,  save, zeros, zeros_like
+
+from matplotlib.pyplot   import figure, show
+import numpy             as np
+from numpy.random        import default_rng
+import torch
 from torch.autograd      import Variable
 from torch.nn            import Module
 from torch.nn.functional import log_softmax, nll_loss
 
+from tokenizer           import extract_sentences, extract_tokens, read_text
 
 class Word2Vec(Module):
     '''
@@ -53,10 +54,10 @@ class Word2Vec(Module):
         Initialize weights and gradients
         '''
         super().__init__()
-        self.W1 = Variable(randn(embedding_size, vocabulary_size).float(), requires_grad=True)
-        self.W2 = Variable(randn(vocabulary_size, embedding_size).float(), requires_grad=True)
-        self.Delta1 = zeros_like(self.W1)
-        self.Delta2 = zeros_like(self.W2)
+        self.W1 = Variable(torch.randn(embedding_size, vocabulary_size).float(), requires_grad=True)
+        self.W2 = Variable(torch.randn(vocabulary_size, embedding_size).float(), requires_grad=True)
+        self.Delta1 = torch.zeros_like(self.W1)
+        self.Delta2 = torch.zeros_like(self.W2)
 
     def calculate_loss(self,word_index,target,mult=True):
         '''
@@ -64,13 +65,13 @@ class Word2Vec(Module):
 
         Evaluate with one datum, compute loss, and update gradients
         '''
-        y_true = Variable(from_numpy(array([target])).long())
+        y_true = Variable(torch.from_numpy(np.array([target])).long())
         if mult:
             x  = Variable(create_1hot_vector(word_index,vocabulary_size)).float()
-            z1 = matmul(self.W1, x)
+            z1 = torch.matmul(self.W1, x)
         else:
             z1 = self.W1[:,word_index]
-        z2 = matmul(self.W2, z1)
+        z2 = torch.matmul(self.W2, z1)
         y_predicted = log_softmax(z2, dim=0)
         loss = nll_loss(y_predicted.view(1,-1), y_true)
         loss_val = loss.item()
@@ -98,42 +99,49 @@ class Word2Vec(Module):
 
         Return weights so they can be plotted
         '''
-        w1    = flatten(self.W1).detach().numpy()
-        w2    = flatten(self.W2).detach().numpy()
+        w1    = torch.flatten(self.W1).detach().numpy()
+        w2    = torch.flatten(self.W2).detach().numpy()
         return w1,w2
 
-    # get_similarities
-    #
-    def get_similarities(self,idx):
-        word_vector = self.W1[:,idx]
-        return matmul(word_vector,self.W1)/(norm(word_vector)*norm(self.W1))
 
-# GradientDescent
-#
-# Optimizer, used to train netwrok by Gradient Descent
+    def get_similarities(self,idx):
+        '''
+        get_similarities
+
+        '''
+        word_vector = self.W1[:,idx]
+        return torch.matmul(word_vector,self.W1)/(torch.norm(word_vector)*torch.norm(self.W1))
+
+
 
 class GradientDescent:
+    '''
+    GradientDescent
+
+    Optimizer, used to train netwrok by Gradient Descent
+    '''
 
     def __init__(self,
                  lr    = 0.001,
                  decay = 0,
                  rg    = None,
                  alpha = 0.9):
-        self.lr    = lr
+        self.lr = lr
         self.decay = decay
-        self.rg    = rg
+        self.rg = rg
         self.alpha = alpha
 
-    # shuffled
-    #
-    # Generator for shuffling idx_pairs
-    #
-    # Parameters:
-    #      idx_pairs
-    #      rg   Either a numpy.random.default_rng (shuffle)
-    #           or None                           (no shuffle)
 
     def shuffled(self,idx_pairs):
+        '''
+        shuffled
+
+        Generator for shuffling idx_pairs
+
+        Parameters:
+            idx_pairs
+            rg   Either a numpy.random.default_rng (shuffle) or None
+        '''
         indices = list(range(len(idx_pairs)))
         if self.rg!=None:
             self.rg.shuffle(indices)
@@ -152,24 +160,27 @@ class GradientDescent:
 
         return loss_val/n
 
-# StochasticGradient
-#
-# Optimizer, used to train network by Stochastic Gradient Descent
+
 
 class StochasticGradient:
+    '''
+    StochasticGradient
+
+    Optimizer, used to train network by Stochastic Gradient Descent
+    '''
     def __init__(self,
                  lr    = 0.001,
                  decay = 0,
                  alpha = 0.9,
                  n     = 18):
-        self.lr    = lr
+        self.lr = lr
         self.decay = decay
         self.alpha = alpha
-        self.n     = n
+        self.n = n
 
     def train(self,model,epoch,idx_pairs):
         loss_val = 0
-        lr       = self.lr/(1+self.decay * epoch)
+        lr       = self.lr/(1 + self.decay*epoch)
 
         for i in sample(range(len(idx_pairs)), self.n):
             word_index,target = idx_pairs[i]
@@ -179,72 +190,88 @@ class StochasticGradient:
         return loss_val/self.n
 
 
-# tokenize_corpus
-#
-# Convert corpus (list of lists of words) to list of tokens, each being a words in lower case.
-#
-# Parameters:
-#      corpus  (list of lists of words, punctuation, etc)
-# Returns:
-#      List of lists of tokens
-
 def tokenize_corpus(corpus):
+    '''
+    tokenize_corpus
+
+    Convert corpus (list of lists of words) to list of tokens, each being a words in lower case.
+
+     Parameters:
+          corpus  (list of lists of words, punctuation, etc)
+     Returns:
+          List of lists of tokens
+    '''
     def istoken(s):
         return s.isalpha()
     def lower(S):
         return [s.lower() for s in S if istoken(s)]
     return [lower(x.split()) for x in corpus]
 
-# create_vocabulary
-#
-# Extract list of words from document.
-#
-# Parameters:
-#      tokenized_corpus      List of lists of tokens from corpus
-#
-# Returns:
-#     vocabulary    List of all words in corpus
-#     word2idx      Map word to an index in vocabulary
-#     idx2word      Map index to word
+
 
 def create_vocabulary(tokenized_corpus):
+    '''
+     create_vocabulary
+
+    Extract list of words from document.
+
+    Parameters:
+         tokenized_corpus      List of lists of tokens from corpus
+
+    Returns:
+        vocabulary    List of all words in corpus
+        word2idx      Map word to an index in vocabulary
+        idx2word      Map index to word
+    '''
     vocabulary = list({token for sentence in tokenized_corpus for token in sentence})
     return vocabulary,                                     \
            {w: idx for (idx, w) in enumerate(vocabulary)}, \
            {idx: w for (idx, w) in enumerate(vocabulary)}
 
-# create_idx_pairs
-#
-# Create list of pairs, (word,context) for corpus
-#
-# Parameters:
-#      tokenized_corpus      List of lists of tokens from corpus
-#      word2idx              Map word to an index in vocabulary
-#      window_size           size of sliding window - used to determine whether a neighbour of a word is in context
+
 
 def create_idx_pairs(tokenized_corpus, word2idx, window_size = 2):
-    # flatten
-    #
-    # Convert a list of lists to a list containing all the same data
+    '''
+     create_idx_pairs
 
+     Create list of pairs, (word,context) for corpus
+
+     Parameters:
+          tokenized_corpus      List of lists of tokens from corpus
+          word2idx              Map word to an index in vocabulary
+          window_size           size of sliding window - used to determine whether a neighbour of a word is in context
+    '''
     def flatten(Lists):
+        '''
+        flatten
+
+        Convert a list of lists to a list containing all the same data
+        '''
         return [x for List in Lists for x in List]
 
-    # create_contexts
-    #
-    # Create list of pairs, (word,context) for a single sentence
 
     def create_contexts(sentence):
-        # in_window
-        #
-        # Used to verify that a context word is within the window
+        '''
+        create_contexts
+
+        Create list of pairs, (word,context) for a single sentence
+        '''
+
         def in_window(context_word_pos):
+            '''
+            in_window
+
+            Used to verify that a context word is within the window
+            '''
             return context_word_pos >= 0 and context_word_pos < len(sentence)
 
-        # create_context
-        #
-        # Create a word context pair from a pair of positions within sentence
+
         def create_context(center_word_pos, word_offset):
+            '''
+            create_context
+
+         Create a word context pair from a pair of positions within sentence
+            '''
             return (word_indices[center_word_pos], word_indices[center_word_pos+ word_offset])
 
         word_indices = [word2idx[word] for word in sentence]
@@ -258,26 +285,22 @@ def create_idx_pairs(tokenized_corpus, word2idx, window_size = 2):
     return flatten([create_contexts(sentence) for sentence in tokenized_corpus])
 
 
-
-# create-1hot-vector
-#
-# Create input data for neural net - a 1-hot vector
-#
-# Parameters:
-#     word_idx             Index of word in vocabulary
-#     vocabulary_size      Size of vocabulary
-#
-# Returns:
-#       1 hot vector of dimension vocabulary_size
-
 def create_1hot_vector(word_idx,vocabulary_size):
-    x           = zeros(vocabulary_size).float()
+    '''
+    create-1hot-vector
+
+    Create input data for neural net - a 1-hot vector
+
+    Parameters:
+        word_idx             Index of word in vocabulary
+        vocabulary_size      Size of vocabulary
+
+    Returns:
+          1 hot vector of dimension vocabulary_size
+    '''
+    x           = torch.zeros(vocabulary_size).float()
     x[word_idx] = 1.0
     return x
-
-# create_optimizer
-#
-# Factory method used to set up either GradientDescent or StochasticGradient
 
 def create_optimizer(name,
                      lr    = 0.01,
@@ -285,6 +308,11 @@ def create_optimizer(name,
                      shuffle = False,
                      alpha = 0.9,
                      n     = 8):
+    '''
+    create_optimizer
+
+    Factory method used to set up either GradientDescent or StochasticGradient
+    '''
     if name=='gradient':
         return GradientDescent(lr    = lr,
                                decay = decay,
@@ -296,9 +324,7 @@ def create_optimizer(name,
                                   alpha = alpha,
                                   n     = n)
 
-# train
-#
-# Train neural network
+
 
 def train(model,
           idx_pairs       = [],
@@ -314,6 +340,11 @@ def train(model,
           checkpoint      = lambda Epochs,Losses: None,
           optimizer_name  = 'gradient',
           n               = 8):
+    '''
+    train
+
+    Train neural network
+    '''
     start  = time()
     Losses = []
     Epochs = []
@@ -329,7 +360,7 @@ def train(model,
         mean_loss = optimizer.train(model,epoch,idx_pairs)
 
         if epoch % frequency == 0:
-            print(f'Mean Loss at Epoch {epoch}: {mean_loss}. Time/epoch = {(time()-start)/(epoch+1):.0f} seconds')
+            print(f'Mean Loss at Epoch {epoch}: {mean_loss:.2f}. Time/epoch = {(time()-start)/(epoch+1):.3f} seconds')
             if epoch >= burn:
                 Epochs.append(epoch)
                 Losses.append(mean_loss)
@@ -337,42 +368,52 @@ def train(model,
 
     return Epochs,Losses
 
-# get_similarity
-#
-# Determine similarity between two vctors
+
 
 def get_similarity(v,u):
-    return dot(v,u)/(norm(v)*norm(u))
+    '''
+    get_similarity
 
+    Determine similarity between two vctors
+    '''
+    return torch.dot(v,u)/(torch.norm(v)*torch.norm(u))
 
-# read_corpus
-#
-# Read corpus from file
 
 def read_corpus(file_name):
+    '''
+    read_corpus
+
+    Read corpus from file
+    '''
     with open(file_name) as f:
         for line in f:
             yield line.strip('.\n')
 
-# save_checkpoint
-#
-# Save checkpoint, and delete excess checkpoint files
+
 
 def save_checkpoint(obj,
                     base            = 'CHK',
                     seq             = 0,
                     max_checkpoints = 3):
-    save(obj,f'{base}{seq:06d}.pt')
+    '''
+    save_checkpoint
+
+    Save checkpoint, and delete excess checkpoint files
+    '''
+    torch.save(obj,f'{base}{seq:06d}.pt')
     checkpoints = sorted(glob(f'{base}*.pt'), reverse = True)
     if len(checkpoints)>max_checkpoints:
         for file_name in checkpoints[max_checkpoints:]:
             remove(file_name)
 
-# get_output
-#
-# Used to determine output file name
+
 
 def get_output(output=None, saved=None, corpus=[]):
+    '''
+    get_output
+
+    Used to determine output file name
+    '''
     if output != None: return output
     if saved!= None:
         match = compile('(\D+)(\d*)').search(saved)
@@ -386,29 +427,31 @@ def get_output(output=None, saved=None, corpus=[]):
         return f'{parts[0]}-0'
 
 def plot_weights(model):
-    figure(figsize=(10,10))
+    fig = figure(figsize=(10,10))
+    ax = fig.subplot(1,1,1)
     w1,w2 = model.get_weights()
-    hist(w1, 50,
+    ax.hist(w1, 50,
          density = True,
          alpha   = 0.5,
          label   = 'W1')
-    hist(w2, 50,
+    ax.hist(w2, 50,
          density = True,
          alpha   = 0.5,
          label   = 'W2')
-    legend()
-    xlabel('W1,W2')
-    title('Weights')
-    savefig(f'{args.output}-weights')
+    ax.legend()
+    ax.xlabel('W1,W2')
+    ax.title('Weights')
+    fig.savefig(f'{args.output}-weights')
 
 def plot_losses(Epochs,Losses,args):
-    figure(figsize=(10,10))
-    plot(Epochs,Losses)
-    xlabel('Epoch'),
-    ylabel('Loss')
+    fig = figure(figsize=(10,10))
+    ax = fig.subplot(1,1,1)
+    ax.plot(Epochs,Losses)
+    ax.xlabel('Epoch'),
+    ax.ylabel('Loss')
 
-    title(f'{args.corpus} -- Embedding dimensions={args.embedding}, momentum={args.alpha},optimizer={args.optimizer}')
-    savefig(args.output)
+    ax.title(f'{args.corpus} -- Embedding dimensions={args.embedding}, momentum={args.alpha},optimizer={args.optimizer}')
+    ax.savefig(args.output)
 
 if __name__=='__main__':
     parser = ArgumentParser(__doc__)
@@ -497,7 +540,7 @@ if __name__=='__main__':
 
     if args.action == 'resume':
         output_file     = get_output(output=args.output, saved=args.saved)
-        loaded          = load(f'{args.saved}.pt')
+        loaded          = torch.load(f'{args.saved}.pt')
         state_dict      = model.state_dict()
         word2idx        = loaded['word2idx']
         idx2word        = loaded['idx2word']
@@ -551,7 +594,7 @@ if __name__=='__main__':
             f'{output_file}.pt')
 
     if args.action == 'test':
-        loaded          = load(f'{args.saved}.pt')
+        loaded          = torch.load(f'{args.saved}.pt')
         loaded_args     = loaded['args']
         word2idx        = loaded['word2idx']
         idx2word        = loaded['idx2word']
@@ -563,7 +606,7 @@ if __name__=='__main__':
         mismatches = []
         for idx, word in idx2word.items():
             similarities     = model.get_similarities(idx)
-            most_similar_ids = flip(similarities.argsort(),[0]).tolist()[:args.depth]
+            most_similar_ids = torch.flip(similarities.argsort(),[0]).tolist()[:args.depth]
             similar_words    = [(idx2word[i],similarities[i]) for i in most_similar_ids]
             first_word,_     = similar_words[0]
             if word==first_word:
