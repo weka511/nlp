@@ -1,9 +1,28 @@
-# Sean Robertsons's NLP demo: Classifying Names with a Character-Level RNN
+#!/usr/bin/env python
+
+#    Copyright (C) 2021-2023 Simon A. Crase   simon@greenweaves.nz
 #
-# Train on a few thousand surnames from 18 languages of origin, and predict
-# which language a name is from based on the spelling.
+#    This is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
 #
-# https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html
+#    This software is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>
+
+
+''' Sean Robertsons's NLP demo: Classifying Names with a Character-Level RNN
+
+Train on a few thousand surnames from 18 languages of origin, and predict
+ which language a name is from based on the spelling.
+
+ https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html
+ '''
 
 from __future__        import unicode_literals, print_function, division
 from glob              import glob

@@ -1,3 +1,22 @@
+#!/usr/bin/env python
+
+#    Copyright (C) 2021-2023 Simon A. Crase   simon@greenweaves.nz
+#
+#    This is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This software is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>
+
+'''Explore variability of Bradley-Terry'''
+
 from cycler            import cycler
 from matplotlib.pyplot import figure,bar,xlabel,ylabel,legend,rc, plot,savefig, title, scatter, show
 from numpy             import argsort, exp, zeros, int32, sum, sqrt, log, argmin,mean,std
