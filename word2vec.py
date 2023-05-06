@@ -1,4 +1,6 @@
-#    Copyright (C) 2021 Simon A. Crase
+#!/usr/bin/env python
+
+#    Copyright (C) 2021=2023 Simon A. Crase
 #
 #    This is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -13,12 +15,13 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>
 #
-#   This program has been written to test my understanding of word2vec --
-#   Efficient Estimation of Word Representations in Vector Space -- Tomas Mikolov, Kai Chen, Greg Corrado, Jeffrey Dean--
-#   https://arxiv.org/abs/1301.3781/
-#
-#   The code is based on Mateusz Bednarski's article, Implementing word2vec in PyTorch (skip-gram model)
-#   https://towardsdatascience.com/implementing-word2vec-in-pytorch-skip-gram-model-e6bae040d2fb
+'''  This program has been written to test my understanding of word2vec --
+   Efficient Estimation of Word Representations in Vector Space -- Tomas Mikolov, Kai Chen, Greg Corrado, Jeffrey Dean--
+   https://arxiv.org/abs/1301.3781/
+
+   The code is based on Mateusz Bednarski's article, Implementing word2vec in PyTorch (skip-gram model)
+   https://towardsdatascience.com/implementing-word2vec-in-pytorch-skip-gram-model-e6bae040d2fb
+'''
 
 from argparse            import ArgumentParser
 from glob                import glob
@@ -38,59 +41,63 @@ from torch.autograd      import Variable
 from torch.nn            import Module
 from torch.nn.functional import log_softmax, nll_loss
 
-# Word2Vec
-#
-# This class represents the two sets of weights described in Mateusz Bednarski's article
 
 class Word2Vec(Module):
-    # __init__
-    #
-    # Initialize weights and gradients
+    '''
+    Word2Vec
 
+    This class represents the two sets of weights described in Mateusz Bednarski's article
+    '''
     def __init__(self,embedding_size, vocabulary_size):
+        '''
+        Initialize weights and gradients
+        '''
         super().__init__()
-        self.W1     = Variable(randn(embedding_size, vocabulary_size).float(), requires_grad=True)
-        self.W2     = Variable(randn(vocabulary_size, embedding_size).float(), requires_grad=True)
+        self.W1 = Variable(randn(embedding_size, vocabulary_size).float(), requires_grad=True)
+        self.W2 = Variable(randn(vocabulary_size, embedding_size).float(), requires_grad=True)
         self.Delta1 = zeros_like(self.W1)
         self.Delta2 = zeros_like(self.W2)
 
-    # calculate_loss
-    #
-    # Evaluate wity one datum, compute loss, and update gradients
-
     def calculate_loss(self,word_index,target,mult=True):
-        y_true        = Variable(from_numpy(array([target])).long())
+        '''
+        calculate_loss
+
+        Evaluate with one datum, compute loss, and update gradients
+        '''
+        y_true = Variable(from_numpy(array([target])).long())
         if mult:
-            x             = Variable(create_1hot_vector(word_index,vocabulary_size)).float()
-            z1            = matmul(self.W1, x)
+            x  = Variable(create_1hot_vector(word_index,vocabulary_size)).float()
+            z1 = matmul(self.W1, x)
         else:
-            z1            = self.W1[:,word_index]
-        z2            = matmul(self.W2, z1)
-        y_predicted   = log_softmax(z2, dim=0)
-        loss          = nll_loss(y_predicted.view(1,-1), y_true)
-        loss_val      = loss.item()
+            z1 = self.W1[:,word_index]
+        z2 = matmul(self.W2, z1)
+        y_predicted = log_softmax(z2, dim=0)
+        loss = nll_loss(y_predicted.view(1,-1), y_true)
+        loss_val = loss.item()
         loss.backward()
         return loss_val
-
-    # update
-    #
-    # Use accumulated gradients to update weights
 
     def update(self,
              alpha = 0.9,
              lr    = 0.001):
-        self.Delta1   = alpha * self.Delta1 - lr * self.W1.grad.data
-        self.Delta2   = alpha * self.Delta2 - lr * self.W2.grad.data
+        '''
+        update
+
+        Use accumulated gradients to update weights
+        '''
+        self.Delta1 = alpha*self.Delta1 - lr*self.W1.grad.data
+        self.Delta2 = alpha*self.Delta2 - lr*self.W2.grad.data
         self.W1.data += self.Delta1
         self.W2.data += self.Delta2
         self.W1.grad.data.zero_()
         self.W2.grad.data.zero_()
 
-    # get_weights
-    #
-    # Return weights so they can be plotted
-
     def get_weights(self):
+        '''
+        get_weights
+
+        Return weights so they can be plotted
+        '''
         w1    = flatten(self.W1).detach().numpy()
         w2    = flatten(self.W2).detach().numpy()
         return w1,w2
@@ -404,7 +411,7 @@ def plot_losses(Epochs,Losses,args):
     savefig(args.output)
 
 if __name__=='__main__':
-    parser = ArgumentParser('Build word2vector')
+    parser = ArgumentParser(__doc__)
     parser.add_argument('action', choices=['train',
                                            'test',
                                            'resume'],
