@@ -428,7 +428,7 @@ def get_output(output=None, saved=None, corpus=[]):
 
 def plot_weights(model):
     fig = figure(figsize=(10,10))
-    ax = fig.subplot(1,1,1)
+    ax = fig.add_subplot(1,1,1)
     w1,w2 = model.get_weights()
     ax.hist(w1, 50,
          density = True,
@@ -439,19 +439,19 @@ def plot_weights(model):
          alpha   = 0.5,
          label   = 'W2')
     ax.legend()
-    ax.xlabel('W1,W2')
-    ax.title('Weights')
+    ax.set_xlabel('W1,W2')
+    ax.set_title('Weights')
     fig.savefig(f'{args.output}-weights')
 
 def plot_losses(Epochs,Losses,args):
     fig = figure(figsize=(10,10))
-    ax = fig.subplot(1,1,1)
+    ax = fig.add_subplot(1,1,1)
     ax.plot(Epochs,Losses)
-    ax.xlabel('Epoch'),
-    ax.ylabel('Loss')
+    ax.set_xlabel('Epoch'),
+    ax.set_ylabel('Loss')
 
-    ax.title(f'{args.corpus} -- Embedding dimensions={args.embedding}, momentum={args.alpha},optimizer={args.optimizer}')
-    ax.savefig(args.output)
+    ax.set_title(f'{args.corpus} -- Embedding dimensions={args.embedding}, momentum={args.alpha},optimizer={args.optimizer}')
+    fig.savefig(args.output)
 
 if __name__=='__main__':
     parser = ArgumentParser(__doc__)
@@ -463,7 +463,7 @@ if __name__=='__main__':
     parser.add_argument('--lr',                  type = float, default = 0.001,                      help = 'Learning rate (before decay)')
     parser.add_argument('--alpha',               type = float, default = 0.0,                        help = 'Momentum')
     parser.add_argument('--decay',               type = float, default = 0.0,                        help = 'Decay rate for learning')
-    parser.add_argument('--frequency',           type = int,   default = 1,                          help = 'Frequency for display')
+    parser.add_argument('--frequency',           type = int,   default = 10,                         help = 'Frequency for display')
     parser.add_argument('--window',              type = int,   default = 2,                          help = 'Window size')
     parser.add_argument('--embedding',           type = int,   default = 100,                        help = 'Embedding size')
     parser.add_argument('--output',                            default = 'word2vec',                 help = 'Output file name (train or resume)')
@@ -526,7 +526,7 @@ if __name__=='__main__':
             minimum_loss = Losses[-1]
             print (f'Saving weights for Loss={minimum_loss} in {output_file}.pt')
 
-            save (
+            torch.save (
                 {   'model'           : model.state_dict(),
                     'word2idx'        : word2idx,
                     'idx2word'        : idx2word,
