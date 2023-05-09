@@ -14,7 +14,7 @@
 #
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>
-#
+
 '''  This program has been written to test my understanding of word2vec --
    Efficient Estimation of Word Representations in Vector Space -- Tomas Mikolov, Kai Chen, Greg Corrado, Jeffrey Dean--
    https://arxiv.org/abs/1301.3781/
@@ -25,7 +25,6 @@
 
 from argparse            import ArgumentParser
 from glob                import glob
-from icecream            import ic
 from itertools           import chain
 from os                  import remove
 from random              import sample
@@ -151,7 +150,7 @@ class GradientDescent:
     def train(self,model,epoch,idx_pairs):
         loss_val = 0
         n        = 0
-        lr       = self.lr/(1+self.decay * epoch)
+        lr       = self.lr/(1 + self.decay*epoch)
 
         for word_index, target in self.shuffled(idx_pairs):
             loss_val += model.calculate_loss(word_index,target)
@@ -201,11 +200,7 @@ def tokenize_corpus(corpus):
      Returns:
           List of lists of tokens
     '''
-    def istoken(s):
-        return s.isalpha()
-    def lower(S):
-        return [s.lower() for s in S if istoken(s)]
-    return [lower(x.split()) for x in corpus]
+    return [[s.lower() for s in x.split() if s.isalpha()] for x in corpus]
 
 
 
@@ -224,9 +219,9 @@ def create_vocabulary(tokenized_corpus):
         idx2word      Map index to word
     '''
     vocabulary = list({token for sentence in tokenized_corpus for token in sentence})
-    return vocabulary,                                     \
-           {w: idx for (idx, w) in enumerate(vocabulary)}, \
-           {idx: w for (idx, w) in enumerate(vocabulary)}
+    word2idx = {w: idx for (idx, w) in enumerate(vocabulary)}
+    idx2word = {idx: w for (idx, w) in enumerate(vocabulary)}
+    return vocabulary, word2idx, idx2word
 
 
 
@@ -471,7 +466,7 @@ if __name__=='__main__':
     parser.add_argument('--burn',                type=int,     default = 0,                          help = 'Burn in')
     parser.add_argument('--show',                              default = False, action='store_true', help = 'Show plots')
     parser.add_argument('--shuffle',                           default = False, action='store_true', help = 'Shuffle indices before each epoch')
-    parser.add_argument('--corpus',                            default = None,  nargs='+',           help = 'Corpus file name')
+    parser.add_argument('--corpus',                            default = None,  nargs='+',           help = 'Name(s) of corpus file(s)')
     parser.add_argument('--chk',                               default = 'chk',                      help = 'Base for checkpoint file name')
     parser.add_argument('--depth',               type = int,   default = 16,                         help = 'Number of matches to display when testing')
     parser.add_argument('--max_checkpoints',     type = int,   default = 3,                          help = 'Maximum number of checkpoints to be retained')
