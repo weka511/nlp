@@ -20,17 +20,21 @@
 from re import split
 
 
-def read_text(file_names = ['chapter1.txt']):
+def read_text(file_names = []):
     '''
     read_text
 
-    generator for reading text from a corpus
+    Generator for reading text from a corpus. It allows us to read the file, one line at a time.
+
+    Parameters:
+        file_names   One or more text files that make up corpus
     '''
+    if len(file_names)==0:
+        raise Exception('read_text() needs a list of file names')
     for file_name in file_names:
-        with open(file_name) as text_file:
+        with open(file_name,encoding='utf-8') as text_file:
             for line in text_file:
                 yield line.strip()
-
 
 
 def extract_tokens(text):
@@ -91,5 +95,5 @@ def extract_sentences(Tokens):
             sentence.append(token)
 
 if __name__=='__main__':
-    for sentence in extract_sentences(extract_tokens(read_text())):
+    for sentence in extract_sentences(extract_tokens(read_text(file_names = ['chapter1.txt']))):
         print (sentence)

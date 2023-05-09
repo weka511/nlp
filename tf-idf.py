@@ -23,26 +23,28 @@ from pathlib import Path
 from time import time
 
 import numpy as np
-from spacy import load
+from tokenizer import read_text, extract_sentences, extract_tokens
 
 def TfIdf(docnames=[]):
-    nlp = load("en_core_web_sm")
     docnames = docnames
     dicts = ChainMap()
     word_counts = []
     for file_name in docnames:
-        doc = nlp(Path(file_name).read_text(encoding="utf-8"))
-        words = [token.lemma_ for token in doc if token.is_alpha and not token.is_stop and not token.is_punct]
+        text = list(read_text(file_names=[file_name]))
+        tokens = extract_tokens(text)
+        words = [word for sentence in extract_sentences(tokens) for word in sentence if word.isalpha()]
         word_counts.append(Counter(words))
         dicts.maps.append(word_counts[-1])
     tf = np.zeros((len(list(dicts)),len(docnames)))
+    tf_idf = np.zeros((len(list(dicts)),len(docnames)))
     df = np.zeros((len(list(dicts))))
     for i,word in enumerate(list(dicts)):
         for j,wc in enumerate(word_counts):
             tf[i,j] = wc[word]
             if wc[word]>0:
                 df[i] += 1
-                z=0
+        tf_idf[i,:] = tf[i,:]/df[i]
+        print (word, tf[i,:], df[i], tf_idf[i,:])
 
 
 
