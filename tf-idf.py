@@ -35,16 +35,22 @@ def TfIdf(docnames=[]):
         words = [word for sentence in extract_sentences(tokens) for word in sentence if word.isalpha()]
         word_counts.append(Counter(words))
         dicts.maps.append(word_counts[-1])
-    tf = np.zeros((len(list(dicts)),len(docnames)))
-    tf_idf = np.zeros((len(list(dicts)),len(docnames)))
-    df = np.zeros((len(list(dicts))))
+
+    m = len(list(dicts))
+    n = len(docnames)
+    tf = np.zeros((m,n))
+    tf_idf = np.zeros((m,n))
+    idf = np.zeros((m))
     for i,word in enumerate(list(dicts)):
+        df = 0
         for j,wc in enumerate(word_counts):
-            tf[i,j] = wc[word]
+            tf[i,j] = np.log(wc[word]+1)
             if wc[word]>0:
-                df[i] += 1
-        tf_idf[i,:] = tf[i,:]/df[i]
-        print (word, tf[i,:], df[i], tf_idf[i,:])
+                df += 1
+        idf[i] = np.log(n/df)
+        tf_idf[i,:] = tf[i,:] * idf[i]
+        if np.any(tf_idf[i,:]>0):
+            print (word, tf_idf[i,:])
 
 
 
