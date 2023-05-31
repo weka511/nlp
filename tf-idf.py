@@ -15,18 +15,27 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-'''td-idf algorithm'''
+'''Compute tf-idf scores for list of documents'''
 
 from argparse import ArgumentParser
 from collections import ChainMap, Counter
 from pathlib import Path
 from time import time
-
 import numpy as np
 from tokenizer import read_text, extract_sentences, extract_tokens
 
-def TfIdf(docnames=[]):
-    docnames = docnames
+def count_words(docnames):
+    '''
+    Count all words in all documents
+
+    Parameters:
+        docnames
+
+    Returns:
+       all_words   A list of all words that occur in any document
+       word_counts A list of Counters(dictionaries), one for each document, showing count
+                   of each word that actually occurs in document
+    '''
     dicts = ChainMap()
     word_counts = []
     for file_name in docnames:
@@ -35,13 +44,29 @@ def TfIdf(docnames=[]):
         words = [word for sentence in extract_sentences(tokens) for word in sentence if word.isalpha()]
         word_counts.append(Counter(words))
         dicts.maps.append(word_counts[-1])
+    return list(dicts), word_counts
 
-    m = len(list(dicts))
+def TfIdf(docnames=[]):
+    '''
+    Compute tf-idf scores for list of documents
+
+    Parameters:
+        docnames  A list of pathnames for the documents that are to be processed
+
+    Returns:
+        all_words
+        tf_idf
+    '''
+
+
+    all_words, word_counts = count_words(docnames)
+    m = len(all_words)
     n = len(docnames)
     tf = np.zeros((m,n))
     tf_idf = np.zeros((m,n))
     idf = np.zeros((m))
-    for i,word in enumerate(list(dicts)):
+
+    for i,word in enumerate(all_words):
         df = 0
         for j,wc in enumerate(word_counts):
             tf[i,j] = np.log(wc[word]+1)
@@ -49,18 +74,18 @@ def TfIdf(docnames=[]):
                 df += 1
         idf[i] = np.log(n/df)
         tf_idf[i,:] = tf[i,:] * idf[i]
-        if np.any(tf_idf[i,:]>0):
-            print (word, tf_idf[i,:])
 
-
+    return all_words,tf_idf
 
 if __name__=='__main__':
     start  = time()
-    parser = ArgumentParser(__doc__)
-
+    parser = ArgumentParser(description=__doc__)
+    parser.add_argument('docnames', nargs='+', help='A list of documents to be processed')
     args = parser.parse_args()
-    TfIdf(docnames=['gatsby.txt','erewhon.txt'])
-
+    words,tf_idf = TfIdf(docnames=args.docnames)
+    for i,word in enumerate(words):
+        if np.any(tf_idf[i,:]>0):
+            print (word, tf_idf[i,:])
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
