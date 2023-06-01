@@ -19,6 +19,7 @@
 
 from argparse import ArgumentParser
 from collections import ChainMap, Counter
+from glob import glob
 from pathlib import Path
 from time import time
 import numpy as np
@@ -77,15 +78,30 @@ def TfIdf(docnames=[]):
 
     return all_words,tf_idf
 
+def create_inner_products(tf_idf):
+    _,n = tf_idf.shape
+    product = np.zeros((n,n))
+    for i in range(n):
+        for j in range(n):
+            product[i,j] = np.dot(tf_idf[:,i],tf_idf[:,j]) if j>=i else product[j,i]
+    return product
+
 if __name__=='__main__':
     start  = time()
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('docnames', nargs='+', help='A list of documents to be processed')
+    parser.add_argument('--log', action='store_true', default=False)
     args = parser.parse_args()
-    words,tf_idf = TfIdf(docnames=args.docnames)
-    for i,word in enumerate(words):
-        if np.any(tf_idf[i,:]>0):
-            print (word, tf_idf[i,:])
+    docnames = [doc for pattern in args.docnames for doc in glob(pattern)]
+    print (docnames)
+    words,tf_idf = TfIdf(docnames=docnames)
+    tf_idf = tf_idf/np.linalg.norm(tf_idf,axis=0,keepdims=True)
+    if args.log:
+        for i,word in enumerate(words):
+            if np.any(tf_idf[i,:]>0):
+                print (word, tf_idf[i,:])
+    D =  create_inner_products(tf_idf)
+    print(D)
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
