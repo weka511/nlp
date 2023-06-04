@@ -17,17 +17,16 @@
 
 '''Compute tf-idf scores for list of documents'''
 
-from argparse import ArgumentParser
 from collections import ChainMap, Counter
-from glob import glob
 from pathlib import Path
 from time import time
+from unittest import test, TestCase
 import numpy as np
 from tokenizer import read_text, extract_sentences, extract_tokens
 
 def count_words(docnames):
     '''
-    Count all words in all documents
+    Count all words in a collection of documents
 
     Parameters:
         docnames
@@ -49,7 +48,8 @@ def count_words(docnames):
 
 def TfIdf(docnames=[]):
     '''
-    Compute tf-idf scores for list of documents
+    Compute tf-idf scores for list of documents. Based on
+    Dan Jurafsky & James H. Martin - Speech and Language Processing
 
     Parameters:
         docnames  A list of pathnames for the documents that are to be processed
@@ -87,22 +87,4 @@ def create_inner_products(tf_idf):
     return product
 
 if __name__=='__main__':
-    start  = time()
-    parser = ArgumentParser(description=__doc__)
-    parser.add_argument('docnames', nargs='+', help='A list of documents to be processed')
-    parser.add_argument('--log', action='store_true', default=False)
-    args = parser.parse_args()
-    docnames = [doc for pattern in args.docnames for doc in glob(pattern)]
-    print (docnames)
-    words,tf_idf = TfIdf(docnames=docnames)
-    tf_idf = tf_idf/np.linalg.norm(tf_idf,axis=0,keepdims=True)
-    if args.log:
-        for i,word in enumerate(words):
-            if np.any(tf_idf[i,:]>0):
-                print (word, tf_idf[i,:])
-    D =  create_inner_products(tf_idf)
-    print(D)
-    elapsed = time() - start
-    minutes = int(elapsed/60)
-    seconds = elapsed - 60*minutes
-    print (f'Elapsed Time {minutes} m {seconds:.2f} s')
+    pass
