@@ -20,7 +20,7 @@
 from collections import ChainMap, Counter
 from pathlib import Path
 from time import time
-from unittest import test, TestCase
+from unittest import main, TestCase
 import numpy as np
 from tokenizer import read_text, extract_sentences, extract_tokens
 
@@ -32,7 +32,7 @@ def count_words(docnames):
         docnames
 
     Returns:
-       all_words   A list of all words that occur in any document
+       vocabulary  A list of all words that occur in any document
        word_counts A list of Counters(dictionaries), one for each document, showing count
                    of each word that actually occurs in document
     '''
@@ -55,19 +55,21 @@ def TfIdf(docnames=[]):
         docnames  A list of pathnames for the documents that are to be processed
 
     Returns:
-        all_words
-        tf_idf
+        vocabulary  The list of words in the document
+        tf_idf      An array of dimension m x n containing Tf-Idf scores, where:
+                       m represents the number of words in the vocabulary, excluding words that occur in all documents
+                       n is the number of documents in the corpus
     '''
 
 
-    all_words, word_counts = count_words(docnames)
-    m = len(all_words)
+    vocabulary, word_counts = count_words(docnames)
+    m = len(vocabulary)
     n = len(docnames)
     tf = np.zeros((m,n))
     tf_idf = np.zeros((m,n))
     idf = np.zeros((m))
 
-    for i,word in enumerate(all_words):
+    for i,word in enumerate(vocabulary):
         df = 0
         for j,wc in enumerate(word_counts):
             tf[i,j] = np.log(wc[word]+1)
@@ -75,8 +77,11 @@ def TfIdf(docnames=[]):
                 df += 1
         idf[i] = np.log(n/df)
         tf_idf[i,:] = tf[i,:] * idf[i]
-
-    return all_words,tf_idf
+    selector = np.argwhere(tf_idf.any(axis=1)).flatten()
+    tf_idf_reduced = np.zeros((len(selector),n))
+    for i,k in enumerate(selector):
+        tf_idf_reduced[i,:] =tf_idf[k,:]
+    return [vocabulary[i] for i in selector],tf_idf_reduced
 
 def create_inner_products(tf_idf):
     _,n = tf_idf.shape
@@ -87,4 +92,28 @@ def create_inner_products(tf_idf):
     return product
 
 if __name__=='__main__':
-    pass
+    class TestSummat(TestCase):
+        def test_count_words(self):
+            '''
+            Verify that vocabulary has the right words, and that the word counts are in the same sequence
+            as the file names for the corpus
+            '''
+            vocabulary,word_counts = count_words(['nano-corpus.txt','nano-corpus1.txt'])
+            self.assertIn('earl',vocabulary)
+            self.assertIn('queen',vocabulary)
+            wc_nano_corpus= word_counts[0]
+            self.assertEqual(1,wc_nano_corpus['king'])
+            self.assertEqual(0,wc_nano_corpus['earl'])
+            wc_nano_corpus1= word_counts[1]
+            self.assertEqual(0,wc_nano_corpus1['king'])
+            self.assertEqual(1,wc_nano_corpus1['earl'])
+
+        def test_TfIdf(self):
+            vocabulary,tf_idf=TfIdf(docnames = [
+                'nano-corpus.txt',
+                'nano-corpus1.txt'
+            ])
+            self.assertEqual(5,len(vocabulary))
+            self.assertIn('countess',vocabulary)
+
+    main()

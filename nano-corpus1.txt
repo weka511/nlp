@@ -1,0 +1,7 @@
+he is an earl.
+she is a countess.
+he is a man.
+she is a woman.
+warsaw is poland capital.
+berlin is germany capital.
+paris is france capital.
