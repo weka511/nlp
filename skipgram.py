@@ -23,6 +23,27 @@ from unittest import main, TestCase, skip
 import numpy as np
 from numpy.random import default_rng
 
+
+class Tower:
+    '''
+    This class supports tower sampling from a vocabulary
+    '''
+    def __init__(self,vocabulary):
+        self.cumulative_probabilities = np.zeros(len(vocabulary)+1)
+        self.Words = []
+        Z = 0
+        for i,(word,freq) in enumerate(vocabulary.items()):
+            self.cumulative_probabilities[i] = Z
+            Z += freq
+            self.Words.append(word)
+        self.cumulative_probabilities[-1] = Z
+
+
+    def get_sample(self,rng=default_rng()):
+        return max(0,
+                   np.searchsorted(self.cumulative_probabilities,
+                                   rng.uniform())-1)
+
 def create_positives(text,width=2):
     Product = []
     for sentence in text:
@@ -32,54 +53,21 @@ def create_positives(text,width=2):
                     Product.append((sentence[i],sentence[i+j]))
     return Product
 
-class Tower:
-    def __init__(self,vocabulary):
-        self.cumulative_probabilities = np.zeros(len(vocabulary)+1)
-        self.Words = []
-        Z = 0
-        for i,(word,freq) in enumerate(vocabulary.items()):
-            self.cumulative_probabilities[i] = Z
-            Z += freq
-            i += 1
-            self.Words.append(word)
-        self.cumulative_probabilities[i] = Z
+def create_negatives_for1word(word,tower,k=2,rng=default_rng()):
+    Product = []
+    while len(Product)<k:
+        j = tower.get_sample(rng=rng)
+        if j not in Product:
+            Product.append(j)
 
+    return Product
 
-    def get_sample(self,rng=default_rng()):
-        return max(0,
-                   np.searchsorted(self.cumulative_probabilities,
-                                   rng.uniform())-1)
-
-def create_negatives(vocabulary,k=2,rng=default_rng()):
-
-    def create_tower():
-        Product = np.zeros((len(vocabulary)+1))
-        Words = []
-        Z = 0
-        i = 0
-        for word,freq in vocabulary.items():
-            Product[i] = Z
-            Z += freq
-            i+= 1
-            Words.append(word)
-        Product[i] = Z
-        return Product,Words
-
-    def create_negatives_for1word(word):
-        Product = []
-        while len(Product)<k:
-            u = rng.uniform()
-            j = np.searchsorted(Tower,u,side='right')
-            if j not in Product:
-                Product.append(j)
-
-        return Product
-
-    Tower,Words = create_tower()
+def create_negatives(vocabulary, k=2, rng=default_rng()):
+    tower = Tower(vocabulary)
     Product = []
     for word in vocabulary:
-        for index in create_negatives_for1word(word):
-            Product.append((word,Words[index]))
+        for index in create_negatives_for1word(word, tower, k=k, rng=rng):
+            Product.append((word,tower.Words[index]))
     return Product
 
 def build_skip_grams(vocabulary,text, width=2, k=2):
@@ -99,6 +87,7 @@ if __name__=='__main__':
     class TestTower(TestCase):
         def uniform(self):
             return self.sample
+
         def test_tower(self):
             vocabulary = {'a':10,
                           'tablespoon':1,
@@ -106,7 +95,7 @@ if __name__=='__main__':
                           'apricot' :1,
                           'jam' :2}
             tower = Tower(normalize(vocabulary))
-            # 0.         0.41666667 0.45833333 0.875      0.91666667 1.
+
             self.sample = 0
             self.assertEqual(0,tower.get_sample(self))
             self.sample = 0.41666666
@@ -120,7 +109,7 @@ if __name__=='__main__':
             self.sample = 1
             self.assertEqual(4,tower.get_sample(self))
 
-        @skip('')
+    class TestSkipGram(TestCase):
         def test_count_words(self):
             '''
             Verify that ...
