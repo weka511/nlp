@@ -15,7 +15,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-'''Template for python unit tests'''
+'''Skipgrams as described in Chapter 6 of Jurafsky & Martin'''
 
 from collections import Counter
 from time import time
@@ -81,9 +81,13 @@ class Word2Vec:
         # train w & c
         return w,c
 
-def normalize(vocabulary):
-    Z = sum(count for _,count in vocabulary.items())
-    return {item : count/Z for item,count in vocabulary.items()}
+    @staticmethod
+    def normalize(vocabulary, alpha=0.75):
+        '''
+        Convert counts of vocabulary items to probabilities using equation (6.32) of Jurafsky & Martin
+        '''
+        Z = sum(count**alpha for _,count in vocabulary.items())
+        return {item : count**alpha / Z for item,count in vocabulary.items()}
 
 if __name__=='__main__':
     class TestTower(TestCase):
@@ -96,7 +100,7 @@ if __name__=='__main__':
                           'of':10,
                           'apricot' :1,
                           'jam' :2}
-            tower = Tower(normalize(vocabulary),self)
+            tower = Tower(Word2Vec.normalize(vocabulary,alpha=1),self)
 
             self.sample = 0
             self.assertEqual(0,tower.get_sample())
@@ -112,6 +116,15 @@ if __name__=='__main__':
             self.assertEqual(4,tower.get_sample())
 
     class TestSkipGram(TestCase):
+        def test_normalize(self):
+            '''
+            Verify that probabilities of vocabulary items satisfy equations (6.32,6.33) of Jurafsky & Martin
+            '''
+            vocabulary = {'a':0.99, 'b':0.01}
+            normalized_vocabulary = Word2Vec.normalize(vocabulary)
+            self.assertAlmostEqual(0.97,normalized_vocabulary['a'],places=2)
+            self.assertAlmostEqual(0.03,normalized_vocabulary['b'],places=2)
+
         def test_count_words(self):
             '''
             Verify that ...
@@ -127,7 +140,7 @@ if __name__=='__main__':
                           'where': 5,
                           'coaxial' : 5,
                           'seven' : 5,
-                          'forever: 5'
+                          'forever': 5,
                           'dear' : 5,
                           'if' : 5}
             word2vec = Word2Vec()
@@ -135,7 +148,7 @@ if __name__=='__main__':
             for a,b in word2vec.generate_positive_examples(text):
                 print (a,b)
             print ('Negative examples')
-            for a,b in word2vec.create_negative_examples(normalize(vocabulary)):
+            for a,b in word2vec.create_negative_examples(Word2Vec.normalize(vocabulary)):
                 print (a,b)
 
     main()
