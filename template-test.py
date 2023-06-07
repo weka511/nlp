@@ -15,20 +15,18 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-'''Template for python script'''
+'''Template for python unit tests'''
 
-from argparse import ArgumentParser
 from time import time
+from unittest import main, TestCase
 import numpy as np
 
 if __name__=='__main__':
-    start  = time()
-    parser = ArgumentParser(__doc__)
+    class TestSummat(TestCase):
+        def test_example(self):
+            '''
+            Verify that ...
+            '''
+            self.fail('not implemented')
 
-    args = parser.parse_args()
-
-
-    elapsed = time() - start
-    minutes = int(elapsed/60)
-    seconds = elapsed - 60*minutes
-    print (f'Elapsed Time {minutes} m {seconds:.2f} s')
+    main()
