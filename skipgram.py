@@ -50,14 +50,13 @@ class Word2Vec:
         self.k = k
         self.rng = rng
 
-    def create_positives(self,text):
-        Product = []
+    def generate_positive_examples(self,text):
         for sentence in text:
             for i in range(len(sentence)):
                 for j in range(-self.width,self.width+1):
                     if j!=0 and i+j>=0 and i+j<len(sentence):
-                        Product.append((sentence[i],sentence[i+j]))
-        return Product
+                        yield sentence[i],sentence[i+j]
+
 
     def create_negatives_for1word(self,word,tower):
         Product = []
@@ -68,20 +67,18 @@ class Word2Vec:
 
         return Product
 
-    def create_negatives(self,vocabulary):
+    def create_negative_examples(self,vocabulary):
         tower = Tower(vocabulary,rng=self.rng)
-        Product = []
         for word in vocabulary:
             for index in self.create_negatives_for1word(word, tower):
-                Product.append((word,tower.Words[index]))
-        return Product
+                yield word,tower.Words[index]
+
 
     def build(self,vocabulary,text):
         n = len(vocabulary)
         w = self.rng.standard_normal(n)
         c = self.rng.standard_normal(n)
-        positive_examples = self.create_positives(text)
-        negative_examples = self.create_negatives(vocabulary)
+        # train w & c
         return w,c
 
 def normalize(vocabulary):
@@ -124,9 +121,21 @@ if __name__=='__main__':
                           'tablespoon':1,
                           'of':10,
                           'apricot' :1,
-                          'jam' :2}
+                          'jam' :2,
+                          'aardvark' : 5,
+                          'my' : 5,
+                          'where': 5,
+                          'coaxial' : 5,
+                          'seven' : 5,
+                          'forever: 5'
+                          'dear' : 5,
+                          'if' : 5}
             word2vec = Word2Vec()
-            word2vec.build(normalize(vocabulary),text)
-
+            print ('Positive examples')
+            for a,b in word2vec.generate_positive_examples(text):
+                print (a,b)
+            print ('Negative examples')
+            for a,b in word2vec.create_negative_examples(normalize(vocabulary)):
+                print (a,b)
 
     main()
