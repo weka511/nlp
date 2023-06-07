@@ -19,7 +19,7 @@
 
 from collections import Counter
 from time import time
-from unittest import main, TestCase
+from unittest import main, TestCase, skip
 import numpy as np
 from numpy.random import default_rng
 
@@ -32,10 +32,28 @@ def create_positives(text,width=2):
                     Product.append((sentence[i],sentence[i+j]))
     return Product
 
+class Tower:
+    def __init__(self,vocabulary):
+        self.cumulative_probabilities = np.zeros(len(vocabulary)+1)
+        self.Words = []
+        Z = 0
+        for i,(word,freq) in enumerate(vocabulary.items()):
+            self.cumulative_probabilities[i] = Z
+            Z += freq
+            i += 1
+            self.Words.append(word)
+        self.cumulative_probabilities[i] = Z
+
+
+    def get_sample(self,rng=default_rng()):
+        return max(0,
+                   np.searchsorted(self.cumulative_probabilities,
+                                   rng.uniform())-1)
+
 def create_negatives(vocabulary,k=2,rng=default_rng()):
 
     def create_tower():
-        Product = np.zeros((len(vocabulary))+1)
+        Product = np.zeros((len(vocabulary)+1))
         Words = []
         Z = 0
         i = 0
@@ -78,7 +96,31 @@ def normalize(vocabulary):
     return {item : count/Z for item,count in vocabulary.items()}
 
 if __name__=='__main__':
-    class TestSummat(TestCase):
+    class TestTower(TestCase):
+        def uniform(self):
+            return self.sample
+        def test_tower(self):
+            vocabulary = {'a':10,
+                          'tablespoon':1,
+                          'of':10,
+                          'apricot' :1,
+                          'jam' :2}
+            tower = Tower(normalize(vocabulary))
+            # 0.         0.41666667 0.45833333 0.875      0.91666667 1.
+            self.sample = 0
+            self.assertEqual(0,tower.get_sample(self))
+            self.sample = 0.41666666
+            self.assertEqual(0,tower.get_sample(self))
+            self.sample = 0.41666667
+            self.assertEqual(1,tower.get_sample(self))
+            self.sample = 0.91666667
+            self.assertEqual(4,tower.get_sample(self))
+            self.sample = 0.91666666
+            self.assertEqual(3,tower.get_sample(self))
+            self.sample = 1
+            self.assertEqual(4,tower.get_sample(self))
+
+        @skip('')
         def test_count_words(self):
             '''
             Verify that ...
