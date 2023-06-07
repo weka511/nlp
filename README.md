@@ -9,6 +9,7 @@ plot.py|Plot learning curves for a single corpus
 rnn.py|[Sean Robertsons's NLP demo: Classifying Names](https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html)
 rnn2.py|[Sean Robertsons's NLP demo: Generating Names with a Character-Level RNN](https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html)
 seq2seq.py|[Sean Robertsons's NLP demo: Translation with a Sequence to Sequence Network and Attention](https://pytorch.org/tutorials/intermediate/seq2seq_translation_tutorial.html)
+skipgram.py|New code for word2vec skip-grams
 template.py|Template for new code
 tfidf.py|Implementation of td-idf algorithm
 tfidf-harness.py|Test harness for td-idf algorithm
