@@ -92,7 +92,7 @@ def create_inner_products(tf_idf):
     return product
 
 if __name__=='__main__':
-    class TestSummat(TestCase):
+    class TestTfIdf(TestCase):
         def test_count_words(self):
             '''
             Verify that vocabulary has the right words, and that the word counts are in the same sequence
