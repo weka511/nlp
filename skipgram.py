@@ -28,7 +28,7 @@ class Tower:
     '''
     This class supports tower sampling from a vocabulary
     '''
-    def __init__(self,vocabulary):
+    def __init__(self,vocabulary,rng=default_rng()):
         self.cumulative_probabilities = np.zeros(len(vocabulary)+1)
         self.Words = []
         Z = 0
@@ -37,47 +37,52 @@ class Tower:
             Z += freq
             self.Words.append(word)
         self.cumulative_probabilities[-1] = Z
+        self.rng = rng
 
-
-    def get_sample(self,rng=default_rng()):
+    def get_sample(self):
         return max(0,
                    np.searchsorted(self.cumulative_probabilities,
-                                   rng.uniform())-1)
+                                   self.rng.uniform())-1)
 
-def create_positives(text,width=2):
-    Product = []
-    for sentence in text:
-        for i in range(len(sentence)):
-            for j in range(-width,width+1):
-                if j!=0 and i+j>=0 and i+j<len(sentence):
-                    Product.append((sentence[i],sentence[i+j]))
-    return Product
+class Word2Vec:
+    def __init__(self, width=2, k=2, rng = default_rng()):
+        self.width = width
+        self.k = k
+        self.rng = rng
 
-def create_negatives_for1word(word,tower,k=2,rng=default_rng()):
-    Product = []
-    while len(Product)<k:
-        j = tower.get_sample(rng=rng)
-        if j not in Product:
-            Product.append(j)
+    def create_positives(self,text):
+        Product = []
+        for sentence in text:
+            for i in range(len(sentence)):
+                for j in range(-self.width,self.width+1):
+                    if j!=0 and i+j>=0 and i+j<len(sentence):
+                        Product.append((sentence[i],sentence[i+j]))
+        return Product
 
-    return Product
+    def create_negatives_for1word(self,word,tower):
+        Product = []
+        while len(Product)<self.k:
+            j = tower.get_sample()
+            if j not in Product:
+                Product.append(j)
 
-def create_negatives(vocabulary, k=2, rng=default_rng()):
-    tower = Tower(vocabulary)
-    Product = []
-    for word in vocabulary:
-        for index in create_negatives_for1word(word, tower, k=k, rng=rng):
-            Product.append((word,tower.Words[index]))
-    return Product
+        return Product
 
-def build_skip_grams(vocabulary,text, width=2, k=2):
-    n = len(vocabulary)
-    rng = default_rng()
-    w = rng.standard_normal(n)
-    c = rng.standard_normal(n)
-    positive_examples = create_positives(text,width)
-    negative_examples = create_negatives(vocabulary,k,rng=rng)
-    return w,c
+    def create_negatives(self,vocabulary):
+        tower = Tower(vocabulary,rng=self.rng)
+        Product = []
+        for word in vocabulary:
+            for index in self.create_negatives_for1word(word, tower):
+                Product.append((word,tower.Words[index]))
+        return Product
+
+    def build(self,vocabulary,text):
+        n = len(vocabulary)
+        w = self.rng.standard_normal(n)
+        c = self.rng.standard_normal(n)
+        positive_examples = self.create_positives(text)
+        negative_examples = self.create_negatives(vocabulary)
+        return w,c
 
 def normalize(vocabulary):
     Z = sum(count for _,count in vocabulary.items())
@@ -94,20 +99,20 @@ if __name__=='__main__':
                           'of':10,
                           'apricot' :1,
                           'jam' :2}
-            tower = Tower(normalize(vocabulary))
+            tower = Tower(normalize(vocabulary),self)
 
             self.sample = 0
-            self.assertEqual(0,tower.get_sample(self))
+            self.assertEqual(0,tower.get_sample())
             self.sample = 0.41666666
-            self.assertEqual(0,tower.get_sample(self))
+            self.assertEqual(0,tower.get_sample())
             self.sample = 0.41666667
-            self.assertEqual(1,tower.get_sample(self))
+            self.assertEqual(1,tower.get_sample())
             self.sample = 0.91666667
-            self.assertEqual(4,tower.get_sample(self))
+            self.assertEqual(4,tower.get_sample())
             self.sample = 0.91666666
-            self.assertEqual(3,tower.get_sample(self))
+            self.assertEqual(3,tower.get_sample())
             self.sample = 1
-            self.assertEqual(4,tower.get_sample(self))
+            self.assertEqual(4,tower.get_sample())
 
     class TestSkipGram(TestCase):
         def test_count_words(self):
@@ -120,7 +125,8 @@ if __name__=='__main__':
                           'of':10,
                           'apricot' :1,
                           'jam' :2}
-            w,c = build_skip_grams(normalize(vocabulary),text)
-            z=0
+            word2vec = Word2Vec()
+            word2vec.build(normalize(vocabulary),text)
+
 
     main()
