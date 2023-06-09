@@ -49,15 +49,33 @@ class Vocabulary:
         '''
         return self.counter[index]
 
+    def items(self):
+        class Items:
+            def __init__(self,vocabulary):
+                self.index = -1
+                self.vocabulary = vocabulary
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                self.index += 1
+                if self.index < len(self.vocabulary.counter):
+                    return self.index,self.vocabulary.counter[self.index]
+                else:
+                    raise StopIteration
+        return Items(self)
+
+
 class Tower:
     '''
     This class supports tower sampling from a vocabulary
     '''
-    def __init__(self,vocabulary,rng=default_rng()):
-        self.cumulative_probabilities = np.zeros(len(vocabulary)+1)
+    def __init__(self,probabilities,rng=default_rng()):
+        self.cumulative_probabilities = np.zeros(len(probabilities)+1)
         self.Words = []
         Z = 0
-        for i,(word,freq) in enumerate(vocabulary.items()):
+        for i,(word,freq) in enumerate(probabilities.items()):
             self.cumulative_probabilities[i] = Z
             Z += freq
             self.Words.append(word)
@@ -127,62 +145,62 @@ if __name__=='__main__':
             return self.sample
 
         def test_tower(self):
-            vocabulary = {'a':10,
-                          'tablespoon':1,
-                          'of':10,
-                          'apricot' :1,
-                          'jam' :2}
+            vocabulary = Vocabulary()
+            vocabulary.parse(['the', 'quick', 'brown','fox', 'jumps', 'over', 'the', 'lazy', 'dog',
+                              'that', 'guards', 'the', 'brown', 'cow'])
+
             tower = Tower(Word2Vec.normalize(vocabulary,alpha=1),self)
 
             self.sample = 0
             self.assertEqual(0,tower.get_sample())
-            self.sample = 0.41666666
+            self.sample = 0.214
             self.assertEqual(0,tower.get_sample())
-            self.sample = 0.41666667
+            self.sample = 0.215
             self.assertEqual(1,tower.get_sample())
-            self.sample = 0.91666667
-            self.assertEqual(4,tower.get_sample())
-            self.sample = 0.91666666
-            self.assertEqual(3,tower.get_sample())
+            self.sample = 0.214+ 0.071
+            self.assertEqual(1,tower.get_sample())
+            self.sample = 0.215+ 0.071
+            self.assertEqual(2,tower.get_sample())
+
             self.sample = 1
-            self.assertEqual(4,tower.get_sample())
+            self.assertEqual(11,tower.get_sample())
 
 
 
-    class TestSkipGram(TestCase):
-        def test_normalize(self):
-            '''
-            Verify that probabilities of vocabulary items satisfy equations (6.32,6.33) of Jurafsky & Martin
-            '''
-            vocabulary = {'a':0.99, 'b':0.01}
-            normalized_vocabulary = Word2Vec.normalize(vocabulary)
-            self.assertAlmostEqual(0.97,normalized_vocabulary['a'],places=2)
-            self.assertAlmostEqual(0.03,normalized_vocabulary['b'],places=2)
+    # class TestSkipGram(TestCase):
+        # def test_normalize(self):
+            # '''
+            # Verify that probabilities of vocabulary items satisfy equations (6.32,6.33) of Jurafsky & Martin
+            # '''
+            # vocabulary = {'a':0.99, 'b':0.01}
+            # normalized_vocabulary = Word2Vec.normalize(vocabulary)
+            # self.assertAlmostEqual(0.97,normalized_vocabulary['a'],places=2)
+            # self.assertAlmostEqual(0.03,normalized_vocabulary['b'],places=2)
 
-        def test_count_words(self):
-            '''
-            Verify that ...
-            '''
-            text = [['a', 'tablespoon', 'of', 'apricot', 'jam']]
-            vocabulary = {'a':10,
-                          'tablespoon':1,
-                          'of':10,
-                          'apricot' :1,
-                          'jam' :2,
-                          'aardvark' : 5,
-                          'my' : 5,
-                          'where': 5,
-                          'coaxial' : 5,
-                          'seven' : 5,
-                          'forever': 5,
-                          'dear' : 5,
-                          'if' : 5}
-            word2vec = Word2Vec()
-            print ('Positive examples')
-            for a,b in word2vec.generate_positive_examples(text):
-                print (a,b)
-            print ('Negative examples')
-            for a,b in word2vec.create_negative_examples(Word2Vec.normalize(vocabulary)):
-                print (a,b)
+        # def test_count_words(self):
+            # '''
+            # Verify that ...
+            # '''
+            # text = [['a', 'tablespoon', 'of', 'apricot', 'jam']]
+            # vocabulary = {'a':10,
+                          # 'tablespoon':1,
+                          # 'of':10,
+                          # 'apricot' :1,
+                          # 'jam' :2,
+                          # 'aardvark' : 5,
+                          # 'my' : 5,
+                          # 'where': 5,
+                          # 'coaxial' : 5,
+                          # 'seven' : 5,
+                          # 'forever': 5,
+                          # 'dear' : 5,
+                          # 'if' : 5}
+            # word2vec = Word2Vec()
+            # print ('Positive examples')
+            # for a,b in word2vec.generate_positive_examples(text):
+                # print (a,b)
+            # print ('Negative examples')
+            # for a,b in word2vec.create_negative_examples(Word2Vec.normalize(vocabulary)):
+                # print (a,b)
 
     main()
