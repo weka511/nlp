@@ -17,10 +17,37 @@
 
 '''Skipgrams as described in Chapter 6 of Jurafsky & Martin'''
 
+from collections import Counter
 from unittest import main, TestCase, skip
 import numpy as np
 from numpy.random import default_rng
+from numpy.testing import assert_array_equal
 
+class Vocabulary:
+    '''
+    This class is responsible for the custody of words from a corpus.
+    '''
+    def __init__(self):
+        self.indices = dict()
+        self.counter = Counter()
+
+    def parse(self,text):
+        '''
+        Parse a text into a list of indices of tokens
+        '''
+        Result = np.zeros(len(text))
+        for i,word in enumerate(text):
+            if not word in self.indices:
+                self.indices[word] = len(self.indices)
+            Result[i] = self.indices[word]
+            self.counter.update([Result[i]])
+        return Result
+
+    def get_count(self,index):
+        '''
+        Determine the number of time a token appears in text
+        '''
+        return self.counter[index]
 
 class Tower:
     '''
@@ -88,6 +115,13 @@ class Word2Vec:
         return {item : count**alpha / Z for item,count in vocabulary.items()}
 
 if __name__=='__main__':
+    class TestVocabulary(TestCase):
+        def test_parse(self):
+            vocabulary = Vocabulary()
+            assert_array_equal(np.array([0,1,2,3,4,5,0,6,7]),
+                             vocabulary.parse(['the', 'quick', 'brown','fox', 'jumps', 'over', 'the', 'lazy', 'dog']))
+            self.assertEqual(2,vocabulary.get_count(0))
+
     class TestTower(TestCase):
         def uniform(self):
             return self.sample
@@ -112,6 +146,8 @@ if __name__=='__main__':
             self.assertEqual(3,tower.get_sample())
             self.sample = 1
             self.assertEqual(4,tower.get_sample())
+
+
 
     class TestSkipGram(TestCase):
         def test_normalize(self):
