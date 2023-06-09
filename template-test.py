@@ -17,7 +17,6 @@
 
 '''Template for python unit tests'''
 
-from time import time
 from unittest import main, TestCase
 import numpy as np
 

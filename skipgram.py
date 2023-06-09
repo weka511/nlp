@@ -17,8 +17,6 @@
 
 '''Skipgrams as described in Chapter 6 of Jurafsky & Martin'''
 
-from collections import Counter
-from time import time
 from unittest import main, TestCase, skip
 import numpy as np
 from numpy.random import default_rng
