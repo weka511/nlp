@@ -35,7 +35,7 @@ class Vocabulary:
         '''
         Parse a text into a list of indices of tokens
         '''
-        Result = np.zeros(len(text))
+        Result = np.zeros(len(text),dtype=np.int64)
         for i,word in enumerate(text):
             if not word in self.indices:
                 self.indices[word] = len(self.indices)
@@ -167,20 +167,20 @@ if __name__=='__main__':
 
 
 
-    # class TestSkipGram(TestCase):
-        # def test_normalize(self):
-            # '''
-            # Verify that probabilities of vocabulary items satisfy equations (6.32,6.33) of Jurafsky & Martin
-            # '''
-            # vocabulary = {'a':0.99, 'b':0.01}
-            # normalized_vocabulary = Word2Vec.normalize(vocabulary)
-            # self.assertAlmostEqual(0.97,normalized_vocabulary['a'],places=2)
-            # self.assertAlmostEqual(0.03,normalized_vocabulary['b'],places=2)
+    class TestSkipGram(TestCase):
+        def test_normalize(self):
+            '''
+            Verify that probabilities of vocabulary items satisfy equations (6.32,6.33) of Jurafsky & Martin
+            '''
+            probabilities = {'a':0.99, 'b':0.01}
+            normalized_vocabulary = Word2Vec.normalize(probabilities)
+            self.assertAlmostEqual(0.97,normalized_vocabulary['a'],places=2)
+            self.assertAlmostEqual(0.03,normalized_vocabulary['b'],places=2)
 
-        # def test_count_words(self):
-            # '''
-            # Verify that ...
-            # '''
+        def test_count_words(self):
+            '''
+            Verify that ...
+            '''
             # text = [['a', 'tablespoon', 'of', 'apricot', 'jam']]
             # vocabulary = {'a':10,
                           # 'tablespoon':1,
@@ -195,12 +195,16 @@ if __name__=='__main__':
                           # 'forever': 5,
                           # 'dear' : 5,
                           # 'if' : 5}
-            # word2vec = Word2Vec()
-            # print ('Positive examples')
-            # for a,b in word2vec.generate_positive_examples(text):
-                # print (a,b)
-            # print ('Negative examples')
-            # for a,b in word2vec.create_negative_examples(Word2Vec.normalize(vocabulary)):
-                # print (a,b)
+            vocabulary = Vocabulary()
+            text = ['the', 'quick', 'brown','fox', 'jumps', 'over', 'the', 'lazy', 'dog',
+                              'that', 'guards', 'the', 'brown', 'cow']
+            indices = vocabulary.parse(text)
+            word2vec = Word2Vec()
+            print ('Positive examples')
+            for a,b in word2vec.generate_positive_examples([indices]):
+                print (a,b)
+            print ('Negative examples')
+            for a,b in word2vec.create_negative_examples(Word2Vec.normalize(vocabulary)):
+                print (a,b)
 
     main()
