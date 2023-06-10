@@ -102,6 +102,15 @@ class ExampleBuilder:
         self.k = k
         self.rng = rng
 
+    def generate_examples(self,text,tower):
+        for sentence in text:
+            for i in range(len(sentence)):
+                for j in range(-self.width,self.width+1):
+                    if j!=0 and i+j>=0 and i+j<len(sentence):
+                        yield sentence[i],sentence[i+j],+1
+                        for k in self.create_negatives_for1word(sentence[i],tower):
+                            yield sentence[i],k,-1
+
     def generate_positive_examples(self,text):
         for sentence in text:
             for i in range(len(sentence)):
@@ -112,7 +121,7 @@ class ExampleBuilder:
 
     def create_negatives_for1word(self,word,tower):
         Product = []
-        while len(Product)<self.k*self.width:
+        while len(Product)<self.k:
             j = tower.get_sample()
             if j not in Product:
                 Product.append(j)
@@ -198,11 +207,14 @@ if __name__=='__main__':
                               'that', 'guards', 'the', 'brown', 'cow']
             indices = vocabulary.parse(text)
             word2vec = ExampleBuilder()
-            print ('Positive examples')
-            for a,b in word2vec.generate_positive_examples([indices]):
-                print (a,b)
-            print ('Negative examples')
-            for a,b in word2vec.create_negative_examples(ExampleBuilder.normalize(vocabulary)):
-                print (a,b)
+            tower = Tower(ExampleBuilder.normalize(vocabulary))
+            for word,context,y in word2vec.generate_examples([indices],tower):
+                print (word,context,y)
+            # print ('Positive examples')
+            # for a,b in word2vec.generate_positive_examples([indices]):
+                # print (a,b)
+            # print ('Negative examples')
+            # for a,b in word2vec.create_negative_examples(ExampleBuilder.normalize(vocabulary)):
+                # print (a,b)
 
     main()
