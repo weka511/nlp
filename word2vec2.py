@@ -19,12 +19,31 @@
 '''Skipgrams as described in Chapter 6 of Jurafsky & Martin'''
 
 from argparse import ArgumentParser
-from csv import writer
+from csv import reader, writer
 from glob import glob
+from os import system
 from time import time
 import numpy as np
 from skipgram import Vocabulary, ExampleBuilder, Tower
 from tokenizer import read_text, extract_sentences, extract_tokens
+
+def read_training_data(file_name):
+    raw_data = []
+    with open(file_name, newline='') as csvfile:
+        examples = reader(csvfile)
+        for row in examples:
+            raw_data.append([int(s) for s in row])
+    training_data = np.array(raw_data)
+    index = np.full((training_data.max()+1,2),-1)
+    m,n = training_data.shape
+    for i in range(m):
+        word_index = training_data[i,0]
+        if index[word_index,0] == -1:
+            index[word_index,0] = i
+        index[word_index,1] = i
+
+    return index,training_data
+
 
 if __name__=='__main__':
     start  = time()
@@ -48,9 +67,11 @@ if __name__=='__main__':
                         examples.writerow([word,context,+1])
                 for word,context in  word2vec.create_negative_examples(ExampleBuilder.normalize(vocabulary)):
                     examples.writerow([word,context,-1])
+            system(f'sort {args.examples}  -g -o {args.examples}')
 
         case 'train':
-            print ('Not implemented')
+            index,training_data = read_training_data(args.examples)
+            print (index)
 
 
     elapsed = time() - start
