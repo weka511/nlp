@@ -23,7 +23,7 @@ import numpy as np
 
 if __name__=='__main__':
     start  = time()
-    parser = ArgumentParser(__doc__)
+    parser = ArgumentParser(description=__doc__)
 
     args = parser.parse_args()
 
