@@ -87,7 +87,16 @@ class Tower:
                    np.searchsorted(self.cumulative_probabilities,
                                    self.rng.uniform())-1)
 
-class Word2Vec:
+class ExampleBuilder:
+
+    @staticmethod
+    def normalize(vocabulary, alpha=0.75):
+        '''
+        Convert counts of vocabulary items to probabilities using equation (6.32) of Jurafsky & Martin
+        '''
+        Z = sum(count**alpha for _,count in vocabulary.items())
+        return {item : count**alpha / Z for item,count in vocabulary.items()}
+
     def __init__(self, width=2, k=2, rng = default_rng()):
         self.width = width
         self.k = k
@@ -116,6 +125,14 @@ class Word2Vec:
             for index in self.create_negatives_for1word(word, tower):
                 yield word,tower.Words[index]
 
+class Word2Vec:
+    def __init__(self, width=2, k=2, rng = default_rng()):
+        self.width = width
+        self.k = k
+        self.rng = rng
+
+
+
 
     def build(self,vocabulary,text):
         n = len(vocabulary)
@@ -124,13 +141,7 @@ class Word2Vec:
         # train w & c
         return w,c
 
-    @staticmethod
-    def normalize(vocabulary, alpha=0.75):
-        '''
-        Convert counts of vocabulary items to probabilities using equation (6.32) of Jurafsky & Martin
-        '''
-        Z = sum(count**alpha for _,count in vocabulary.items())
-        return {item : count**alpha / Z for item,count in vocabulary.items()}
+
 
 if __name__=='__main__':
     class TestVocabulary(TestCase):
@@ -149,7 +160,7 @@ if __name__=='__main__':
             vocabulary.parse(['the', 'quick', 'brown','fox', 'jumps', 'over', 'the', 'lazy', 'dog',
                               'that', 'guards', 'the', 'brown', 'cow'])
 
-            tower = Tower(Word2Vec.normalize(vocabulary,alpha=1),self)
+            tower = Tower(ExampleBuilder.normalize(vocabulary,alpha=1),self)
 
             self.sample = 0
             self.assertEqual(0,tower.get_sample())
@@ -173,7 +184,7 @@ if __name__=='__main__':
             Verify that probabilities of vocabulary items satisfy equations (6.32,6.33) of Jurafsky & Martin
             '''
             probabilities = {'a':0.99, 'b':0.01}
-            normalized_vocabulary = Word2Vec.normalize(probabilities)
+            normalized_vocabulary = ExampleBuilder.normalize(probabilities)
             self.assertAlmostEqual(0.97,normalized_vocabulary['a'],places=2)
             self.assertAlmostEqual(0.03,normalized_vocabulary['b'],places=2)
 
@@ -181,30 +192,17 @@ if __name__=='__main__':
             '''
             Verify that ...
             '''
-            # text = [['a', 'tablespoon', 'of', 'apricot', 'jam']]
-            # vocabulary = {'a':10,
-                          # 'tablespoon':1,
-                          # 'of':10,
-                          # 'apricot' :1,
-                          # 'jam' :2,
-                          # 'aardvark' : 5,
-                          # 'my' : 5,
-                          # 'where': 5,
-                          # 'coaxial' : 5,
-                          # 'seven' : 5,
-                          # 'forever': 5,
-                          # 'dear' : 5,
-                          # 'if' : 5}
+
             vocabulary = Vocabulary()
             text = ['the', 'quick', 'brown','fox', 'jumps', 'over', 'the', 'lazy', 'dog',
                               'that', 'guards', 'the', 'brown', 'cow']
             indices = vocabulary.parse(text)
-            word2vec = Word2Vec()
+            word2vec = ExampleBuilder()
             print ('Positive examples')
             for a,b in word2vec.generate_positive_examples([indices]):
                 print (a,b)
             print ('Negative examples')
-            for a,b in word2vec.create_negative_examples(Word2Vec.normalize(vocabulary)):
+            for a,b in word2vec.create_negative_examples(ExampleBuilder.normalize(vocabulary)):
                 print (a,b)
 
     main()
