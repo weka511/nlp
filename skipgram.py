@@ -112,7 +112,7 @@ class ExampleBuilder:
 
     def create_negatives_for1word(self,word,tower):
         Product = []
-        while len(Product)<self.k:
+        while len(Product)<self.k*self.width:
             j = tower.get_sample()
             if j not in Product:
                 Product.append(j)
