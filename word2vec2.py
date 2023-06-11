@@ -24,59 +24,67 @@ from glob import glob
 from os import system
 from time import time
 import numpy as np
-from skipgram import Vocabulary, ExampleBuilder, Tower
+from numpy.random import default_rng
+from skipgram import Vocabulary, ExampleBuilder, Tower, Optimizer, Word2Vec
 from tokenizer import read_text, extract_sentences, extract_tokens
 
 def read_training_data(file_name):
-    raw_data = []
+    def count_entries():
+        count = 0
+        with open(file_name, newline='') as csvfile:
+            examples = reader(csvfile)
+            for row in examples:
+                count += 1
+        return count
+
+    training_data = np.empty((count_entries(),3),dtype=np.int64)
     with open(file_name, newline='') as csvfile:
         examples = reader(csvfile)
-        for row in examples:
-            raw_data.append([int(s) for s in row])
-    training_data = np.array(raw_data)
-    index = np.full((training_data.max()+1,2),-1)
-    m,n = training_data.shape
-    for i in range(m):
-        word_index = training_data[i,0]
-        if index[word_index,0] == -1:
-            index[word_index,0] = i
-        index[word_index,1] = i
+        for i,row in enumerate(examples):
+            training_data[i,:] = np.array([int(s) for s in row],dtype=np.int64)
+    return training_data
 
-    return index,training_data
+def create_vocabulary(docnames):
+    '''
+    Build vocabulary first, so we have frequencies
+    '''
+    Product = Vocabulary()
 
+    for sentence in extract_sentences(extract_tokens(read_text(file_names = docnames))):
+        Product.parse(sentence)
+
+    return Product
 
 if __name__=='__main__':
     start  = time()
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('docnames', nargs='+', help='A list of documents to be processed')
-    parser.add_argument('--action', choices=['create', 'train'], required=True)
-    parser.add_argument('--examples', default='examples.csv')
+    parser.add_argument('action', choices=['create', 'train'])
+    parser.add_argument('docnames', nargs='*', help='A list of documents to be processed')
+    parser.add_argument('--examples', default='examples.csv', help='File name for training examples')
+    parser.add_argument('--width', '-w', type=int, default=2, help='Window size for building examples')
+    parser.add_argument('--k', '-k', type=int, default=2, help='Number of negative examples for each positive')
+    parser.add_argument('--seed', type=int,default=None)
     args = parser.parse_args()
-
+    rng = default_rng(args.seed)
     match args.action:
         case 'create':
             docnames = [doc for pattern in args.docnames for doc in glob(pattern)]
-            vocabulary = Vocabulary()
-            word2vec = ExampleBuilder()
-            for sentence in extract_sentences(extract_tokens(read_text(file_names = docnames))):
-                vocabulary.parse(sentence)
-            tower = Tower(ExampleBuilder.normalize(vocabulary))
+            vocabulary = create_vocabulary(docnames)
+            word2vec = ExampleBuilder(k=args.k, width=args.width)
+            tower = Tower(ExampleBuilder.normalize(vocabulary),rng=rng)
             with open(args.examples,'w', newline='') as out:
                 examples = writer(out)
-
                 for sentence in extract_sentences(extract_tokens(read_text(file_names = docnames))):
                     indices = vocabulary.parse(sentence)
                     for word,context,y in word2vec.generate_examples([indices],tower):
                         examples.writerow([word,context,y])
-                    # for word,context in word2vec.generate_positive_examples([indices]):
-                        # examples.writerow([word,context,+1])
-                # for word,context in  word2vec.create_negative_examples(ExampleBuilder.normalize(vocabulary)):
-                    # examples.writerow([word,context,-1])
-            # system(f'sort {args.examples}  -g -o {args.examples}')
 
         case 'train':
-            index,training_data = read_training_data(args.examples)
-            print (index)
+            data = read_training_data(args.examples)
+            model = Word2Vec()
+            model.build(data[:,0].max(),rng=rng)
+            optimizer = Optimizer.create(model,data,rng=rng)
+            optimizer.optimize()
 
 
     elapsed = time() - start

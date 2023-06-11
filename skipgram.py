@@ -17,6 +17,7 @@
 
 '''Skipgrams as described in Chapter 6 of Jurafsky & Martin'''
 
+from abc import ABC, abstractmethod
 from collections import Counter
 from unittest import main, TestCase, skip
 import numpy as np
@@ -97,10 +98,10 @@ class ExampleBuilder:
         Z = sum(count**alpha for _,count in vocabulary.items())
         return {item : count**alpha / Z for item,count in vocabulary.items()}
 
-    def __init__(self, width=2, k=2, rng = default_rng()):
+    def __init__(self, width=2, k=2):
         self.width = width
         self.k = k
-        self.rng = rng
+
 
     def generate_examples(self,text,tower):
         for sentence in text:
@@ -111,14 +112,6 @@ class ExampleBuilder:
                         for k in self.create_negatives_for1word(sentence[i],tower):
                             yield sentence[i],k,-1
 
-    def generate_positive_examples(self,text):
-        for sentence in text:
-            for i in range(len(sentence)):
-                for j in range(-self.width,self.width+1):
-                    if j!=0 and i+j>=0 and i+j<len(sentence):
-                        yield sentence[i],sentence[i+j]
-
-
     def create_negatives_for1word(self,word,tower):
         Product = []
         while len(Product)<self.k:
@@ -128,28 +121,58 @@ class ExampleBuilder:
 
         return Product
 
-    def create_negative_examples(self,vocabulary):
-        tower = Tower(vocabulary,rng=self.rng)
-        for word in vocabulary:
-            for index in self.create_negatives_for1word(word, tower):
-                yield word,tower.Words[index]
 
 class Word2Vec:
-    def __init__(self, width=2, k=2, rng = default_rng()):
-        self.width = width
-        self.k = k
+
+    def build(self,m,n=128,rng=default_rng()):
+        self.w = rng.standard_normal((m,n))
+        self.c = rng.standard_normal((m,n))
+        print (self.w.shape)
+
+
+class Optimizer(ABC):
+    @staticmethod
+    def create(model,data,rng=default_rng()):
+        return StochasticGradientDescent(model,data,rng=rng)
+
+    def __init__(self,model,data,rng=default_rng()):
         self.rng = rng
+        self.model = model
+        self.data = data
+        y = data[:,2]
+        indices = np.argwhere(y>0)
+        self.gap = indices.item(1) - indices.item(0)
+        m,n = data.shape
+        self.n_sets = int(m/self.gap)
 
+    @abstractmethod
+    def optimize(self):
+        ...
 
+class StochasticGradientDescent(Optimizer):
+    def __init__(self,model,data,m = 16,N = 128,epsilon0 = 0.01,  final_ratio=0.01, tau = 32,rng=default_rng()):
+        super().__init__(model,data,rng=rng)
+        self.m = m # minibatch
+        self.N = N
+        self.epsilon0 = epsilon0
+        self.epsilon_tau = final_ratio * self.epsilon0
+        self.tau = tau
 
+    def optimize(self):
+        for k in range(self.N):
+            if k<self.tau:
+                alpha = k/self.tau
+                epsilon = (1.0 - alpha)*self.epsilon0 + alpha*self.epsilon_tau
+            self.step(epsilon)
 
-    def build(self,vocabulary,text):
-        n = len(vocabulary)
-        w = self.rng.standard_normal(n)
-        c = self.rng.standard_normal(n)
-        # train w & c
-        return w,c
+    def step(self,epsilon):
+        for index_test_set in self.create_minibatch():
+            index_start = self.gap * index_test_set
+            for i in range(self.gap):
+                print (index_test_set, self.data[index_start + i,:])
 
+    def create_minibatch(self):
+        return self.rng.integers(self.n_sets,size=(self.m))
 
 
 if __name__=='__main__':
@@ -210,11 +233,5 @@ if __name__=='__main__':
             tower = Tower(ExampleBuilder.normalize(vocabulary))
             for word,context,y in word2vec.generate_examples([indices],tower):
                 print (word,context,y)
-            # print ('Positive examples')
-            # for a,b in word2vec.generate_positive_examples([indices]):
-                # print (a,b)
-            # print ('Negative examples')
-            # for a,b in word2vec.create_negative_examples(ExampleBuilder.normalize(vocabulary)):
-                # print (a,b)
 
     main()
