@@ -130,23 +130,42 @@ class Word2Vec:
         self.c = rng.standard_normal((m,n))
         print (self.w.shape)
 
-    def get_loss_for_data_group(self,data,gap, i_data_group):
+    def get_product(self,i_w,i_c):
+        return np.dot(self.w[i_w,:],self.c[i_c,:])
+
+class LossCalculator:
+    def __init__(self,model,data):
+        self.model = model
+        self.data = data
+
+    def get_loss_for_data_group(self,gap, i_data_group):
         def get_loss_neg(j):
-            i_c_neg = data[i_data_row+j,1]
-            return np.log(expit(1-np.dot(self.w[i_w,:],self.c[i_c_neg,:])))
+            i_c_neg = self.data[i_data_row+j,1]
+            return np.log(expit(1-self.model.get_product(i_w,i_c_neg)))
         i_data_row = gap*i_data_group
-        i_w = data[i_data_row,0]
-        i_c_pos = data[i_data_row,1]
-        return - (np.log(expit(np.dot(self.w[i_w,:],self.c[i_c_pos,:])))
+        i_w = self.data[i_data_row,0]
+        i_c_pos = self.data[i_data_row,1]
+        return - (np.log(expit(self.model.get_product(i_w,i_c_pos)))
                   + sum([get_loss_neg(j) for j in range(1,gap)]))
+
+    def get_derivatives(self,gap, i_data_group):
+        i_data_row = gap*i_data_group
+        i_w = self.data[i_data_row,0]
+        i_c_pos = self.data[i_data_row,1]
+        term1 = expit(self.model.get_product(i_w,i_c_pos))-1
+        delta_c_pos = term1 * self.model.w[i_w,:]
+        term2 = [expit(self.model.get_product(i_w,self.data[i_data_row+j,1])) for j in range(1,gap)]
+        delta_c_neg = [t* self.model.w[i_w,:] for t in term2]
+        delta_w = term1 * self.model.c[i_c_pos,:] + sum(term2[j-1]*self.model.c[self.data[i_data_row+j,1],:] for j in range(1,gap))
+        return delta_c_pos,delta_c_neg,delta_w
 
 
 class Optimizer(ABC):
     @staticmethod
-    def create(model,data,rng=default_rng()):
-        return StochasticGradientDescent(model,data,rng=rng)
+    def create(model,data,loss_calculator,rng=default_rng()):
+        return StochasticGradientDescent(model,data,loss_calculator,rng=rng)
 
-    def __init__(self,model,data,rng=default_rng()):
+    def __init__(self,model,data,loss_calculator,rng=default_rng()):
         self.rng = rng
         self.model = model
         self.data = data
@@ -155,14 +174,15 @@ class Optimizer(ABC):
         self.gap = indices.item(1) - indices.item(0)
         m,n = data.shape
         self.n_groups = int(m/self.gap)
+        self.loss_calculator = loss_calculator
 
     @abstractmethod
     def optimize(self):
         ...
 
 class StochasticGradientDescent(Optimizer):
-    def __init__(self,model,data,m = 16,N = 128,epsilon0 = 0.01,  final_ratio=0.01, tau = 32,rng=default_rng()):
-        super().__init__(model,data,rng=rng)
+    def __init__(self,model,data,loss_calculator,m = 16,N = 128,epsilon0 = 0.01,  final_ratio=0.01, tau = 32,rng=default_rng()):
+        super().__init__(model,data,loss_calculator,rng=rng)
         self.m = m # minibatch
         self.N = N
         self.epsilon0 = epsilon0
@@ -172,7 +192,8 @@ class StochasticGradientDescent(Optimizer):
 
     def optimize(self):
         for i in range(self.n_groups):
-            self.losses[i] = self.model.get_loss_for_data_group(self.data,self.gap, i)
+            self.losses[i] = self.loss_calculator.get_loss_for_data_group(self.gap, i)
+
         total_loss = sum(self.losses)
         for k in range(self.N):
             if k<self.tau:
@@ -185,6 +206,7 @@ class StochasticGradientDescent(Optimizer):
             index_start = self.gap * index_test_set
             for i in range(self.gap):
                 print (index_test_set, self.data[index_start + i,:])
+            self.loss_calculator.get_derivatives(self.gap, index_test_set)
 
     def create_minibatch(self):
         return self.rng.integers(self.n_groups,size=(self.m))

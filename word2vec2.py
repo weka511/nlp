@@ -25,7 +25,7 @@ from os import system
 from time import time
 import numpy as np
 from numpy.random import default_rng
-from skipgram import Vocabulary, ExampleBuilder, Tower, Optimizer, Word2Vec
+from skipgram import Vocabulary, ExampleBuilder, Tower, Optimizer, Word2Vec, LossCalculator
 from tokenizer import read_text, extract_sentences, extract_tokens
 
 def read_training_data(file_name):
@@ -83,7 +83,8 @@ if __name__=='__main__':
             data = read_training_data(args.examples)
             model = Word2Vec()
             model.build(data[:,0].max()+1,rng=rng)
-            optimizer = Optimizer.create(model,data,rng=rng)
+            loss_calculator = LossCalculator(model,data)
+            optimizer = Optimizer.create(model,data,loss_calculator,rng=rng)
             optimizer.optimize()
 
 
