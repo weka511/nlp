@@ -82,7 +82,7 @@ if __name__=='__main__':
         case 'train':
             data = read_training_data(args.examples)
             model = Word2Vec()
-            model.build(data[:,0].max(),rng=rng)
+            model.build(data[:,0].max()+1,rng=rng)
             optimizer = Optimizer.create(model,data,rng=rng)
             optimizer.optimize()
 

@@ -23,6 +23,7 @@ from unittest import main, TestCase, skip
 import numpy as np
 from numpy.random import default_rng
 from numpy.testing import assert_array_equal
+from scipy.special import expit
 
 class Vocabulary:
     '''
@@ -129,6 +130,16 @@ class Word2Vec:
         self.c = rng.standard_normal((m,n))
         print (self.w.shape)
 
+    def get_loss_for_data_group(self,data,gap, i_data_group):
+        def get_loss_neg(j):
+            i_c_neg = data[i_data_row+j,1]
+            return np.log(expit(1-np.dot(self.w[i_w,:],self.c[i_c_neg,:])))
+        i_data_row = gap*i_data_group
+        i_w = data[i_data_row,0]
+        i_c_pos = data[i_data_row,1]
+        return - (np.log(expit(np.dot(self.w[i_w,:],self.c[i_c_pos,:])))
+                  + sum([get_loss_neg(j) for j in range(1,gap)]))
+
 
 class Optimizer(ABC):
     @staticmethod
@@ -143,7 +154,7 @@ class Optimizer(ABC):
         indices = np.argwhere(y>0)
         self.gap = indices.item(1) - indices.item(0)
         m,n = data.shape
-        self.n_sets = int(m/self.gap)
+        self.n_groups = int(m/self.gap)
 
     @abstractmethod
     def optimize(self):
@@ -157,8 +168,12 @@ class StochasticGradientDescent(Optimizer):
         self.epsilon0 = epsilon0
         self.epsilon_tau = final_ratio * self.epsilon0
         self.tau = tau
+        self.losses = np.empty((self.n_groups))
 
     def optimize(self):
+        for i in range(self.n_groups):
+            self.losses[i] = self.model.get_loss_for_data_group(self.data,self.gap, i)
+        total_loss = sum(self.losses)
         for k in range(self.N):
             if k<self.tau:
                 alpha = k/self.tau
@@ -172,7 +187,7 @@ class StochasticGradientDescent(Optimizer):
                 print (index_test_set, self.data[index_start + i,:])
 
     def create_minibatch(self):
-        return self.rng.integers(self.n_sets,size=(self.m))
+        return self.rng.integers(self.n_groups,size=(self.m))
 
 
 if __name__=='__main__':
