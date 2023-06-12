@@ -23,6 +23,7 @@ from csv import reader, writer
 from glob import glob
 from os import system
 from time import time
+from matplotlib.pyplot import figure, show
 import numpy as np
 from numpy.random import default_rng
 from skipgram import Vocabulary, ExampleBuilder, Tower, Optimizer, Word2Vec, LossCalculator
@@ -63,7 +64,15 @@ if __name__=='__main__':
     parser.add_argument('--examples', default='examples.csv', help='File name for training examples')
     parser.add_argument('--width', '-w', type=int, default=2, help='Window size for building examples')
     parser.add_argument('--k', '-k', type=int, default=2, help='Number of negative examples for each positive')
-    parser.add_argument('--seed', type=int,default=None)
+    parser.add_argument('--seed', type=int,default=None, help='Used to initialize random number generator')
+    parser.add_argument('--minibatch', '-m', type=int, default=64, help='Minibatch size')
+    parser.add_argument('--dimension', '-d', type=int, default=64, help='Dimension of word vectors')
+    parser.add_argument('-N', '-N', type=int, default=2048, help='Number of iterations')
+    parser.add_argument('--eta', '-e', type=float, default=0.05, help='Starting value for learning rate')
+    parser.add_argument('--ratio', '-r', type=float, default=0.01, help='Final learning rate as a fraction of the first')
+    parser.add_argument('--tau', '-t', type=int, default=2, help='Number of steps to decrease learning rate')
+    parser.add_argument('--show', default=False, action='store_true', help='display plots')
+    parser.add_argument('--plot', default='word2vec2', help='Plot file name')
     args = parser.parse_args()
     rng = default_rng(args.seed)
     match args.action:
@@ -82,11 +91,22 @@ if __name__=='__main__':
         case 'train':
             data = read_training_data(args.examples)
             model = Word2Vec()
-            model.build(data[:,0].max()+1,rng=rng)
+            model.build(data[:,0].max()+1,n=args.dimension,rng=rng)
             loss_calculator = LossCalculator(model,data)
-            optimizer = Optimizer.create(model,data,loss_calculator,rng=rng)
+            optimizer = Optimizer.create(model,data,loss_calculator,
+                                         m = args.minibatch,N = args.N,eta0 = args.eta,  final_ratio=args.ratio, tau = args.tau, rng=rng)
             optimizer.optimize()
 
+            fig = figure()
+            ax = fig.add_subplot(1,1,1)
+            ax.plot(range(len(optimizer.log)),optimizer.log)
+            ax.ticklabel_format(style='plain',axis='x',useOffset=False)
+            ax.set_title(f'Minibatch={args.minibatch}, dimension={args.dimension}')
+            ax.set_xlabel('Step number')
+            ax.set_ylabel('Loss')
+            fig.savefig(args.plot)
+            if args.show:
+                show()
 
     elapsed = time() - start
     minutes = int(elapsed/60)

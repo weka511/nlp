@@ -52,6 +52,9 @@ class Vocabulary:
         return self.counter[index]
 
     def items(self):
+        '''
+        Used to iterate through all words in vocabulary, and also give the corresponding frequency for each word
+        '''
         class Items:
             def __init__(self,vocabulary):
                 self.index = -1
@@ -85,11 +88,17 @@ class Tower:
         self.rng = rng
 
     def get_sample(self):
+        '''
+        Retrieve a random sample, respecting probabilities
+        '''
         return max(0,
                    np.searchsorted(self.cumulative_probabilities,
                                    self.rng.uniform())-1)
 
 class ExampleBuilder:
+    '''
+    A class that constructs tarining data from text.
+    '''
 
     @staticmethod
     def normalize(vocabulary, alpha=0.75):
@@ -102,7 +111,6 @@ class ExampleBuilder:
     def __init__(self, width=2, k=2):
         self.width = width
         self.k = k
-
 
     def generate_examples(self,text,tower):
         for sentence in text:
@@ -124,20 +132,30 @@ class ExampleBuilder:
 
 
 class Word2Vec:
-
+    '''
+    Used to store word2vec weights
+    '''
     def build(self,m,n=32,rng=default_rng()):
         self.w = rng.standard_normal((m,n))
         self.c = rng.standard_normal((m,n))
         self.n = n
-        print (self.w.shape)
 
     def get_product(self,i_w,i_c):
         return np.dot(self.w[i_w,:],self.c[i_c,:])
 
 class LossCalculator:
+    '''
+    Calculate loss and its derivatives
+    '''
     def __init__(self,model,data):
         self.model = model
         self.data = data
+
+    def get(self,gap, n_groups):
+        '''
+        Calculate loss
+        '''
+        return sum(self.get_loss_for_data_group(gap, i) for i in range(n_groups))
 
     def get_loss_for_data_group(self,gap, i_data_group):
         def get_loss_neg(j):
@@ -149,6 +167,9 @@ class LossCalculator:
         return - (np.log(expit(self.model.get_product(i_w,i_c_pos)))
                   + sum([get_loss_neg(j) for j in range(1,gap)]))
 
+    '''
+    Calculate derivatives of loss
+    '''
     def get_derivatives(self,gap, i_data_group):
         i_data_row = gap*i_data_group
         i_w = self.data[i_data_row,0]
@@ -162,9 +183,12 @@ class LossCalculator:
 
 
 class Optimizer(ABC):
+    '''
+    Class representiong method of optimizing loss
+    '''
     @staticmethod
-    def create(model,data,loss_calculator,rng=default_rng()):
-        return StochasticGradientDescent(model,data,loss_calculator,rng=rng)
+    def create(model,data,loss_calculator,m = 16,N = 2048,eta0 = 0.05,  final_ratio=0.01, tau = 512,rng=default_rng()):
+        return StochasticGradientDescent(model,data,loss_calculator,m=m, N=N, eta0=eta0, final_ratio=final_ratio,tau=tau,rng=rng)
 
     def __init__(self,model,data,loss_calculator,rng=default_rng()):
         self.rng = rng
@@ -182,30 +206,30 @@ class Optimizer(ABC):
         ...
 
 class StochasticGradientDescent(Optimizer):
-    def __init__(self,model,data,loss_calculator,m = 16,N = 2048,epsilon0 = 0.05,  final_ratio=0.01, tau = 512,rng=default_rng()):
+    '''
+    Optimizer based on Stochastic Gradient
+    '''
+    def __init__(self,model,data,loss_calculator,m = 16,N = 2048,eta0 = 0.05,  final_ratio=0.01, tau = 512,rng=default_rng()):
         super().__init__(model,data,loss_calculator,rng=rng)
         self.m = m # minibatch
         self.N = N
-        self.epsilon0 = epsilon0
-        self.epsilon_tau = final_ratio * self.epsilon0
+        self.eta0 = eta0
+        self.eta_tau = final_ratio * self.eta0
         self.tau = tau
-        # self.losses = np.empty((self.n_groups))
+        self.log = []
 
     def optimize(self):
-        # for i in range(self.n_groups):
-            # self.losses[i] = self.loss_calculator.get_loss_for_data_group(self.gap, i)
-
-        total_loss = sum(self.loss_calculator.get_loss_for_data_group(self.gap, i) for i in range(self.n_groups))
-
+        total_loss = self.loss_calculator.get(self.gap, self.n_groups)
         for k in range(self.N):
             if k<self.tau:
                 alpha = k/self.tau
-                epsilon = (1.0 - alpha)*self.epsilon0 + alpha*self.epsilon_tau
-            self.step(epsilon)
-            total_loss = sum(self.loss_calculator.get_loss_for_data_group(self.gap, i) for i in range(self.n_groups))
-            print (f'Iteration={k+1:5d}, Epsilon={epsilon:.4f}, Loss={total_loss:.2f}')
+                eta = (1.0 - alpha)*self.eta0 + alpha*self.eta_tau
+            self.step(eta)
+            total_loss = self.loss_calculator.get(self.gap, self.n_groups)
+            print (f'Iteration={k+1:5d}, eta={eta:.4f}, Loss={total_loss:.2f}')
+            self.log.append(total_loss)
 
-    def step(self,epsilon):
+    def step(self,eta):
         iws = np.zeros((self.m),dtype=np.int64)
         dws = np.zeros((self.m,self.model.n))
         iwc = np.zeros((self.gap*self.m),dtype=np.int64)
@@ -220,10 +244,10 @@ class StochasticGradientDescent(Optimizer):
                 dcs[self.gap*i+k,:] = delta_c_pos if k==0 else delta_c_neg[k-1]
         for i in range(self.m):
             index_w = iws[i]
-            self.model.w[index_w,:] -= epsilon * dws[i,:]
+            self.model.w[index_w,:] -= eta * dws[i,:]
             for j in range(self.gap):
                 index_c = iwc[self.gap*i+j]
-                self.model.c[index_c,:] -= epsilon * dws[i,:]
+                self.model.c[index_c,:] -= eta * dws[i,:]
 
 
     def create_minibatch(self):
