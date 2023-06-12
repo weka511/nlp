@@ -122,7 +122,10 @@ if __name__=='__main__':
         case 'train':
             data = read_training_data(args.examples)
             model = Word2Vec()
-            model.build(data[:,0].max()+1,n=args.dimension,rng=rng)
+            if args.resume:
+                model.load(ensure(args.load))
+            else:
+                model.build(data[:,0].max()+1,n=args.dimension,rng=rng)
             loss_calculator = LossCalculator(model,data)
             optimizer = Optimizer.create(model,data,loss_calculator,
                                          m = args.minibatch,N = args.N,eta0 = args.eta,  final_ratio=args.ratio, tau = args.tau, rng=rng)
