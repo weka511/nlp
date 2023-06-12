@@ -136,20 +136,37 @@ class Word2Vec:
     Used to store word2vec weights
     '''
     def build(self,m,n=32,rng=default_rng()):
+        '''
+        Initialze weights to random values
+        '''
         self.w = rng.standard_normal((m,n))
         self.c = rng.standard_normal((m,n))
         self.n = n
 
     def get_product(self,i_w,i_c):
+        '''
+        Calculate inner product of one word vector and one context
+
+        Parameters:
+            i_w    Index of wprd vector
+            i_c    Index of context vector
+        '''
         return np.dot(self.w[i_w,:],self.c[i_c,:])
 
     def load(self,name):
-        with load(name) as data:
+        '''
+        Initialize weights using stored data
+        '''
+        with np.load(name) as data:
             self.w = data['w']
             self.c = data['c']
             _,self.n = self.w.shape
 
+
     def save(self,name):
+        '''
+        Save weights in an external file
+        '''
         np.savez(name,w=self.w,c=self.c)
 
 class LossCalculator:

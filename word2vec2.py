@@ -65,7 +65,7 @@ def create_vocabulary(docnames):
 if __name__=='__main__':
     start  = time()
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['create', 'train'])
+    parser.add_argument('action', choices=['create', 'train', 'test'])
     parser.add_argument('docnames', nargs='*', help='A list of documents to be processed')
     parser.add_argument('--examples', default='examples.csv', help='File name for training examples')
     parser.add_argument('--width', '-w', type=int, default=2, help='Window size for building examples')
@@ -80,6 +80,7 @@ if __name__=='__main__':
     parser.add_argument('--show', default=False, action='store_true', help='display plots')
     parser.add_argument('--plot', default='word2vec2', help='Plot file name')
     parser.add_argument('--save', default='word2vec2', help='File name to save weights')
+    parser.add_argument('--load', default='word2vec2', help='File name to load weights')
     args = parser.parse_args()
 
     rng = default_rng(args.seed)
@@ -115,6 +116,13 @@ if __name__=='__main__':
             fig.savefig(args.plot)
             if args.show:
                 show()
+
+        case test:
+            model = Word2Vec()
+            if args.load.endswith('.npz'):
+                model.load(args.load)
+            else:
+                model.load(f'{args.load}.npz')
 
     elapsed = time() - start
     minutes = int(elapsed/60)
