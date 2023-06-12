@@ -75,6 +75,12 @@ def create_vocabulary(docnames):
 
     return Product
 
+def ensure(name,has_extension='npz'):
+    '''
+    Ensure that file name has appropriate extension
+    '''
+    return name if name.endswith(has_extension) else f'{name}.{has_extension}'
+
 if __name__=='__main__':
     start  = time()
     parser = ArgumentParser(description=__doc__)
@@ -95,6 +101,7 @@ if __name__=='__main__':
     parser.add_argument('--save', default='word2vec2', help='File name to save weights')
     parser.add_argument('--load', default='word2vec2', help='File name to load weights')
     parser.add_argument('--vocabulary', default='vocabulary', help='File name for vocabulary')
+    parser.add_argument('--resume', default=False, action='store_true', help='Resume training')
     args = parser.parse_args()
 
     rng = default_rng(args.seed)
@@ -104,13 +111,13 @@ if __name__=='__main__':
             vocabulary = create_vocabulary(docnames)
             word2vec = ExampleBuilder(k=args.k, width=args.width)
             tower = Tower(ExampleBuilder.normalize(vocabulary),rng=rng)
-            with open(args.examples,'w', newline='') as out:
+            with open(ensure(args.examples,has_extension='csv'),'w', newline='') as out:
                 examples = writer(out)
                 for sentence in extract_sentences(extract_tokens(read_text(file_names = docnames))):
                     indices = vocabulary.parse(sentence)
                     for word,context,y in word2vec.generate_examples([indices],tower):
                         examples.writerow([word,context,y])
-            vocabulary.save(args.vocabulary)
+            vocabulary.save(ensure(args.vocabulary,has_extension='csv'))
 
         case 'train':
             data = read_training_data(args.examples)
@@ -134,10 +141,10 @@ if __name__=='__main__':
 
         case test:
             model = Word2Vec()
-            if args.load.endswith('.npz'):
-                model.load(args.load)
-            else:
-                model.load(f'{args.load}.npz')
+            model.load(ensure(args.load))
+            vocabulary = Vocabulary()
+            vocabulary.load(ensure(args.vocabulary))
+
 
     elapsed = time() - start
     minutes = int(elapsed/60)

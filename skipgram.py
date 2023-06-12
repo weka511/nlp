@@ -75,9 +75,9 @@ class Vocabulary:
         '''
         Initialize vocabulary from stored data
         '''
-        with np.load(name) as data:
+        with np.load(name,allow_pickle=True) as data:
             self.indices = data['indices']
-            self.vocabulary = data['vocabulary']
+            self.counter = data['counter']
 
 
     def save(self,name):
