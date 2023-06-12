@@ -81,29 +81,42 @@ def ensure(name,has_extension='npz'):
     '''
     return name if name.endswith(has_extension) else f'{name}.{has_extension}'
 
+def create_arguments():
+    parser = ArgumentParser(description=__doc__)
+    parser.add_argument('action', choices=['create', 'train', 'test'],
+                        help='''
+                        Action to be performed: create training examples from corpus;
+                        train weights using examples; test weights
+                        ''')
+    parser.add_argument('--seed', type=int,default=None, help='Used to initialize random number generator')
+    parser.add_argument('--show', default=False, action='store_true', help='display plots')
+    parser.add_argument('--examples', default='examples.csv', help='File name for training examples')
+    parser.add_argument('--vocabulary', default='vocabulary', help='File name for vocabulary')
+
+    group_create = parser.add_argument_group('create', 'Parameters for create')
+    group_create.add_argument('docnames', nargs='*', help='A list of documents to be processed')
+    group_create.add_argument('--width', '-w', type=int, default=2, help='Window size for building examples')
+    group_create.add_argument('--k', '-k', type=int, default=2, help='Number of negative examples for each positive')
+
+    group_train = parser.add_argument_group('train', 'Parameters for train')
+    group_train.add_argument('--minibatch', '-m', type=int, default=64, help='Minibatch size')
+    group_train.add_argument('--dimension', '-d', type=int, default=64, help='Dimension of word vectors')
+    group_train.add_argument('--N', '-N', type=int, default=2048, help='Number of iterations')
+    group_train.add_argument('--eta', '-e', type=float, default=0.05, help='Starting value for learning rate')
+    group_train.add_argument('--ratio', '-r', type=float, default=0.01, help='Final learning rate as a fraction of the first')
+    group_train.add_argument('--tau', '-t', type=int, default=512, help='Number of steps to decrease learning rate')
+    group_train.add_argument('--plot', default='word2vec2', help='Plot file name')
+    group_train.add_argument('--save', default='word2vec2', help='File name to save weights')
+    group_train.add_argument('--resume', default=False, action='store_true', help='Resume training')
+
+    group_test = parser.add_argument_group('test', 'Parameters for test')
+    group_test.add_argument('--load', default='word2vec2', help='File name to load weights')
+
+    return parser.parse_args()
+
 if __name__=='__main__':
     start  = time()
-    parser = ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['create', 'train', 'test'])
-    parser.add_argument('docnames', nargs='*', help='A list of documents to be processed')
-    parser.add_argument('--examples', default='examples.csv', help='File name for training examples')
-    parser.add_argument('--width', '-w', type=int, default=2, help='Window size for building examples')
-    parser.add_argument('--k', '-k', type=int, default=2, help='Number of negative examples for each positive')
-    parser.add_argument('--seed', type=int,default=None, help='Used to initialize random number generator')
-    parser.add_argument('--minibatch', '-m', type=int, default=64, help='Minibatch size')
-    parser.add_argument('--dimension', '-d', type=int, default=64, help='Dimension of word vectors')
-    parser.add_argument('--N', '-N', type=int, default=2048, help='Number of iterations')
-    parser.add_argument('--eta', '-e', type=float, default=0.05, help='Starting value for learning rate')
-    parser.add_argument('--ratio', '-r', type=float, default=0.01, help='Final learning rate as a fraction of the first')
-    parser.add_argument('--tau', '-t', type=int, default=512, help='Number of steps to decrease learning rate')
-    parser.add_argument('--show', default=False, action='store_true', help='display plots')
-    parser.add_argument('--plot', default='word2vec2', help='Plot file name')
-    parser.add_argument('--save', default='word2vec2', help='File name to save weights')
-    parser.add_argument('--load', default='word2vec2', help='File name to load weights')
-    parser.add_argument('--vocabulary', default='vocabulary', help='File name for vocabulary')
-    parser.add_argument('--resume', default=False, action='store_true', help='Resume training')
-    args = parser.parse_args()
-
+    args = create_arguments()
     rng = default_rng(args.seed)
     match args.action:
         case 'create':
@@ -139,8 +152,6 @@ if __name__=='__main__':
             ax.set_xlabel('Step number')
             ax.set_ylabel('Loss')
             fig.savefig(args.plot)
-            if args.show:
-                show()
 
         case test:
             model = Word2Vec()
@@ -148,8 +159,10 @@ if __name__=='__main__':
             vocabulary = Vocabulary()
             vocabulary.load(ensure(args.vocabulary))
 
-
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
     print (f'Elapsed Time {minutes} m {seconds:.2f} s')
+
+    if args.show:
+        show()
