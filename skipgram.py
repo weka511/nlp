@@ -128,6 +128,7 @@ class Word2Vec:
     def build(self,m,n=128,rng=default_rng()):
         self.w = rng.standard_normal((m,n))
         self.c = rng.standard_normal((m,n))
+        self.n = n
         print (self.w.shape)
 
     def get_product(self,i_w,i_c):
@@ -202,11 +203,21 @@ class StochasticGradientDescent(Optimizer):
             self.step(epsilon)
 
     def step(self,epsilon):
-        for index_test_set in self.create_minibatch():
+        iws = np.zeros((self.m),dtype=np.int64)
+        dws = np.zeros((self.m,self.model.n))
+        iwc = np.zeros((self.gap*self.m),dtype=np.int64)
+        dcs = np.zeros((self.gap*self.m,self.model.n))
+        for i,index_test_set in enumerate(self.create_minibatch()):
             index_start = self.gap * index_test_set
-            for i in range(self.gap):
-                print (index_test_set, self.data[index_start + i,:])
-            self.loss_calculator.get_derivatives(self.gap, index_test_set)
+            for k in range(self.gap):
+                print (f'Group {index_test_set}, w={self.data[index_start + k,0]} c={self.data[index_start + k,1]} {"+" if self.data[index_start + k,2]>0 else "-"}')
+            delta_c_pos,delta_c_neg,delta_w = self.loss_calculator.get_derivatives(self.gap, index_test_set)
+            iws[i] = self.data[index_start,0]
+            dws[i,:] = delta_w
+            for k in range(self.gap):
+                iwc[self.gap*i+k] = self.data[index_start + k,1]
+                dcs[self.gap*i+k,:] = delta_c_pos if k==0 else delta_c_neg[k-1]
+        z=0
 
     def create_minibatch(self):
         return self.rng.integers(self.n_groups,size=(self.m))
