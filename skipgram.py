@@ -125,7 +125,7 @@ class ExampleBuilder:
 
 class Word2Vec:
 
-    def build(self,m,n=128,rng=default_rng()):
+    def build(self,m,n=32,rng=default_rng()):
         self.w = rng.standard_normal((m,n))
         self.c = rng.standard_normal((m,n))
         self.n = n
@@ -182,25 +182,28 @@ class Optimizer(ABC):
         ...
 
 class StochasticGradientDescent(Optimizer):
-    def __init__(self,model,data,loss_calculator,m = 16,N = 128,epsilon0 = 0.01,  final_ratio=0.01, tau = 32,rng=default_rng()):
+    def __init__(self,model,data,loss_calculator,m = 16,N = 2048,epsilon0 = 0.05,  final_ratio=0.01, tau = 512,rng=default_rng()):
         super().__init__(model,data,loss_calculator,rng=rng)
         self.m = m # minibatch
         self.N = N
         self.epsilon0 = epsilon0
         self.epsilon_tau = final_ratio * self.epsilon0
         self.tau = tau
-        self.losses = np.empty((self.n_groups))
+        # self.losses = np.empty((self.n_groups))
 
     def optimize(self):
-        for i in range(self.n_groups):
-            self.losses[i] = self.loss_calculator.get_loss_for_data_group(self.gap, i)
+        # for i in range(self.n_groups):
+            # self.losses[i] = self.loss_calculator.get_loss_for_data_group(self.gap, i)
 
-        total_loss = sum(self.losses)
+        total_loss = sum(self.loss_calculator.get_loss_for_data_group(self.gap, i) for i in range(self.n_groups))
+
         for k in range(self.N):
             if k<self.tau:
                 alpha = k/self.tau
                 epsilon = (1.0 - alpha)*self.epsilon0 + alpha*self.epsilon_tau
             self.step(epsilon)
+            total_loss = sum(self.loss_calculator.get_loss_for_data_group(self.gap, i) for i in range(self.n_groups))
+            print (f'Iteration={k+1:5d}, Epsilon={epsilon:.4f}, Loss={total_loss:.2f}')
 
     def step(self,epsilon):
         iws = np.zeros((self.m),dtype=np.int64)
@@ -209,15 +212,19 @@ class StochasticGradientDescent(Optimizer):
         dcs = np.zeros((self.gap*self.m,self.model.n))
         for i,index_test_set in enumerate(self.create_minibatch()):
             index_start = self.gap * index_test_set
-            for k in range(self.gap):
-                print (f'Group {index_test_set}, w={self.data[index_start + k,0]} c={self.data[index_start + k,1]} {"+" if self.data[index_start + k,2]>0 else "-"}')
             delta_c_pos,delta_c_neg,delta_w = self.loss_calculator.get_derivatives(self.gap, index_test_set)
             iws[i] = self.data[index_start,0]
             dws[i,:] = delta_w
             for k in range(self.gap):
                 iwc[self.gap*i+k] = self.data[index_start + k,1]
                 dcs[self.gap*i+k,:] = delta_c_pos if k==0 else delta_c_neg[k-1]
-        z=0
+        for i in range(self.m):
+            index_w = iws[i]
+            self.model.w[index_w,:] -= epsilon * dws[i,:]
+            for j in range(self.gap):
+                index_c = iwc[self.gap*i+j]
+                self.model.c[index_c,:] -= epsilon * dws[i,:]
+
 
     def create_minibatch(self):
         return self.rng.integers(self.n_groups,size=(self.m))
