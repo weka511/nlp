@@ -71,6 +71,20 @@ class Vocabulary:
                     raise StopIteration
         return Items(self)
 
+    def load(self,name):
+        '''
+        Initialize vocabulary from stored data
+        '''
+        with np.load(name) as data:
+            self.indices = data['indices']
+            self.vocabulary = data['vocabulary']
+
+
+    def save(self,name):
+        '''
+        Save vocabulary in an external file
+        '''
+        np.savez(name,indices=self.indices,counter=self.counter)
 
 class Tower:
     '''
@@ -97,7 +111,7 @@ class Tower:
 
 class ExampleBuilder:
     '''
-    A class that constructs tarining data from text.
+    A class that constructs training data from text.
     '''
 
     @staticmethod

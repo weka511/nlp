@@ -31,12 +31,18 @@ from tokenizer import read_text, extract_sentences, extract_tokens
 
 def read_training_data(file_name):
     '''
-    Read file contiining examples for training
+    Read file containing examples for training
+
+    Parameters:
+        file_name    Name of file that is to be read
 
     Returns:
-       A nupy array, each word consisting of a word, context, and an indicator of +/-
+       A numpy array, each word consisting of a word, context, and an indicator of +/-
     '''
     def count_entries():
+        '''
+        Establish number of rows required for array
+        '''
         count = 0
         with open(file_name, newline='') as csvfile:
             examples = reader(csvfile)
@@ -54,6 +60,13 @@ def read_training_data(file_name):
 def create_vocabulary(docnames):
     '''
     Build vocabulary first, so we have frequencies
+
+    Parameters:
+        docnames  List of all documents to be read
+
+    Returns:
+        Vocabulry built from all documents
+
     '''
     Product = Vocabulary()
 
@@ -81,6 +94,7 @@ if __name__=='__main__':
     parser.add_argument('--plot', default='word2vec2', help='Plot file name')
     parser.add_argument('--save', default='word2vec2', help='File name to save weights')
     parser.add_argument('--load', default='word2vec2', help='File name to load weights')
+    parser.add_argument('--vocabulary', default='vocabulary', help='File name for vocabulary')
     args = parser.parse_args()
 
     rng = default_rng(args.seed)
@@ -96,6 +110,7 @@ if __name__=='__main__':
                     indices = vocabulary.parse(sentence)
                     for word,context,y in word2vec.generate_examples([indices],tower):
                         examples.writerow([word,context,y])
+            vocabulary.save(args.vocabulary)
 
         case 'train':
             data = read_training_data(args.examples)
