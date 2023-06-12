@@ -143,6 +143,15 @@ class Word2Vec:
     def get_product(self,i_w,i_c):
         return np.dot(self.w[i_w,:],self.c[i_c,:])
 
+    def load(self,name):
+        with load(name) as data:
+            self.w = data['w']
+            self.c = data['c']
+            _,self.n = self.w.shape
+
+    def save(self,name):
+        np.savez(name,w=self.w,c=self.c)
+
 class LossCalculator:
     '''
     Calculate loss and its derivatives

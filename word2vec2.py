@@ -30,6 +30,12 @@ from skipgram import Vocabulary, ExampleBuilder, Tower, Optimizer, Word2Vec, Los
 from tokenizer import read_text, extract_sentences, extract_tokens
 
 def read_training_data(file_name):
+    '''
+    Read file contiining examples for training
+
+    Returns:
+       A nupy array, each word consisting of a word, context, and an indicator of +/-
+    '''
     def count_entries():
         count = 0
         with open(file_name, newline='') as csvfile:
@@ -67,13 +73,15 @@ if __name__=='__main__':
     parser.add_argument('--seed', type=int,default=None, help='Used to initialize random number generator')
     parser.add_argument('--minibatch', '-m', type=int, default=64, help='Minibatch size')
     parser.add_argument('--dimension', '-d', type=int, default=64, help='Dimension of word vectors')
-    parser.add_argument('-N', '-N', type=int, default=2048, help='Number of iterations')
+    parser.add_argument('--N', '-N', type=int, default=2048, help='Number of iterations')
     parser.add_argument('--eta', '-e', type=float, default=0.05, help='Starting value for learning rate')
     parser.add_argument('--ratio', '-r', type=float, default=0.01, help='Final learning rate as a fraction of the first')
-    parser.add_argument('--tau', '-t', type=int, default=2, help='Number of steps to decrease learning rate')
+    parser.add_argument('--tau', '-t', type=int, default=512, help='Number of steps to decrease learning rate')
     parser.add_argument('--show', default=False, action='store_true', help='display plots')
     parser.add_argument('--plot', default='word2vec2', help='Plot file name')
+    parser.add_argument('--save', default='word2vec2', help='File name to save weights')
     args = parser.parse_args()
+
     rng = default_rng(args.seed)
     match args.action:
         case 'create':
@@ -96,7 +104,7 @@ if __name__=='__main__':
             optimizer = Optimizer.create(model,data,loss_calculator,
                                          m = args.minibatch,N = args.N,eta0 = args.eta,  final_ratio=args.ratio, tau = args.tau, rng=rng)
             optimizer.optimize()
-
+            model.save(args.save)
             fig = figure()
             ax = fig.add_subplot(1,1,1)
             ax.plot(range(len(optimizer.log)),optimizer.log)
