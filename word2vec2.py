@@ -108,6 +108,8 @@ def create_arguments():
     group_train.add_argument('--plot', default='word2vec2', help='Plot file name')
     group_train.add_argument('--save', default='word2vec2', help='File name to save weights')
     group_train.add_argument('--resume', default=False, action='store_true', help='Resume training')
+    group_train.add_argument('--checkpoint', default='checkpoint', help='File name to save weights at checkpoint')
+    group_train.add_argument('--freq', type=int, default=25, help='Save checkoint every FREQ iteration')
 
     group_test = parser.add_argument_group('test', 'Parameters for test')
     group_test.add_argument('--load', default='word2vec2', help='File name to load weights')
@@ -141,7 +143,8 @@ if __name__=='__main__':
                 model.build(data[:,0].max()+1,n=args.dimension,rng=rng)
             loss_calculator = LossCalculator(model,data)
             optimizer = Optimizer.create(model,data,loss_calculator,
-                                         m = args.minibatch,N = args.N,eta0 = args.eta,  final_ratio=args.ratio, tau = args.tau, rng=rng)
+                                         m = args.minibatch,N = args.N,eta0 = args.eta,
+                                         final_ratio=args.ratio, tau = args.tau, rng=rng)
             optimizer.optimize()
             model.save(args.save)
             fig = figure()

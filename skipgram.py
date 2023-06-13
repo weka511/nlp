@@ -19,6 +19,8 @@
 
 from abc import ABC, abstractmethod
 from collections import Counter
+from os import replace
+from os.path import isfile
 from unittest import main, TestCase, skip
 import numpy as np
 from numpy.random import default_rng
@@ -227,10 +229,13 @@ class Optimizer(ABC):
     Class representiong method of optimizing loss
     '''
     @staticmethod
-    def create(model,data,loss_calculator,m = 16,N = 2048,eta0 = 0.05,  final_ratio=0.01, tau = 512,rng=default_rng()):
-        return StochasticGradientDescent(model,data,loss_calculator,m=m, N=N, eta0=eta0, final_ratio=final_ratio,tau=tau,rng=rng)
+    def create(model,data,loss_calculator,m = 16,N = 2048,eta0 = 0.05,  final_ratio=0.01, tau = 512,rng=default_rng(),
+                 checkpoint_file = 'checkpoint', freq = 25):
+        return StochasticGradientDescent(model,data,loss_calculator,m=m, N=N, eta0=eta0, final_ratio=final_ratio,tau=tau,rng=rng,
+                                         checkpoint_file = checkpoint_file, freq = freq )
 
-    def __init__(self,model,data,loss_calculator,rng=default_rng()):
+    def __init__(self,model,data,loss_calculator,rng=default_rng(),
+                 checkpoint_file = 'checkpoint', freq = 25):
         self.rng = rng
         self.model = model
         self.data = data
@@ -249,31 +254,57 @@ class StochasticGradientDescent(Optimizer):
     '''
     Optimizer based on Stochastic Gradient
     '''
-    def __init__(self,model,data,loss_calculator,m = 16,N = 2048,eta0 = 0.05,  final_ratio=0.01, tau = 512,rng=default_rng()):
-        super().__init__(model,data,loss_calculator,rng=rng)
+    def __init__(self,model,data,loss_calculator,
+                 m = 16, N = 2048, eta0 = 0.05,
+                 final_ratio=0.01, tau = 512, rng=default_rng(),
+                 checkpoint_file = 'checkpoint', freq = 25):
+        super().__init__(model,data,loss_calculator,rng=rng, checkpoint_file=checkpoint_file,freq=freq)
         self.m = m # minibatch
         self.N = N
         self.eta0 = eta0
         self.eta_tau = final_ratio * self.eta0
         self.tau = tau
         self.log = []
+        nrows,_ = data.shape
+        print (f'There are {int(nrows/self.gap)} groups. Recommend that tau be at least {int(nrows/(self.gap*m))}')
+        self.checkpoint_file = checkpoint_file
+        self.freq = freq
 
     def optimize(self):
-        total_loss = self.loss_calculator.get(self.gap, self.n_groups)
+        '''
+        Optimize loss: this performs stochactic gradient optimization,
+        and calculates learning rate to be used at each step.
+        '''
         for k in range(self.N):
             if k<self.tau:
                 alpha = k/self.tau
                 eta = (1.0 - alpha)*self.eta0 + alpha*self.eta_tau
-            self.step(eta)
+            iws,dws,iwc,dcs = self.calculate_gradients()
+            self.step(iws,dws,iwc,dcs,eta)
+
             total_loss = self.loss_calculator.get(self.gap, self.n_groups)
             print (f'Iteration={k+1:5d}, eta={eta:.4f}, Loss={total_loss:.2f}')
             self.log.append(total_loss)
+            if k%self.freq==0:
+                self.checkpoint()
 
-    def step(self,eta):
+
+
+    def calculate_gradients(self):
+        '''
+        Calculate gradients so we can take one step.
+
+        Returns:
+             iws   Indices of the words that have been selected by minibatch
+             dws   derivatives by dw (words)
+             iwc   Indices of the contexts that have been selected by minibatch
+             dcs   derivatives by dc (contexts)
+        '''
         iws = np.zeros((self.m),dtype=np.int64)
-        dws = np.zeros((self.m,self.model.n))
+        dws = np.zeros((self.m,self.model.n))      # derivatives by dw
         iwc = np.zeros((self.gap*self.m),dtype=np.int64)
-        dcs = np.zeros((self.gap*self.m,self.model.n))
+        dcs = np.zeros((self.gap*self.m,self.model.n))   # derivatives by dc
+
         for i,index_test_set in enumerate(self.create_minibatch()):
             index_start = self.gap * index_test_set
             delta_c_pos,delta_c_neg,delta_w = self.loss_calculator.get_derivatives(self.gap, index_test_set)
@@ -282,16 +313,31 @@ class StochasticGradientDescent(Optimizer):
             for k in range(self.gap):
                 iwc[self.gap*i+k] = self.data[index_start + k,1]
                 dcs[self.gap*i+k,:] = delta_c_pos if k==0 else delta_c_neg[k-1]
+
+        return iws,dws,iwc,dcs
+
+    def step(self,iws,dws,iwc,dcs,eta):
         for i in range(self.m):
             index_w = iws[i]
             self.model.w[index_w,:] -= eta * dws[i,:]
             for j in range(self.gap):
                 index_c = iwc[self.gap*i+j]
-                self.model.c[index_c,:] -= eta * dws[i,:]
-
+                self.model.c[index_c,:] -= eta * dcs[i,:]
 
     def create_minibatch(self):
+        '''
+        Sample training data to produce minibatch
+        '''
         return self.rng.integers(self.n_groups,size=(self.m))
+
+    def checkpoint(self):
+        '''
+        Save model in checkpoint file. Keep one backup if file exists already.
+        '''
+        checkpoint_file = f'{self.checkpoint_file}.npz'
+        if isfile(checkpoint_file):
+            replace(checkpoint_file,f'{self.checkpoint_file}.npz.bak')
+        self.model.save(self.checkpoint_file)
 
 
 if __name__=='__main__':
