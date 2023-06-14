@@ -34,6 +34,7 @@ class Vocabulary:
     def __init__(self):
         self.indices = dict()
         self.counter = Counter()
+        self.words = None
 
     def parse(self,text):
         '''
@@ -73,13 +74,21 @@ class Vocabulary:
                     raise StopIteration
         return Items(self)
 
+    def get_word(self,index):
+        '''
+        Revese lookup: find word given index
+        '''
+        if self.words==None:
+            self.words = [word for word,_ in sorted([(word,position) for word,position in self.indices.items()],key=lambda tup: tup[1])]
+        return self.words[index]
+
     def load(self,name):
         '''
         Initialize vocabulary from stored data
         '''
         with np.load(name,allow_pickle=True) as data:
-            self.indices = data['indices']
-            self.counter = data['counter']
+            self.indices = data['indices'].item()
+            self.counter = data['counter'].item()
 
 
     def save(self,name):
@@ -168,6 +177,23 @@ class Word2Vec:
             i_c    Index of context vector
         '''
         return np.dot(self.w[i_w,:],self.c[i_c,:])
+
+    def create_products(self,normalized=True):
+        '''
+        Calculate inner products of vectors
+        '''
+        m,_ = self.w.shape
+        Product = np.full((m,m),np.nan)
+        for i in range(m):
+            for j in range(i,m):
+                Product[i,j] = np.dot(self.w[i,:],self.w[j,:])
+                Product[j,i] = Product[i,j]
+
+        if normalized:
+            Normalizer = np.sqrt(Product.diagonal())
+            return Product/np.outer(Normalizer,Normalizer)
+        else:
+            return Product
 
     def load(self,name):
         '''

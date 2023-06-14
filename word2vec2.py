@@ -113,6 +113,7 @@ def create_arguments():
 
     group_test = parser.add_argument_group('test', 'Parameters for test')
     group_test.add_argument('--load', default='word2vec2', help='File name to load weights')
+    group_train.add_argument('--L', '-L', type=int, default=6, help='Number of words to compare')
 
     return parser.parse_args()
 
@@ -161,6 +162,14 @@ if __name__=='__main__':
             model.load(ensure(args.load))
             vocabulary = Vocabulary()
             vocabulary.load(ensure(args.vocabulary))
+            NormalizedInnerProducts = np.abs(model.create_products())
+            m,_ = NormalizedInnerProducts.shape
+            for i in range(m):
+                print ( f'{vocabulary.get_word(i)}')
+                ind = np.argpartition(NormalizedInnerProducts[i,:], -args.L)[-args.L:]
+                ind1 = [j for j in ind if i!=j]
+                for j in ind1:
+                    print ( f'\t{vocabulary.get_word(j)} ({NormalizedInnerProducts[i,j]:.4f})')
 
     elapsed = time() - start
     minutes = int(elapsed/60)
