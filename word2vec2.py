@@ -26,7 +26,7 @@ from time import time
 from matplotlib.pyplot import figure, show
 import numpy as np
 from numpy.random import default_rng
-from skipgram import Vocabulary, ExampleBuilder, Tower, Optimizer, Word2Vec, LossCalculator
+from skipgram import Vocabulary, ExampleBuilder, Tower, Optimizer, Word2Vec, LossCalculator, Index2Word
 from tokenizer import read_text, extract_sentences, extract_tokens
 
 def read_training_data(file_name):
@@ -39,18 +39,14 @@ def read_training_data(file_name):
     Returns:
        A numpy array, each word consisting of a word, context, and an indicator of +/-
     '''
-    def count_entries():
+    def count_rows():
         '''
         Establish number of rows required for array
         '''
-        count = 0
-        with open(file_name, newline='') as csvfile:
-            examples = reader(csvfile)
-            for row in examples:
-                count += 1
-        return count
+        with open(file_name, newline='') as f:
+            return len(f.readlines())
 
-    training_data = np.empty((count_entries(),3),dtype=np.int64)
+    training_data = np.empty((count_rows(),3),dtype=np.int64)
     with open(file_name, newline='') as csvfile:
         examples = reader(csvfile)
         for i,row in enumerate(examples):
@@ -65,7 +61,7 @@ def create_vocabulary(docnames):
         docnames  List of all documents to be read
 
     Returns:
-        Vocabulry built from all documents
+        Vocabulary built from all documents
 
     '''
     Product = Vocabulary()
@@ -162,14 +158,25 @@ if __name__=='__main__':
             model.load(ensure(args.load))
             vocabulary = Vocabulary()
             vocabulary.load(ensure(args.vocabulary))
-            NormalizedInnerProducts = np.abs(model.create_products())
-            m,_ = NormalizedInnerProducts.shape
+            words = Index2Word(vocabulary)
+            NormalizedInnerProductsW = np.abs(model.create_productsW())
+            InnerProductsWC = np.abs(model.create_productsWC())
+            m,_ = NormalizedInnerProductsW.shape
+            fig = figure()
+            ax1 = fig.add_subplot(2,1,1)
+            n,bins,_ = ax1.hist([NormalizedInnerProductsW[i,j] for i in range(m) for j in range(i)],bins=20)
+            ax1.set_title(f'Weights')
+            ax2 = fig.add_subplot(2,1,2)
+            n,bins,_ = ax2.hist([InnerProductsWC[i,j] for i in range(m) for j in range(i)],bins=20)
+            ax2.set_title(f'Weights by Context')
             for i in range(m):
-                print ( f'{vocabulary.get_word(i)}')
-                ind = np.argpartition(NormalizedInnerProducts[i,:], -args.L)[-args.L:]
-                ind1 = [j for j in ind if i!=j]
-                for j in ind1:
-                    print ( f'\t{vocabulary.get_word(j)} ({NormalizedInnerProducts[i,j]:.4f})')
+                print ( f'{words.get_word(i)}')
+                nearest_neighbours = [j for j in np.argpartition(InnerProductsWC[i,:], -args.L)[-args.L:] if i!=j]
+                for j in nearest_neighbours:
+                    print ( f'\t{words.get_word(j)} ({InnerProductsWC[i,j]:.4f})')
+
+
+            fig.savefig(args.plot)
 
     elapsed = time() - start
     minutes = int(elapsed/60)

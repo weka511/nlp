@@ -74,14 +74,6 @@ class Vocabulary:
                     raise StopIteration
         return Items(self)
 
-    def get_word(self,index):
-        '''
-        Revese lookup: find word given index
-        '''
-        if self.words==None:
-            self.words = [word for word,_ in sorted([(word,position) for word,position in self.indices.items()],key=lambda tup: tup[1])]
-        return self.words[index]
-
     def load(self,name):
         '''
         Initialize vocabulary from stored data
@@ -96,6 +88,25 @@ class Vocabulary:
         Save vocabulary in an external file
         '''
         np.savez(name,indices=self.indices,counter=self.counter)
+
+class Index2Word:
+    '''
+    Companion to Vocabulary: used to find word given index
+    '''
+    def __init__(self,vocabulary):
+        self.words = [word for word,_ in sorted([(word,position) for word,position in vocabulary.indices.items()],key=lambda tup: tup[1])]
+
+    def get_word(self,index):
+        '''
+        Find word given index
+
+        Parameters:
+            index    Index number of word fromm Vocabulary
+
+        Returns:
+            word corresponding to index
+        '''
+        return self.words[index]
 
 class Tower:
     '''
@@ -173,12 +184,12 @@ class Word2Vec:
         Calculate inner product of one word vector and one context
 
         Parameters:
-            i_w    Index of wprd vector
+            i_w    Index of word vector
             i_c    Index of context vector
         '''
         return np.dot(self.w[i_w,:],self.c[i_c,:])
 
-    def create_products(self,normalized=True):
+    def create_productsW(self,normalized=True):
         '''
         Calculate inner products of vectors
         '''
@@ -194,6 +205,18 @@ class Word2Vec:
             return Product/np.outer(Normalizer,Normalizer)
         else:
             return Product
+
+    def create_productsWC(self):
+        '''
+        Calculate inner products of vectors
+        '''
+        m,_ = self.w.shape
+        Product = np.full((m,m),np.nan)
+        for i in range(m):
+            for j in range(m):
+                Product[i,j] = np.dot(self.w[i,:],self.c[j,:])
+
+        return Product
 
     def load(self,name):
         '''
@@ -313,8 +336,6 @@ class StochasticGradientDescent(Optimizer):
             self.log.append(total_loss)
             if k%self.freq==0:
                 self.checkpoint()
-
-
 
     def calculate_gradients(self):
         '''
