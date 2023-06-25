@@ -15,6 +15,7 @@ template-test.py|Template for new code using python unittest
 tfidf.py|Implementation of td-idf algorithm
 tfidf-harness.py|Test harness for td-idf algorithm
 tokenizer.py|Prepare text for processing
+transformer.py|Trannsformer, based in [Arun Mohan's demo](https://www.kaggle.com/code/arunmohan003/transformer-from-scratch-using-pytorch/notebook)
 word2vec.py |This program has been written to test my understanding of [word2vec](https://arxiv.org/abs/1301.3781/Word2Vec). The code was originally based on [Mateusz Bednarski's article--Implementing word2vec in PyTorch](https://towardsdatascience.com/implementing-word2vec-in-pytorch-skip-gram-model-e6bae040d2fb)
 word2vec2.py|Test harness for skipgram.py. It builds examples, trains weights, and some test code.
 nlp.wpr|Wing IDE Project file
