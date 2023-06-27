@@ -15,33 +15,33 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-'''https://www.kaggle.com/code/arunmohan003/transformer-from-scratch-using-pytorch/notebook'''
+'''
+Transformer implementation based on Arum Mohan's Notebook
+https://www.kaggle.com/code/arunmohan003/transformer-from-scratch-using-pytorch/notebook,
+https://jalammar.github.io/illustrated-transformer/,
+https://jalammar.github.io/visualizing-neural-machine-translation-mechanics-of-seq2seq-models-with-attention/
+'''
 
 from argparse import ArgumentParser
-import math
-import copy
-import re
+from math import cos, sin, sqrt
 from time import time
-from warnings import simplefilter
 import torch.nn as nn
 import torch
-import torch.nn.functional as F
-import pandas as pd
-import numpy as np
-import seaborn as sns
-import torchtext
-import matplotlib.pyplot as plt
-
+from torch.nn.functional import softmax
 
 class Embedding(nn.Module):
+    '''
+    Used to convert each word in the input sequence to an embedding vector
+    '''
     def __init__(self, vocab_size, embed_dim):
         '''
         Args:
             vocab_size: size of vocabulary
             embed_dim: dimension of embeddings
         '''
-        super(Embedding, self).__init__()
+        super().__init__()
         self.embed = nn.Embedding(vocab_size, embed_dim)
+
     def forward(self, x):
         '''
         Args:
@@ -49,24 +49,29 @@ class Embedding(nn.Module):
         Returns:
             out: embedding vector
         '''
-        out = self.embed(x)
-        return out
+        return self.embed(x)
+
 
 class PositionalEmbedding(nn.Module):
+    '''
+    This clsaa encapsulates a vector which represents position. A postion vector is to the word embedding vector
+    before the first self-attention layer. If the same word appears in a different position,
+    the actual representation will be slightly different, depending on where it appears in the input sentence.
+    '''
     def __init__(self,max_seq_len,embed_model_dim):
         '''
         Args:
             seq_len: length of input sequence
             embed_model_dim: demension of embedding
         '''
-        super(PositionalEmbedding, self).__init__()
+        super().__init__()
         self.embed_dim = embed_model_dim
 
         pe = torch.zeros(max_seq_len,self.embed_dim)
         for pos in range(max_seq_len):
             for i in range(0,self.embed_dim,2):
-                pe[pos, i] = math.sin(pos / (10000 ** ((2 * i)/self.embed_dim)))
-                pe[pos, i + 1] = math.cos(pos / (10000 ** ((2 * (i + 1))/self.embed_dim)))
+                pe[pos, i] = sin(pos / (10000 ** ((2 * i)/self.embed_dim)))
+                pe[pos, i + 1] = cos(pos / (10000 ** ((2 * (i + 1))/self.embed_dim)))
         pe = pe.unsqueeze(0)
         self.register_buffer('pe', pe)
 
@@ -79,24 +84,26 @@ class PositionalEmbedding(nn.Module):
             x: output
         '''
 
-        # make embeddings relatively larger
-        x = x * math.sqrt(self.embed_dim)
-        #add constant to embedding
+        x = x * sqrt(self.embed_dim)
         seq_len = x.size(1)
         x = x + torch.autograd.Variable(self.pe[:,:seq_len], requires_grad=False)
         return x
 
 class MultiHeadAttention(nn.Module):
+    '''
+    This class represents multi-head attention, i.e. a collection of query/key/value triplets that
+    can attend to differnt positions to answer separate questions.
+    '''
     def __init__(self, embed_dim=512, n_heads=8):
         '''
         Args:
-            embed_dim: dimension of embeding vector output
+            embed_dim: dimension of embedding vector output
             n_heads: number of self attention heads
         '''
-        super(MultiHeadAttention, self).__init__()
+        super().__init__()
 
-        self.embed_dim = embed_dim    #512 dim
-        self.n_heads = n_heads   #8
+        self.embed_dim = embed_dim
+        self.n_heads = n_heads
         self.single_head_dim = int(self.embed_dim / self.n_heads)   #512/8 = 64  . each key,query, value will be of 64d
 
         #key,query and value matrixes    #64 x 64
@@ -145,27 +152,17 @@ class MultiHeadAttention(nn.Module):
 
         # fill those positions of product matrix as (-1e20) where mask positions are 0
         if mask is not None:
-             product = product.masked_fill(mask == 0, float('-1e20'))
+            product = product.masked_fill(mask == 0, float('-1e20'))
 
-        #divising by square root of key dimension
-        product = product / math.sqrt(self.single_head_dim) # / sqrt(64)
-
-        #applying softmax
-        scores = F.softmax(product, dim=-1)
-
-        #mutiply with value matrix
+        product = product / sqrt(self.single_head_dim)
+        scores = softmax(product, dim=-1)
         scores = torch.matmul(scores, v)  ##(32x8x 10x 10) x (32 x 8 x 10 x 64) = (32 x 8 x 10 x 64)
-
-        #concatenated output
         concat = scores.transpose(1,2).contiguous().view(batch_size, seq_length_query, self.single_head_dim*self.n_heads)  # (32x8x10x64) -> (32x10x8x64)  -> (32,10,512)
-
-        output = self.out(concat) #(32,10,512) -> (32,10,512)
-
-        return output
+        return self.out(concat) #(32,10,512) -> (32,10,512)
 
 class TransformerBlock(nn.Module):
     def __init__(self, embed_dim, expansion_factor=4, n_heads=8):
-        super(TransformerBlock, self).__init__()
+        super().__init__()
 
         '''
         Args:
@@ -213,22 +210,24 @@ class TransformerBlock(nn.Module):
 
 class TransformerEncoder(nn.Module):
     '''
-    Args:
-        seq_len : length of input sequence
-        embed_dim: dimension of embedding
-        num_layers: number of encoder layers
-        expansion_factor: factor which determines number of linear layers in feed forward layer
-        n_heads: number of heads in multihead attention
-
-    Returns:
-        out: output of the encoder
+    A class that represents the encoder stack of a transformer.
     '''
     def __init__(self, seq_len, vocab_size, embed_dim, num_layers=2, expansion_factor=4, n_heads=8):
-        super(TransformerEncoder, self).__init__()
+        '''
+        Args:
+            seq_len : length of input sequence
+            embed_dim: dimension of embedding
+            num_layers: number of encoder layers
+            expansion_factor: factor which determines number of linear layers in feed forward layer
+            n_heads: number of heads in multihead attention
+
+        Returns:
+            out: output of the encoder
+        '''
+        super().__init__()
 
         self.embedding_layer = Embedding(vocab_size, embed_dim)
         self.positional_encoder = PositionalEmbedding(seq_len, embed_dim)
-
         self.layers = nn.ModuleList([TransformerBlock(embed_dim, expansion_factor, n_heads) for i in range(num_layers)])
 
     def forward(self, x):
@@ -241,7 +240,7 @@ class TransformerEncoder(nn.Module):
 
 class DecoderBlock(nn.Module):
     def __init__(self, embed_dim, expansion_factor=4, n_heads=8):
-        super(DecoderBlock, self).__init__()
+        super().__init__()
 
         '''
         Args:
@@ -280,8 +279,11 @@ class DecoderBlock(nn.Module):
 
 
 class TransformerDecoder(nn.Module):
+    '''
+    A class that represents the decoder stack of a transformer.
+    '''
     def __init__(self, target_vocab_size, embed_dim, seq_len, num_layers=2, expansion_factor=4, n_heads=8):
-        super(TransformerDecoder, self).__init__()
+        super().__init__()
         '''
         Args:
            target_vocab_size: vocabulary size of taget
@@ -306,7 +308,6 @@ class TransformerDecoder(nn.Module):
         self.dropout = nn.Dropout(0.2)
 
     def forward(self, x, enc_out, mask):
-
         '''
         Args:
             x: input vector from target
@@ -315,8 +316,6 @@ class TransformerDecoder(nn.Module):
         Returns:
             out: output vector
         '''
-
-
         x = self.word_embedding(x)  #32x10x512
         x = self.position_embedding(x) #32x10x512
         x = self.dropout(x)
@@ -324,13 +323,17 @@ class TransformerDecoder(nn.Module):
         for layer in self.layers:
             x = layer(enc_out, x, enc_out, mask)
 
-        out = F.softmax(self.fc_out(x))
+        out = softmax(self.fc_out(x),dim=1) #  UserWarning: Implicit dimension choice for
+                                              # softmax has been deprecated. Change the call to include dim=X as an argument.
 
         return out
 
 class Transformer(nn.Module):
+    '''
+    This class represents a Transformer
+    '''
     def __init__(self, embed_dim, src_vocab_size, target_vocab_size, seq_length,num_layers=2, expansion_factor=4, n_heads=8):
-        super(Transformer, self).__init__()
+        super().__init__()
 
         '''
         Args:
@@ -406,20 +409,16 @@ class Transformer(nn.Module):
         return outputs
 
 if __name__=='__main__':
-    simplefilter('ignore')
     print(f'Torch version {torch.__version__}')
-    start  = time()
+    start = time()
     parser = ArgumentParser(description=__doc__)
-
+    parser.add_argument('--model', default = False, action='store_true')
     args = parser.parse_args()
-
-
 
     src_vocab_size = 11
     target_vocab_size = 11
     num_layers = 6
     seq_length= 12
-
 
     # let 0 be sos token and 1 be eos token
     src = torch.tensor([[0, 2, 5, 6, 4, 3, 9, 5, 2, 9, 10, 1],
@@ -427,11 +426,12 @@ if __name__=='__main__':
     target = torch.tensor([[0, 1, 7, 4, 3, 5, 9, 2, 8, 10, 9, 1],
                            [0, 1, 5, 6, 2, 4, 7, 6, 2, 8, 10, 1]])
 
-    print(src.shape,target.shape)
+    print(f'Src: {src.shape} Target: {target.shape}')
     model = Transformer(embed_dim=512, src_vocab_size=src_vocab_size,
                         target_vocab_size=target_vocab_size, seq_length=seq_length,
                         num_layers=num_layers, expansion_factor=4, n_heads=8)
-    # print(model)
+    if args.model:
+        print(model)
 
     out = model(src, target)
     print(out.shape)
@@ -440,15 +440,11 @@ if __name__=='__main__':
                         target_vocab_size=target_vocab_size, seq_length=seq_length,
                         num_layers=num_layers, expansion_factor=4, n_heads=8)
 
-
-
     src = torch.tensor([[0, 2, 5, 6, 4, 3, 9, 5, 2, 9, 10, 1]])
     trg = torch.tensor([[0]])
     print(src.shape,trg.shape)
     out = model.decode(src, trg)
     print (out)
-
-
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
