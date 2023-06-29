@@ -16,11 +16,13 @@
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 '''
-Transformer implementation based on Arum Mohan's Notebook
-https://www.kaggle.com/code/arunmohan003/transformer-from-scratch-using-pytorch/notebook,
-https://jalammar.github.io/illustrated-transformer/,
-https://jalammar.github.io/visualizing-neural-machine-translation-mechanics-of-seq2seq-models-with-attention/
+Transformer implementation based on Arum Mohan's Notebook Trsnaformer from scratch using pytorch
 '''
+
+# https://www.kaggle.com/code/arunmohan003/transformer-from-scratch-using-pytorch/notebook,
+# https://jalammar.github.io/illustrated-transformer/,
+# https://jalammar.github.io/visualizing-neural-machine-translation-mechanics-of-seq2seq-models-with-attention/
+# https://theaisummer.com/attention/
 
 from argparse import ArgumentParser
 from math import cos, sin, sqrt
