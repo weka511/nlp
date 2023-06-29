@@ -2,6 +2,8 @@
 
 My experiments with Natural Language Processing
 
+## Code
+
 File | Description
 -----------------|---------------------------------------------------------------
 bt.py|Explore variability of Bradley-Terry
@@ -19,6 +21,11 @@ transformer.py|An attempt to understand Transformers, based on [Arun Mohan's dem
 word2vec.py |This program has been written to test my understanding of [word2vec](https://arxiv.org/abs/1301.3781/Word2Vec). The code was originally based on [Mateusz Bednarski's article--Implementing word2vec in PyTorch](https://towardsdatascience.com/implementing-word2vec-in-pytorch-skip-gram-model-e6bae040d2fb)
 word2vec2.py|Test harness for skipgram.py. It builds examples, trains weights, and some test code.
 nlp.wpr|Wing IDE Project file
+
+## Data folder
+
+File | Description
+-----------------|---------------------------------------------------------------
 64317-0.txt|The Great Gatsby
 gatsby*.txt|Chapters of The Great Gatsby used for training
 unigram_freq.csv|Most frequent 333,333 word in English after [Rachel Tatman](https://www.kaggle.com/rtatman/english-word-frequenc)
