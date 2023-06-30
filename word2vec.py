@@ -23,24 +23,23 @@
    https://towardsdatascience.com/implementing-word2vec-in-pytorch-skip-gram-model-e6bae040d2fb
 '''
 
-from argparse            import ArgumentParser
-from glob                import glob
-from itertools           import chain
-from os                  import remove
-from random              import sample
-from re                  import compile
-from sys                 import float_info
-from time                import time
-
-from matplotlib.pyplot   import figure, show
-import numpy             as np
-from numpy.random        import default_rng
+from argparse import ArgumentParser
+from glob import glob
+from itertools import chain
+from os.path import join
+from os import remove
+from random import sample
+from re import compile
+from sys import float_info
+from time import time
+from matplotlib.pyplot import figure, show
+import numpy as np
+from numpy.random import default_rng
 import torch
-from torch.autograd      import Variable
-from torch.nn            import Module
+from torch.autograd import Variable
+from torch.nn import Module
 from torch.nn.functional import log_softmax, nll_loss
-
-from tokenizer           import extract_sentences, extract_tokens, read_text
+from tokenizer import extract_sentences, extract_tokens, read_text
 
 class Word2Vec(Module):
     '''
@@ -98,9 +97,7 @@ class Word2Vec(Module):
 
         Return weights so they can be plotted
         '''
-        w1    = torch.flatten(self.W1).detach().numpy()
-        w2    = torch.flatten(self.W2).detach().numpy()
-        return w1,w2
+        return torch.flatten(self.W1).detach().numpy(), torch.flatten(self.W2).detach().numpy()
 
 
     def get_similarities(self,idx):
@@ -117,7 +114,7 @@ class GradientDescent:
     '''
     GradientDescent
 
-    Optimizer, used to train netwrok by Gradient Descent
+    Optimizer, used to train network by Gradient Descent
     '''
 
     def __init__(self,
@@ -223,8 +220,6 @@ def create_vocabulary(tokenized_corpus):
     idx2word = {idx: w for (idx, w) in enumerate(vocabulary)}
     return vocabulary, word2idx, idx2word
 
-
-
 def create_idx_pairs(tokenized_corpus, word2idx, window_size = 2):
     '''
      create_idx_pairs
@@ -293,7 +288,7 @@ def create_1hot_vector(word_idx,vocabulary_size):
     Returns:
           1 hot vector of dimension vocabulary_size
     '''
-    x           = torch.zeros(vocabulary_size).float()
+    x = torch.zeros(vocabulary_size).float()
     x[word_idx] = 1.0
     return x
 
@@ -384,8 +379,6 @@ def read_corpus(file_name):
         for line in f:
             yield line.strip('.\n')
 
-
-
 def save_checkpoint(obj,
                     base            = 'CHK',
                     seq             = 0,
@@ -400,7 +393,6 @@ def save_checkpoint(obj,
     if len(checkpoints)>max_checkpoints:
         for file_name in checkpoints[max_checkpoints:]:
             remove(file_name)
-
 
 
 def get_output(output=None, saved=None, corpus=[]):
@@ -422,6 +414,9 @@ def get_output(output=None, saved=None, corpus=[]):
         return f'{parts[0]}-0'
 
 def plot_weights(model):
+    '''
+    Plot a histogram for weights
+    '''
     fig = figure(figsize=(10,10))
     ax = fig.add_subplot(1,1,1)
     w1,w2 = model.get_weights()
@@ -439,6 +434,9 @@ def plot_weights(model):
     fig.savefig(f'{args.output}-weights')
 
 def plot_losses(Epochs,Losses,args):
+    '''
+    Show the evolution of Loss with time
+    '''
     fig = figure(figsize=(10,10))
     ax = fig.add_subplot(1,1,1)
     ax.plot(Epochs,Losses)
@@ -450,42 +448,36 @@ def plot_losses(Epochs,Losses,args):
 
 if __name__=='__main__':
     parser = ArgumentParser(__doc__)
-    parser.add_argument('action', choices=['train',
-                                           'test',
-                                           'resume'],
-                                  help = 'Train weights or test them')
-    parser.add_argument('--N',                   type = int,   default = 20001,                      help = 'Number of Epochs for training')
-    parser.add_argument('--lr',                  type = float, default = 0.001,                      help = 'Learning rate (before decay)')
-    parser.add_argument('--alpha',               type = float, default = 0.0,                        help = 'Momentum')
-    parser.add_argument('--decay',               type = float, default = 0.0,                        help = 'Decay rate for learning')
-    parser.add_argument('--frequency',           type = int,   default = 10,                         help = 'Frequency for display')
-    parser.add_argument('--window',              type = int,   default = 2,                          help = 'Window size')
-    parser.add_argument('--embedding',           type = int,   default = 100,                        help = 'Embedding size')
-    parser.add_argument('--output',                            default = 'word2vec',                 help = 'Output file name (train or resume)')
-    parser.add_argument('--saved',                             default = None,                       help = 'Saved weights (resume or test)')
-    parser.add_argument('--burn',                type=int,     default = 0,                          help = 'Burn in')
-    parser.add_argument('--show',                              default = False, action='store_true', help = 'Show plots')
-    parser.add_argument('--shuffle',                           default = False, action='store_true', help = 'Shuffle indices before each epoch')
-    parser.add_argument('--corpus',                            default = None,  nargs='+',           help = 'Name(s) of corpus file(s)')
-    parser.add_argument('--chk',                               default = 'chk',                      help = 'Base for checkpoint file name')
-    parser.add_argument('--depth',               type = int,   default = 16,                         help = 'Number of matches to display when testing')
-    parser.add_argument('--max_checkpoints',     type = int,   default = 3,                          help = 'Maximum number of checkpoints to be retained')
-    parser.add_argument('--optimizer', choices =['gradient',
-                                                 'stochastic'],
-                                                 default='gradient')
-    parser.add_argument('--minibatch',           type = int,  default = 8)
+    parser.add_argument('action', choices=['train', 'test', 'resume'], help = 'Train weights or test them')
+    parser.add_argument('--N', type = int,   default = 20001,  help = 'Number of Epochs for training')
+    parser.add_argument('--lr', type = float, default = 0.001, help = 'Learning rate (before decay)')
+    parser.add_argument('--alpha', type = float, default = 0.0, help = 'Momentum')
+    parser.add_argument('--decay', type = float, default = 0.0, help = 'Decay rate for learning')
+    parser.add_argument('--frequency', type = int,   default = 10,                         help = 'Frequency for display')
+    parser.add_argument('--window', type = int,   default = 2,                          help = 'Window size')
+    parser.add_argument('--embedding', type = int,   default = 100,                        help = 'Embedding size')
+    parser.add_argument('--output', default = 'word2vec',                 help = 'Output file name (train or resume)')
+    parser.add_argument('--saved', default = None,                       help = 'Saved weights (resume or test)')
+    parser.add_argument('--burn', type=int,     default = 0,                          help = 'Burn in')
+    parser.add_argument('--show', default = False, action='store_true', help = 'Show plots')
+    parser.add_argument('--shuffle', default = False, action='store_true', help = 'Shuffle indices before each epoch')
+    parser.add_argument('--corpus', default = None,  nargs='+',           help = 'Name(s) of corpus file(s)')
+    parser.add_argument('--chk', default = 'chk',                      help = 'Base for checkpoint file name')
+    parser.add_argument('--depth', type = int,   default = 16,                         help = 'Number of matches to display when testing')
+    parser.add_argument('--max_checkpoints', type = int,   default = 3,                          help = 'Maximum number of checkpoints to be retained')
+    parser.add_argument('--optimizer', choices =['gradient', 'stochastic'], default='stochastic')
+    parser.add_argument('--minibatch', type = int,  default = 8)
+    parser.add_argument('--data', default = './data')
     args = parser.parse_args()
 
     if args.action == 'train':
-        output_file                  = get_output(output=args.output, corpus=args.corpus)
-        tokenized_corpus             = [word for word in extract_sentences(extract_tokens(read_text(file_names=args.corpus)))]
+        output_file = get_output(output=args.output, corpus=args.corpus)
+        file_names = [globbed for name in args.corpus for globbed in glob(join(args.data,name))]
+        tokenized_corpus = [word for word in extract_sentences(extract_tokens(read_text(file_names=file_names)))]
         vocabulary,word2idx,idx2word = create_vocabulary(tokenized_corpus)
-        vocabulary_size              = len(vocabulary)
-        idx_pairs                    = create_idx_pairs(tokenized_corpus, word2idx, window_size = args.window)
+        vocabulary_size = len(vocabulary)
+        idx_pairs = create_idx_pairs(tokenized_corpus, word2idx, window_size = args.window)
         print (f'Vocabulary size={vocabulary_size:,d} words. There are {len(idx_pairs):,d} idx pairs')
-
-        minimum_loss = float_info.max
-
         model = Word2Vec(args.embedding, vocabulary_size)
 
         Epochs,Losses = train(model,
@@ -517,7 +509,8 @@ if __name__=='__main__':
 
         plot_losses(Epochs,Losses,args)
         plot_weights(model)
-        if Losses[-1]<minimum_loss:
+        minimum_loss = float_info.max
+        if Losses[-1] < minimum_loss:
             minimum_loss = Losses[-1]
             print (f'Saving weights for Loss={minimum_loss} in {output_file}.pt')
 
@@ -571,9 +564,9 @@ if __name__=='__main__':
                                  max_checkpoints = args.max_checkpoints))
 
 
-        minimum_loss      = Losses[-1]
+        minimum_loss = Losses[-1]
         loaded_args.alpha = args.alpha
-        loaded_args.lr    = args.lr
+        loaded_args.lr = args.lr
         print (f'Saving weights for Loss={minimum_loss} in {output_file}.pt')
         ic(model)
         save (
