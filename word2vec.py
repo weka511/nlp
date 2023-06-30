@@ -46,10 +46,20 @@ class Word2Vec(Module):
     Word2Vec
 
     This class represents the two sets of weights described in Mateusz Bednarski's article
+
+        Data members:
+        W1      each column of W1 stores v vector for single word
+        W2      probabilities for each word
+        Delta1  Used to accumulate gradients for W1
+        Delta2  Used to accumulate gradients for W1
     '''
     def __init__(self,embedding_size, vocabulary_size):
         '''
         Initialize weights and gradients
+
+        Parameters:
+            embedding_size      Number of dimensions in word-vector space
+            vocabulary_size     Number of items in vocabulary
         '''
         super().__init__()
         self.W1 = Variable(torch.randn(embedding_size, vocabulary_size).float(), requires_grad=True)
@@ -57,18 +67,14 @@ class Word2Vec(Module):
         self.Delta1 = torch.zeros_like(self.W1)
         self.Delta2 = torch.zeros_like(self.W2)
 
-    def calculate_loss(self,word_index,target,mult=True):
+    def calculate_loss(self,word_index,target):
         '''
         calculate_loss
 
-        Evaluate with one datum, compute loss, and update gradients
+        Calculate negative log likelihood loss and update gradients
         '''
         y_true = Variable(torch.from_numpy(np.array([target])).long())
-        if mult:
-            x  = Variable(create_1hot_vector(word_index,vocabulary_size)).float()
-            z1 = torch.matmul(self.W1, x)
-        else:
-            z1 = self.W1[:,word_index]
+        z1 = self.W1[:,word_index]
         z2 = torch.matmul(self.W2, z1)
         y_predicted = log_softmax(z2, dim=0)
         loss = nll_loss(y_predicted.view(1,-1), y_true)
@@ -78,11 +84,15 @@ class Word2Vec(Module):
 
     def update(self,
              alpha = 0.9,
-             lr    = 0.001):
+             lr = 0.001):
         '''
         update
 
         Use accumulated gradients to update weights
+
+        Parameters:
+            alpha     Momentum
+            lr        Learning rate
         '''
         self.Delta1 = alpha*self.Delta1 - lr*self.W1.grad.data
         self.Delta2 = alpha*self.Delta2 - lr*self.W2.grad.data
@@ -146,12 +156,12 @@ class GradientDescent:
 
     def train(self,model,epoch,idx_pairs):
         loss_val = 0
-        n        = 0
-        lr       = self.lr/(1 + self.decay*epoch)
+        n  = 0
+        lr = self.lr/(1 + self.decay*epoch)
 
         for word_index, target in self.shuffled(idx_pairs):
             loss_val += model.calculate_loss(word_index,target)
-            n        += 1
+            n += 1
             model.update(alpha = self.alpha, lr = self.lr)
 
         return loss_val/n
@@ -165,10 +175,10 @@ class StochasticGradient:
     Optimizer, used to train network by Stochastic Gradient Descent
     '''
     def __init__(self,
-                 lr    = 0.001,
-                 decay = 0,
+                 lr = 0.01,
+                 decay = 0.1,
                  alpha = 0.9,
-                 n     = 18):
+                 n  = 18):
         self.lr = lr
         self.decay = decay
         self.alpha = alpha
@@ -176,7 +186,7 @@ class StochasticGradient:
 
     def train(self,model,epoch,idx_pairs):
         loss_val = 0
-        lr       = self.lr/(1 + self.decay*epoch)
+        lr = self.lr/(1 + self.decay*epoch)
 
         for i in sample(range(len(idx_pairs)), self.n):
             word_index,target = idx_pairs[i]
@@ -446,12 +456,12 @@ def plot_losses(Epochs,Losses,args):
     ax.set_title(f'{args.corpus} -- Embedding dimensions={args.embedding}, momentum={args.alpha},optimizer={args.optimizer}')
     fig.savefig(args.output)
 
-if __name__=='__main__':
+def parse_args():
     parser = ArgumentParser(__doc__)
     parser.add_argument('action', choices=['train', 'test', 'resume'], help = 'Train weights or test them')
     parser.add_argument('--N', type = int,   default = 20001,  help = 'Number of Epochs for training')
     parser.add_argument('--lr', type = float, default = 0.001, help = 'Learning rate (before decay)')
-    parser.add_argument('--alpha', type = float, default = 0.0, help = 'Momentum')
+    parser.add_argument('--alpha', type = float, default = 0.7, help = 'Momentum')
     parser.add_argument('--decay', type = float, default = 0.0, help = 'Decay rate for learning')
     parser.add_argument('--frequency', type = int,   default = 10,                         help = 'Frequency for display')
     parser.add_argument('--window', type = int,   default = 2,                          help = 'Window size')
@@ -468,7 +478,10 @@ if __name__=='__main__':
     parser.add_argument('--optimizer', choices =['gradient', 'stochastic'], default='stochastic')
     parser.add_argument('--minibatch', type = int,  default = 8)
     parser.add_argument('--data', default = './data')
-    args = parser.parse_args()
+    return parser.parse_args()
+
+if __name__=='__main__':
+    args = parse_args()
 
     if args.action == 'train':
         output_file = get_output(output=args.output, corpus=args.corpus)
@@ -479,7 +492,6 @@ if __name__=='__main__':
         idx_pairs = create_idx_pairs(tokenized_corpus, word2idx, window_size = args.window)
         print (f'Vocabulary size={vocabulary_size:,d} words. There are {len(idx_pairs):,d} idx pairs')
         model = Word2Vec(args.embedding, vocabulary_size)
-
         Epochs,Losses = train(model,
                               idx_pairs       = idx_pairs,
                               vocabulary_size = vocabulary_size,
@@ -491,16 +503,16 @@ if __name__=='__main__':
                               frequency       = args.frequency,
                               alpha           = args.alpha,
                               shuffle         = args.shuffle,
-                              checkpoint      = lambda Epochs,Losses: save_checkpoint (
-                                  {   'model'           : model.state_dict(),
-                                      'word2idx'        : word2idx,
-                                      'idx2word'        : idx2word,
-                                      'decay'      : args.decay,
-                                      'idx_pairs'       : idx_pairs,
-                                      'args'            : args,
-                                      'Epochs'          : Epochs,
-                                      'Losses'          : Losses,
-                                      'vocabulary_size' : vocabulary_size },
+                              checkpoint      = lambda Epochs,Losses: save_checkpoint ({
+                                  'model'           : model.state_dict(),
+                                  'word2idx'        : word2idx,
+                                  'idx2word'        : idx2word,
+                                  'decay'           : args.decay,
+                                  'idx_pairs'       : idx_pairs,
+                                  'args'            : args,
+                                  'Epochs'          : Epochs,
+                                  'Losses'          : Losses,
+                                  'vocabulary_size' : vocabulary_size },
                                  seq             = Epochs[-1],
                                  base            = args.chk,
                                  max_checkpoints = args.max_checkpoints),
@@ -512,8 +524,7 @@ if __name__=='__main__':
         minimum_loss = float_info.max
         if Losses[-1] < minimum_loss:
             minimum_loss = Losses[-1]
-            print (f'Saving weights for Loss={minimum_loss} in {output_file}.pt')
-
+            print (f'Saving weights for Loss={minimum_loss:.2f} in {output_file}.pt')
             torch.save (
                 {   'model'           : model.state_dict(),
                     'word2idx'        : word2idx,
@@ -563,7 +574,6 @@ if __name__=='__main__':
                                  base            = args.chk,
                                  max_checkpoints = args.max_checkpoints))
 
-
         minimum_loss = Losses[-1]
         loaded_args.alpha = args.alpha
         loaded_args.lr = args.lr
@@ -593,10 +603,10 @@ if __name__=='__main__':
 
         mismatches = []
         for idx, word in idx2word.items():
-            similarities     = model.get_similarities(idx)
+            similarities = model.get_similarities(idx)
             most_similar_ids = torch.flip(similarities.argsort(),[0]).tolist()[:args.depth]
-            similar_words    = [(idx2word[i],similarities[i]) for i in most_similar_ids]
-            first_word,_     = similar_words[0]
+            similar_words = [(idx2word[i],similarities[i]) for i in most_similar_ids]
+            first_word,_  = similar_words[0]
             if word==first_word:
                 print (f'{" ".join([f"{w}({sim:.3f})" for w,sim in similar_words])} {"Shuffled" if args.shuffle else ""}')
             else:
