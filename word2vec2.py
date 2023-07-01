@@ -180,10 +180,14 @@ if __name__=='__main__':
 
         case test:
             model = Word2Vec()
-            model.load(create_file_name(args.load))
+            model_name = create_file_name(args.load,path=args.data)
+            model.load(model_name)
+            print (f'Loaded {model_name}')
             vocabulary = Vocabulary()
-            vocabulary.load(create_file_name(args.vocabulary))
+            vocabulary_file = create_file_name(args.vocabulary,path=args.data)
+            vocabulary.load(vocabulary_file)
             words = Index2Word(vocabulary)
+            print (f'Loaded {vocabulary_file}')
             NormalizedInnerProductsW = np.abs(model.create_productsW())
             InnerProductsWC = np.abs(model.create_productsWC())
             m,_ = NormalizedInnerProductsW.shape

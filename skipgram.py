@@ -145,6 +145,10 @@ class ExampleBuilder:
     def normalize(vocabulary, alpha=0.75):
         '''
         Convert counts of vocabulary items to probabilities using equation (6.32) of Jurafsky & Martin
+
+        Parameters:
+            vocabulary
+            alpha      Exponent used in  equation (6.32) of Jurafsky & Martin
         '''
         Z = sum(count**alpha for _,count in vocabulary.items())
         return {item : count**alpha / Z for item,count in vocabulary.items()}
@@ -154,15 +158,28 @@ class ExampleBuilder:
         self.k = k
 
     def generate_examples(self,text,tower):
+        '''
+        Create both positive and negative examples for all words
+        '''
         for sentence in text:
-            for i in range(len(sentence)):
-                for j in range(-self.width,self.width+1):
-                    if j!=0 and i+j>=0 and i+j<len(sentence):
-                        yield sentence[i],sentence[i+j],+1
-                        for k in self.create_negatives_for1word(sentence[i],tower):
-                            yield sentence[i],k,-1
+            for word,context in self.generate_words_and_context(sentence):
+                yield sentence[word],sentence[context],+1         # Emit Positive example
+                for sample in self.create_negatives_for1word(tower):
+                    yield sentence[word],sample,-1               # Emit Negative example
 
-    def create_negatives_for1word(self,word,tower):
+    def generate_words_and_context(self,sentence):
+        '''
+        Used to iterate through word/context pairs in a single sentence
+        '''
+        for i in range(len(sentence)):   # for each word
+            for j in range(-self.width,self.width+1):   # for each context word within window
+                if j!=0 and i+j>=0 and i+j<len(sentence):
+                    yield i,i+j
+
+    def create_negatives_for1word(self,tower):
+        '''
+        Sample vocabulary to create negative examples
+        '''
         Product = []
         while len(Product)<self.k:
             j = tower.get_sample()
