@@ -155,10 +155,10 @@ if __name__=='__main__':
             print (f'Saved vocabulary of {len(vocabulary)} words to {vocabulary_file}')
 
         case 'train':
-            data = read_training_data(args.examples)
+            data = read_training_data(join(args.data,args.examples))
             model = Word2Vec()
             if args.resume:
-                model.load(create_file_name(args.load))
+                model.load(create_file_name(args.load,path=args.data))
             else:
                 model.build(data[:,0].max()+1,n=args.dimension,rng=rng)
             loss_calculator = LossCalculator(model,data)
@@ -166,7 +166,9 @@ if __name__=='__main__':
                                          m = args.minibatch,N = args.N,eta0 = args.eta,
                                          final_ratio=args.ratio, tau = args.tau, rng=rng)
             optimizer.optimize()
-            model.save(args.save)
+            save_file_name = create_arguments(args.save,path=args.data)
+            model.save(save_file_name)
+            print (f'Saved weights in {save_file_name}')
             fig = figure()
             ax = fig.add_subplot(1,1,1)
             ax.plot(range(len(optimizer.log)),optimizer.log)
