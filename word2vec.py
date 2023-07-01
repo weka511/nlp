@@ -69,9 +69,11 @@ class Word2Vec(Module):
 
     def calculate_loss(self,word_index,target):
         '''
-        calculate_loss
-
         Calculate negative log likelihood loss and update gradients
+
+        Parameters:
+             word_index     Index of some predicted word
+             target         The word that should have been predicted (ground truth)
         '''
         y_true = Variable(torch.from_numpy(np.array([target])).long())
         z1 = self.W1[:,word_index]
@@ -112,7 +114,7 @@ class Word2Vec(Module):
 
     def get_similarities(self,idx):
         '''
-        get_similarities
+       Used to retrieve the words that are similar to a specified one
 
         '''
         word_vector = self.W1[:,idx]
