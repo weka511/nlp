@@ -109,7 +109,7 @@ def create_arguments():
     group_create = parser.add_argument_group('create', 'Parameters for create')
     group_create.add_argument('docnames', nargs='*', help='A list of documents to be processed')
     group_create.add_argument('--width', '-w', type=int, default=2, help='Window size for building examples')
-    group_create.add_argument('--k', '-k', type=int, default=2, help='Number of negative examples for each positive')
+    group_create.add_argument('--k', '-k', type=int, default=5, help='Number of negative examples for each positive')
 
     group_train = parser.add_argument_group('train', 'Parameters for train')
     group_train.add_argument('--minibatch', '-m', type=int, default=64, help='Minibatch size')
