@@ -34,7 +34,12 @@ class Vocabulary:
     def __init__(self):
         self.indices = dict()
         self.counter = Counter()
-        self.words = None
+
+    def __len__(self):
+        '''
+        Get number of words in vocabulary
+        '''
+        return len(self.indices)
 
     def parse(self,text):
         '''

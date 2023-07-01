@@ -22,6 +22,7 @@ from argparse import ArgumentParser
 from csv import reader, writer
 from glob import glob
 from os import system
+from os.path import join
 from time import time
 from matplotlib.pyplot import figure, show
 import numpy as np
@@ -71,13 +72,28 @@ def create_vocabulary(docnames):
 
     return Product
 
-def ensure(name,has_extension='npz'):
+def create_file_name(name,ext='npz',path=None):
     '''
     Ensure that file name has appropriate extension
+
+    Parameters:
+        name      Basic file name
+        ext       Extension to be used if 'name' lacks extension
+        path      Path to file
+    Returns:
+        fully qualified file name
+
     '''
-    return name if name.endswith(has_extension) else f'{name}.{has_extension}'
+    file_name = name if name.endswith(ext) else f'{name}.{ext}'
+    return file_name if path==None else join(path,file_name)
 
 def create_arguments():
+    '''
+    Parse command line arguments
+
+    Returns:
+       'args' object
+    '''
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['create', 'train', 'test'],
                         help='''
@@ -88,6 +104,7 @@ def create_arguments():
     parser.add_argument('--show', default=False, action='store_true', help='display plots')
     parser.add_argument('--examples', default='examples.csv', help='File name for training examples')
     parser.add_argument('--vocabulary', default='vocabulary', help='File name for vocabulary')
+    parser.add_argument('--data', default='./data', help='Path to data files')
 
     group_create = parser.add_argument_group('create', 'Parameters for create')
     group_create.add_argument('docnames', nargs='*', help='A list of documents to be processed')
@@ -119,23 +136,29 @@ if __name__=='__main__':
     rng = default_rng(args.seed)
     match args.action:
         case 'create':
-            docnames = [doc for pattern in args.docnames for doc in glob(pattern)]
+            docnames = [doc for pattern in args.docnames for doc in glob(join(args.data,pattern))]
             vocabulary = create_vocabulary(docnames)
             word2vec = ExampleBuilder(k=args.k, width=args.width)
             tower = Tower(ExampleBuilder.normalize(vocabulary),rng=rng)
-            with open(ensure(args.examples,has_extension='csv'),'w', newline='') as out:
+            examples_file = create_file_name(args.examples,ext='csv',path=args.data)
+            with open(examples_file,'w', newline='') as out:
                 examples = writer(out)
+                n = 1
                 for sentence in extract_sentences(extract_tokens(read_text(file_names = docnames))):
                     indices = vocabulary.parse(sentence)
                     for word,context,y in word2vec.generate_examples([indices],tower):
                         examples.writerow([word,context,y])
-            vocabulary.save(ensure(args.vocabulary,has_extension='csv'))
+                        n += 1
+            print (f'Saved {n} examples to {examples_file}')
+            vocabulary_file = create_file_name(args.vocabulary,path=args.data)
+            vocabulary.save(vocabulary_file)
+            print (f'Saved vocabulary of {len(vocabulary)} words to {vocabulary_file}')
 
         case 'train':
             data = read_training_data(args.examples)
             model = Word2Vec()
             if args.resume:
-                model.load(ensure(args.load))
+                model.load(create_file_name(args.load))
             else:
                 model.build(data[:,0].max()+1,n=args.dimension,rng=rng)
             loss_calculator = LossCalculator(model,data)
@@ -155,9 +178,9 @@ if __name__=='__main__':
 
         case test:
             model = Word2Vec()
-            model.load(ensure(args.load))
+            model.load(create_file_name(args.load))
             vocabulary = Vocabulary()
-            vocabulary.load(ensure(args.vocabulary))
+            vocabulary.load(create_file_name(args.vocabulary))
             words = Index2Word(vocabulary)
             NormalizedInnerProductsW = np.abs(model.create_productsW())
             InnerProductsWC = np.abs(model.create_productsWC())
