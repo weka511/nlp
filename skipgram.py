@@ -45,12 +45,23 @@ class Vocabulary:
         '''
         Parse a text into a list of indices of tokens
         '''
+        def is_word(word):
+            if word.isalpha(): return True
+            if len(word) > 2 and "'" in word:  # not the apostrophe from keyboard: pasted from text
+                return True
+            return False
+
         Result = np.zeros(len(text),dtype=np.int64)
-        for i,word in enumerate(text):
-            if not word in self.indices:
-                self.indices[word] = len(self.indices)
-            Result[i] = self.indices[word]
-            self.counter.update([Result[i]])
+        i = 0
+        for word in text:
+            if is_word(word):
+                if not word in self.indices:
+                    self.indices[word] = len(self.indices)
+                Result[i] = self.indices[word]
+                self.counter.update([Result[i]])
+                i += 1
+            else:
+                print(f'Skipping {word}')
         return Result
 
     def get_count(self,index):
