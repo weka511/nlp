@@ -24,14 +24,24 @@ from sklearn.cluster import KMeans
 from skipgram import Word2Vec, Vocabulary,Index2Word
 from word2vec2 import create_file_name
 
-if __name__=='__main__':
-    start  = time()
+def create_arguments():
+    '''
+    Parse command line arguments
+
+    Returns:
+       'args' object
+    '''
+
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--load', default='word2vec2', help='File name to load weights')
     parser.add_argument('--data', default='.', help='Path to data files')
     parser.add_argument('--vocabulary', default='vocabulary', help='File name for vocabulary')
     parser.add_argument('--n', type=int, default=8, help='Number of clusters')
-    args = parser.parse_args()
+    return parser.parse_args()
+
+if __name__=='__main__':
+    start  = time()
+    args = create_arguments()
     vocabulary = Vocabulary()
     vocabulary_file = create_file_name(args.vocabulary,path=args.data)
     vocabulary.load(vocabulary_file)
@@ -42,11 +52,16 @@ if __name__=='__main__':
     model.load(model_name)
     print (f'Loaded {model_name}')
     kmeans = KMeans(n_clusters=args.n, random_state=0, n_init='auto').fit(model.w)
+    Distances = kmeans.transform(model.w)
     for i in range(args.n):
         print (f'Cluster {i}')
+        words_and_distances = []
         for j in range(len(kmeans.labels_)):
             if kmeans.labels_[j]==i:
-                print (words.get_word(j))
+                words_and_distances.append((words.get_word(j),Distances[j,i]))
+        words_and_distances.sort(key=lambda tup: tup[1])
+        for word,distance in words_and_distances:
+            print (f'{word:20} {distance}')
 
     elapsed = time() - start
     minutes = int(elapsed/60)
