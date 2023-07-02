@@ -312,9 +312,9 @@ class Optimizer(ABC):
     '''
     @staticmethod
     def create(model,data,loss_calculator,m = 16,N = 2048,eta0 = 0.05,  final_ratio=0.01, tau = 512,rng=default_rng(),
-                 checkpoint_file = 'checkpoint', freq = 25):
+                 checkpoint_file = 'checkpoint', freq = 25, report=10):
         return StochasticGradientDescent(model,data,loss_calculator,m=m, N=N, eta0=eta0, final_ratio=final_ratio,tau=tau,rng=rng,
-                                         checkpoint_file = checkpoint_file, freq = freq )
+                                         checkpoint_file = checkpoint_file, freq = freq, report=report )
 
     def __init__(self,model,data,loss_calculator,rng=default_rng(),
                  checkpoint_file = 'checkpoint', freq = 25):
@@ -339,7 +339,7 @@ class StochasticGradientDescent(Optimizer):
     def __init__(self,model,data,loss_calculator,
                  m = 16, N = 2048, eta0 = 0.05,
                  final_ratio=0.01, tau = 512, rng=default_rng(),
-                 checkpoint_file = 'checkpoint', freq = 25):
+                 checkpoint_file = 'checkpoint', freq = 25, report=32):
         super().__init__(model,data,loss_calculator,rng=rng, checkpoint_file=checkpoint_file,freq=freq)
         self.m = m # minibatch
         self.N = N
@@ -351,8 +351,9 @@ class StochasticGradientDescent(Optimizer):
         print (f'There are {int(nrows/self.gap)} groups. Recommend that tau be at least {int(nrows/(self.gap*m))}')
         self.checkpoint_file = checkpoint_file
         self.freq = freq
+        self.report = report
 
-    def optimize(self):
+    def optimize(self,report=10):
         '''
         Optimize loss: this performs stochactic gradient optimization,
         and calculates learning rate to be used at each step.
@@ -364,9 +365,10 @@ class StochasticGradientDescent(Optimizer):
             iws,dws,iwc,dcs = self.calculate_gradients()
             self.step(iws,dws,iwc,dcs,eta)
 
-            total_loss = self.loss_calculator.get(self.gap, self.n_groups)
-            print (f'Iteration={k+1:5d}, eta={eta:.4f}, Loss={total_loss:.2f}')
-            self.log.append(total_loss)
+            if k%self.report==0:
+                total_loss = self.loss_calculator.get(self.gap, self.n_groups)
+                print (f'Iteration={k+1:5d}, eta={eta:.4f}, Loss={total_loss:.2f}')
+                self.log.append(total_loss)
             if k%self.freq==0:
                 self.checkpoint()
 

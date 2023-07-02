@@ -122,7 +122,8 @@ def create_arguments():
     group_train.add_argument('--save', default='word2vec2', help='File name to save weights')
     group_train.add_argument('--resume', default=False, action='store_true', help='Resume training')
     group_train.add_argument('--checkpoint', default='checkpoint', help='File name to save weights at checkpoint')
-    group_train.add_argument('--freq', type=int, default=25, help='Save checkoint every FREQ iteration')
+    group_train.add_argument('--freq', type=int, default=25, help='Save checkpoint every FREQ iteration')
+    group_train.add_argument('--report', type=int, default=32, help='Report progress every REPORT iteration')
 
     group_test = parser.add_argument_group('test', 'Parameters for test')
     group_test.add_argument('--load', default='word2vec2', help='File name to load weights')
@@ -165,7 +166,8 @@ if __name__=='__main__':
             optimizer = Optimizer.create(model,data,loss_calculator,
                                          m = args.minibatch,N = args.N,eta0 = args.eta,
                                          final_ratio=args.ratio, tau = args.tau, rng=rng,
-                                         checkpoint_file=create_file_name(args.checkpoint,path=args.data))
+                                         checkpoint_file=create_file_name(args.checkpoint,path=args.data),
+                                         freq=args.freq, report=args.report)
             optimizer.optimize()
             save_file_name = create_file_name(args.save,path=args.data)
             model.save(save_file_name)
