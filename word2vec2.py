@@ -166,7 +166,7 @@ if __name__=='__main__':
                                          m = args.minibatch,N = args.N,eta0 = args.eta,
                                          final_ratio=args.ratio, tau = args.tau, rng=rng)
             optimizer.optimize()
-            save_file_name = create_arguments(args.save,path=args.data)
+            save_file_name = create_file_name(args.save,path=args.data)
             model.save(save_file_name)
             print (f'Saved weights in {save_file_name}')
             fig = figure()
