@@ -35,7 +35,7 @@ def create_arguments():
 
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--load', default='word2vec2', help='File name to load weights')
-    parser.add_argument('--data', default='.', help='Path to data files')
+    parser.add_argument('--data', default='./data', help='Path to data files')
     parser.add_argument('--vocabulary', default='vocabulary', help='File name for vocabulary')
     parser.add_argument('--n', type=int, default=8, help='Number of clusters')
     parser.add_argument('--clusters', default='clusters.csv', help='File name for clustering results')
