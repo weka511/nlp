@@ -18,6 +18,7 @@
 '''Cluster word2vec data'''
 
 from argparse import ArgumentParser
+from csv import writer
 from time import time
 import numpy as np
 from sklearn.cluster import KMeans
@@ -37,6 +38,7 @@ def create_arguments():
     parser.add_argument('--data', default='.', help='Path to data files')
     parser.add_argument('--vocabulary', default='vocabulary', help='File name for vocabulary')
     parser.add_argument('--n', type=int, default=8, help='Number of clusters')
+    parser.add_argument('--clusters', default='clusters.csv', help='File name for clustering results')
     return parser.parse_args()
 
 if __name__=='__main__':
@@ -53,16 +55,22 @@ if __name__=='__main__':
     print (f'Loaded {model_name}')
     kmeans = KMeans(n_clusters=args.n, random_state=0, n_init='auto').fit(model.w)
     Distances = kmeans.transform(model.w)
-    for i in range(args.n):
-        print (f'Cluster {i}')
-        words_and_distances = []
-        for j in range(len(kmeans.labels_)):
-            if kmeans.labels_[j]==i:
-                words_and_distances.append((words.get_word(j),Distances[j,i]))
-        words_and_distances.sort(key=lambda tup: tup[1])
-        for word,distance in words_and_distances:
-            print (f'{word:20} {distance}')
-
+    clusters_file = create_file_name(args.clusters,ext='csv',path=args.data)
+    with open(clusters_file,'w', newline='') as out:
+        clusters = writer(out)
+        for i in range(args.n):
+            print (f'Cluster {i}')
+            words_and_distances = []
+            for j in range(len(kmeans.labels_)):
+                if kmeans.labels_[j]==i:
+                    words_and_distances.append((words.get_word(j),Distances[j,i]))
+            words_and_distances.sort(key=lambda tup: tup[1])
+            for word,distance in words_and_distances:
+                try:
+                    clusters.writerow([i,word,distance])
+                except UnicodeEncodeError as oops:
+                    print (oops)
+    print (f'Wrote {clusters_file}')
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
