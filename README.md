@@ -28,5 +28,6 @@ nlp.wpr|Wing IDE Project file
 File | Description
 -----------------|---------------------------------------------------------------
 64317-0.txt|The Great Gatsby
+blogs.zip|[The Blog Authorship Corpus](https://u.cs.biu.ac.il/~koppel/BlogCorpus.htm)
 gatsby*.txt|Chapters of The Great Gatsby used for training
 unigram_freq.csv|Most frequent 333,333 word in English after [Rachel Tatman](https://www.kaggle.com/rtatman/english-word-frequenc)
