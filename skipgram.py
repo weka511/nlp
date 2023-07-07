@@ -367,7 +367,7 @@ class StochasticGradientDescent(Optimizer):
             if k%self.freq==0:
                 total_loss = self.loss_calculator.get(self.gap, self.n_groups)
                 print (f'Iteration={k+1:5d}, eta={eta:.4f}, Loss={total_loss:.2f}')
-                if total_loss<no.inf:
+                if total_loss<np.inf:
                     self.log.append(total_loss)
                     self.checkpoint()
                 else:
