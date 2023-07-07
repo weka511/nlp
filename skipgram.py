@@ -365,12 +365,14 @@ class StochasticGradientDescent(Optimizer):
             iws,dws,iwc,dcs = self.calculate_gradients()
             self.step(iws,dws,iwc,dcs,eta)
 
-            if k%self.report==0:
+            if k%self.freq==0:
                 total_loss = self.loss_calculator.get(self.gap, self.n_groups)
                 print (f'Iteration={k+1:5d}, eta={eta:.4f}, Loss={total_loss:.2f}')
-                self.log.append(total_loss)
-            if k%self.freq==0:
-                self.checkpoint()
+                if total_loss<no.inf:
+                    self.log.append(total_loss)
+                    self.checkpoint()
+                else:
+                    raise Exception('Total loss overflow')
 
     def calculate_gradients(self):
         '''
@@ -399,6 +401,16 @@ class StochasticGradientDescent(Optimizer):
         return iws,dws,iwc,dcs
 
     def step(self,iws,dws,iwc,dcs,eta):
+        '''
+        Take one step
+
+        Parameters:
+            iws   Indices of the words that have been selected by minibatch
+            dws   derivatives by dw (words)
+            iwc   Indices of the contexts that have been selected by minibatch
+            dcs   derivatives by dc (contexts)
+            eta   Step size
+        '''
         for i in range(self.m):
             index_w = iws[i]
             self.model.w[index_w,:] -= eta * dws[i,:]
