@@ -195,7 +195,7 @@ if __name__=='__main__':
                                          checkpoint_file=create_file_name(args.checkpoint,path=args.data),
                                          freq=args.freq)
             optimizer.optimize()
-            save_file_name = create_file_name(args.save,path=args.data)
+            save_file_name = create_file_name(args.save,path=args.data,width=width,k=k,paths=paths)
             model.save(save_file_name)
             print (f'Saved weights in {save_file_name}')
             fig = figure()

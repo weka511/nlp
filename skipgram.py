@@ -262,11 +262,11 @@ class Word2Vec:
             _,self.n = self.w.shape
 
 
-    def save(self,name):
+    def save(self,name,width=2,k=2,paths=[]):
         '''
         Save weights in an external file
         '''
-        np.savez(name,w=self.w,c=self.c)
+        np.savez(name,w=self.w,c=self.c,width=width,k=k,paths=paths)
 
 class LossCalculator:
     '''
