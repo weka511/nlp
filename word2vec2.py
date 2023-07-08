@@ -47,12 +47,33 @@ def read_training_data(file_name):
         with open(file_name, newline='') as f:
             return len(f.readlines())
 
-    training_data = np.empty((count_rows(),3),dtype=np.int64)
     with open(file_name, newline='') as csvfile:
+        paths = []
         examples = reader(csvfile)
-        for i,row in enumerate(examples):
-            training_data[i,:] = np.array([int(s) for s in row],dtype=np.int64)
-    return training_data
+        i = 0
+        skip = 0
+        in_examples = False
+        for row in examples:
+            if in_examples:
+                training_data[i,:] = np.array([int(s) for s in row],dtype=np.int64)
+                i += 1
+            else:
+                match row[0]:
+                    case 'k':
+                        k = int(row[1])
+                        skip += 1
+                    case 'width':
+                        width = int(row[1])
+                        skip += 1
+                    case 'word':
+                        skip += 1
+                        in_examples = True
+                        training_data = np.empty((count_rows()-skip,3),dtype=np.int64)
+                    case _:
+                        skip += 1
+                        paths.append(row[0])
+
+    return k,width,paths,training_data
 
 def create_vocabulary(docnames,verbose=False):
     '''
@@ -161,7 +182,7 @@ if __name__=='__main__':
             print (f'Saved vocabulary of {len(vocabulary)} words to {vocabulary_file}')
 
         case 'train':
-            data = read_training_data(join(args.data,args.examples))
+            k,width,paths,data = read_training_data(join(args.data,args.examples))
             model = Word2Vec()
             if args.resume:
                 model.load(create_file_name(args.load,path=args.data))
