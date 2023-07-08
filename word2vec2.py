@@ -54,7 +54,7 @@ def read_training_data(file_name):
             training_data[i,:] = np.array([int(s) for s in row],dtype=np.int64)
     return training_data
 
-def create_vocabulary(docnames):
+def create_vocabulary(docnames,verbose=False):
     '''
     Build vocabulary first, so we have frequencies
 
@@ -68,7 +68,7 @@ def create_vocabulary(docnames):
     Product = Vocabulary()
 
     for sentence in extract_sentences(extract_tokens(read_text(file_names = docnames))):
-        Product.parse(sentence)
+        Product.parse(sentence,verbose=verbose)
 
     return Product
 
@@ -110,6 +110,7 @@ def create_arguments():
     group_create.add_argument('docnames', nargs='*', help='A list of documents to be processed')
     group_create.add_argument('--width', '-w', type=int, default=2, help='Window size for building examples')
     group_create.add_argument('--k', '-k', type=int, default=5, help='Number of negative examples for each positive')
+    group_create.add_argument('--verbose', default=False, action='store_true')
 
     group_train = parser.add_argument_group('train', 'Parameters for train')
     group_train.add_argument('--minibatch', '-m', type=int, default=64, help='Minibatch size')
@@ -137,12 +138,17 @@ if __name__=='__main__':
     match args.action:
         case 'create':
             docnames = [doc for pattern in args.docnames for doc in glob(join(args.data,pattern))]
-            vocabulary = create_vocabulary(docnames)
+            vocabulary = create_vocabulary(docnames, verbose=args.verbose)
             word2vec = ExampleBuilder(k=args.k, width=args.width)
             tower = Tower(ExampleBuilder.normalize(vocabulary),rng=rng)
             examples_file = create_file_name(args.examples,ext='csv',path=args.data)
             with open(examples_file,'w', newline='') as out:
                 examples = writer(out)
+                for doc in docnames:
+                    examples.writerow([doc])
+                examples.writerow(['k',args.k])
+                examples.writerow(['width',args.width])
+                examples.writerow(['word','context','y'])
                 n = 1
                 for sentence in extract_sentences(extract_tokens(read_text(file_names = docnames))):
                     indices = vocabulary.parse(sentence)

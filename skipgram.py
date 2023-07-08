@@ -41,7 +41,7 @@ class Vocabulary:
         '''
         return len(self.indices)
 
-    def parse(self,text):
+    def parse(self,text,verbose=False):
         '''
         Parse a text into a list of indices of tokens
         '''
@@ -61,7 +61,8 @@ class Vocabulary:
                 self.counter.update([Result[i]])
                 i += 1
             else:
-                print(f'Skipping {word}')
+                if verbose:
+                    print(f'Skipping {word}')
         return Result
 
     def get_count(self,index):
