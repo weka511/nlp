@@ -18,13 +18,14 @@
 '''Skipgrams as described in Chapter 6 of Jurafsky & Martin'''
 
 from abc import ABC, abstractmethod
+from builtins import FloatingPointError
 from collections import Counter
 from os import replace
 from os.path import isfile
 from unittest import main, TestCase, skip
 import numpy as np
 from numpy.random import default_rng
-from numpy.testing import assert_array_equal
+from numpy.testing import assert_array_equal, assert_array_less
 from scipy.special import expit
 
 class Vocabulary:
@@ -65,11 +66,14 @@ class Vocabulary:
                     print(f'Skipping {word}')
         return Result
 
-    def get_count(self,index):
+    def get_count(self,token):
         '''
         Determine the number of time a token appears in text
+
+        Parameters:
+            token
         '''
-        return self.counter[index]
+        return self.counter[token]
 
     def items(self):
         '''
@@ -212,6 +216,8 @@ class Word2Vec:
         self.w = rng.standard_normal((m,n))
         self.c = rng.standard_normal((m,n))
         self.n = n
+        assert_array_less(self.w,np.inf)    # Issue #23
+        assert_array_less(self.c,np.inf)    # Issue #23
 
     def get_product(self,i_w,i_c):
         '''
@@ -268,10 +274,29 @@ class Word2Vec:
         '''
         np.savez(name,w=self.w,c=self.c,width=width,k=k,paths=paths)
 
+
+
 class LossCalculator:
     '''
     Calculate loss and its derivatives
     '''
+    @staticmethod
+    def log_sigmoid(x):
+        '''
+        Used by LossCalculator to calculate log of sigmoid - attempt to fix  #23
+
+        log sigmoid(x) = log (1/(1+exp(-x)))
+                       = log(1) - log(1 + exp(-x))
+                       =  - log(1 + exp(-x))
+
+        NB: if -x is large enough to cause am overflow,
+            -np.log(1+np.exp(-x)) is close to -np.log(np.exp(-x)) = -(-x)) = x
+        '''
+        try:
+            return -np.log(1+np.exp(-x))
+        except FloatingPointError:
+            return x
+
     def __init__(self,model,data):
         self.model = model
         self.data = data
@@ -279,27 +304,48 @@ class LossCalculator:
     def get(self,gap, n_groups):
         '''
         Calculate loss
+
+        Parameters:
+             gap        Gap between positive examples
+             n_groups   Number of positive examples (each with bevy of negatives)
         '''
         return sum(self.get_loss_for_data_group(gap, i) for i in range(n_groups))
 
     def get_loss_for_data_group(self,gap, i_data_group):
-        def get_loss_neg(j):
-            i_c_neg = self.data[i_data_row+j,1]
-            return np.log(expit(1-self.model.get_product(i_w,i_c_neg)))
-        i_data_row = gap*i_data_group
-        i_w = self.data[i_data_row,0]
-        i_c_pos = self.data[i_data_row,1]
-        return - (np.log(expit(self.model.get_product(i_w,i_c_pos)))
-                  + sum([get_loss_neg(j) for j in range(1,gap)]))
+        '''
+        Calculate loss for one data group (positive example and accompanying nagatives)
 
-    '''
-    Calculate derivatives of loss
-    '''
-    def get_derivatives(self,gap, i_data_group):
+        Parameters:
+            gap          Gap between positive examples
+            i_data_group Identifies group
+        '''
+        def get_loss_neg(j):
+            '''
+            Contribution to loss from one negative example
+            '''
+            i_c_neg = self.data[i_data_row+j,1]
+
+            return LossCalculator.log_sigmoid((1 - self.model.get_product(i_w,i_c_neg)))
+
         i_data_row = gap*i_data_group
         i_w = self.data[i_data_row,0]
         i_c_pos = self.data[i_data_row,1]
-        term1 = expit(self.model.get_product(i_w,i_c_pos))-1
+        return - (LossCalculator.log_sigmoid(self.model.get_product(i_w,i_c_pos)) + sum([get_loss_neg(j) for j in range(1,gap)]))
+
+
+    def get_derivatives(self,gap, i_data_group):
+        '''
+        Calculate derivatives of loss
+
+            Parameters:
+                gap        Gap between positive examples
+                n_groups   Number of positive examples (each with bevy of negatives)
+
+        '''
+        i_data_row = gap*i_data_group
+        i_w = self.data[i_data_row,0]
+        i_c_pos = self.data[i_data_row,1]
+        term1 = expit(self.model.get_product(i_w,i_c_pos)) - 1
         delta_c_pos = term1 * self.model.w[i_w,:]
         term2 = [expit(self.model.get_product(i_w,self.data[i_data_row+j,1])) for j in range(1,gap)]
         delta_c_neg = [t* self.model.w[i_w,:] for t in term2]
@@ -323,10 +369,10 @@ class Optimizer(ABC):
         self.model = model
         self.data = data
         y = data[:,2]
-        indices = np.argwhere(y>0)
-        self.gap = indices.item(1) - indices.item(0)
+        indices_positive = np.argwhere(y>0)
+        self.gap = indices_positive.item(1) - indices_positive.item(0) # gap between positive examples
         m,n = data.shape
-        self.n_groups = int(m/self.gap)
+        self.n_groups = int(m/self.gap)          # Number of positive examples (each with bevy of negatives)
         self.loss_calculator = loss_calculator
 
     @abstractmethod
@@ -355,24 +401,29 @@ class StochasticGradientDescent(Optimizer):
 
     def optimize(self,report=10):
         '''
-        Optimize loss: this performs stochactic gradient optimization,
+        Optimize loss: this performs stochastic gradient optimization,
         and calculates learning rate to be used at each step.
         '''
+        oldargs = np.seterr(divide='raise', over='raise')   # Issue 23: we need to detect division by zero
         for k in range(self.N):
-            if k<self.tau:
+            if k<self.tau:                    # steadily reduce eta until it reaches minimum
                 alpha = k/self.tau
                 eta = (1.0 - alpha)*self.eta0 + alpha*self.eta_tau
+
             iws,dws,iwc,dcs = self.calculate_gradients()
             self.step(iws,dws,iwc,dcs,eta)
 
             if k%self.freq==0:
                 total_loss = self.loss_calculator.get(self.gap, self.n_groups)
-                print (f'Iteration={k+1:5d}, eta={eta:.4f}, Loss={total_loss:.2f}')
-                if total_loss<np.inf:
+                print (f'Iteration={k+1:5d}, eta={eta:.4f}, Loss={total_loss:.8e}')
+                if abs(total_loss) < np.inf:
                     self.log.append(total_loss)
                     self.checkpoint()
                 else:
+                    np.seterr(**oldargs) # Issue 23: put error handling back the way it was
                     raise Exception('Total loss overflow')
+
+        np.seterr(**oldargs) # Issue 23: put error handling back the way it was
 
     def calculate_gradients(self):
         '''
@@ -395,8 +446,8 @@ class StochasticGradientDescent(Optimizer):
             iws[i] = self.data[index_start,0]
             dws[i,:] = delta_w
             for k in range(self.gap):
-                iwc[self.gap*i+k] = self.data[index_start + k,1]
-                dcs[self.gap*i+k,:] = delta_c_pos if k==0 else delta_c_neg[k-1]
+                iwc[self.gap*i + k] = self.data[index_start + k,1]
+                dcs[self.gap*i + k,:] = delta_c_pos if k==0 else delta_c_neg[k-1]
 
         return iws,dws,iwc,dcs
 
@@ -411,12 +462,15 @@ class StochasticGradientDescent(Optimizer):
             dcs   derivatives by dc (contexts)
             eta   Step size
         '''
+        assert_array_less(dws,np.inf)    # Issue #23
+        assert_array_less(iws,np.inf)    # Issue #23
+        assert_array_less(eta,np.inf)
         for i in range(self.m):
             index_w = iws[i]
-            self.model.w[index_w,:] -= eta * dws[i,:]
+            self.model.w[index_w,:] -= (eta * dws[i,:])
             for j in range(self.gap):
                 index_c = iwc[self.gap*i+j]
-                self.model.c[index_c,:] -= eta * dcs[i,:]
+                self.model.c[index_c,:] -= (eta * dcs[i,:])
 
     def create_minibatch(self):
         '''
