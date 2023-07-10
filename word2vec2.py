@@ -195,7 +195,7 @@ if __name__=='__main__':
                                          checkpoint_file=create_file_name(args.checkpoint,path=args.data),
                                          freq=args.freq)
             optimizer.optimize()
-            save_file_name = create_file_name(args.save,path=args.data,width=width,k=k,paths=paths)
+            save_file_name = create_file_name(args.save,path=args.data)
             model.save(save_file_name)
             print (f'Saved weights in {save_file_name}')
             fig = figure()
@@ -203,7 +203,7 @@ if __name__=='__main__':
             ax.plot(range(len(optimizer.log)),optimizer.log)
             ax.ticklabel_format(style='plain',axis='x',useOffset=False)
             ax.set_title(f'Minibatch={args.minibatch}, dimension={args.dimension}')
-            ax.set_xlabel('Step number')
+            ax.set_xlabel(f'Increment of 1 corresponds to {args.freq} steps')
             ax.set_ylabel('Loss')
             fig.savefig(args.plot)
 
