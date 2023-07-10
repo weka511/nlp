@@ -26,7 +26,6 @@ from unittest import main, TestCase, skip
 import numpy as np
 from numpy.random import default_rng
 from numpy.testing import assert_array_equal, assert_array_less
-from scipy.special import expit
 
 class Vocabulary:
     '''
@@ -212,9 +211,14 @@ class Word2Vec:
     def build(self,m,n=32,rng=default_rng()):
         '''
         Initialze weights to random values
+
+        Parameters:
+             m     Number of word vectors
+             n     Dimension of word vectors
+             rng   Random number generator
         '''
-        self.w = rng.standard_normal((m,n))
-        self.c = rng.standard_normal((m,n))
+        self.w = rng.standard_normal((m,n))    # word vectors
+        self.c = rng.standard_normal((m,n))    # Word vectors for constant
         self.n = n
         assert_array_less(self.w,np.inf)    # Issue #23
         assert_array_less(self.c,np.inf)    # Issue #23
@@ -281,9 +285,22 @@ class LossCalculator:
     Calculate loss and its derivatives
     '''
     @staticmethod
+    def sigmoid(x):
+        '''
+        Calculate logistic function
+
+        Parameters:
+            x    Value to be squashed by logistic function
+
+        Returns:
+            Result of equation (5.4) in Jurafsky and Martin
+        '''
+        return 1.0/(1.0 + np.exp(-x))
+
+    @staticmethod
     def log_sigmoid(x):
         '''
-        Used by LossCalculator to calculate log of sigmoid - attempt to fix  #23
+        Used to calculate log of sigmoid - attempt to fix  #23
 
         log sigmoid(x) = log (1/(1+exp(-x)))
                        = log(1) - log(1 + exp(-x))
@@ -293,11 +310,18 @@ class LossCalculator:
             -np.log(1+np.exp(-x)) is close to -np.log(np.exp(-x)) = -(-x)) = x
         '''
         try:
-            return -np.log(1+np.exp(-x))
+            return -np.log(1.0 + np.exp(-x))
         except FloatingPointError:
             return x
 
     def __init__(self,model,data):
+        '''
+        Initialize loss calculator
+
+        Parameters:
+            model
+            data
+        '''
         self.model = model
         self.data = data
 
@@ -325,12 +349,13 @@ class LossCalculator:
             '''
             i_c_neg = self.data[i_data_row+j,1]
 
-            return LossCalculator.log_sigmoid((1 - self.model.get_product(i_w,i_c_neg)))
+            return LossCalculator.log_sigmoid((-self.model.get_product(i_w,i_c_neg))) #23 removed 1 -  from within sigmoid
 
         i_data_row = gap*i_data_group
         i_w = self.data[i_data_row,0]
         i_c_pos = self.data[i_data_row,1]
         return - (LossCalculator.log_sigmoid(self.model.get_product(i_w,i_c_pos)) + sum([get_loss_neg(j) for j in range(1,gap)]))
+
 
 
     def get_derivatives(self,gap, i_data_group):
@@ -345,9 +370,9 @@ class LossCalculator:
         i_data_row = gap*i_data_group
         i_w = self.data[i_data_row,0]
         i_c_pos = self.data[i_data_row,1]
-        term1 = expit(self.model.get_product(i_w,i_c_pos)) - 1
+        term1 = LossCalculator.sigmoid(self.model.get_product(i_w,i_c_pos)) - 1
         delta_c_pos = term1 * self.model.w[i_w,:]
-        term2 = [expit(self.model.get_product(i_w,self.data[i_data_row+j,1])) for j in range(1,gap)]
+        term2 = [LossCalculator.sigmoid(self.model.get_product(i_w,self.data[i_data_row+j,1])) for j in range(1,gap)]
         delta_c_neg = [t* self.model.w[i_w,:] for t in term2]
         delta_w = term1 * self.model.c[i_c_pos,:] + sum(term2[j-1]*self.model.c[self.data[i_data_row+j,1],:] for j in range(1,gap))
         return delta_c_pos,delta_c_neg,delta_w
