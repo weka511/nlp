@@ -306,11 +306,12 @@ class LossCalculator:
                        = log(1) - log(1 + exp(-x))
                        =  - log(1 + exp(-x))
 
-        NB: if -x is large enough to cause am overflow,
+        NB: if -x is large enough to cause an overflow,
             -np.log(1+np.exp(-x)) is close to -np.log(np.exp(-x)) = -(-x)) = x
         '''
         try:
-            return -np.log(1.0 + np.exp(-x))
+            value = -np.log(1.0 + np.exp(-x))
+            return value if value > -np.inf else x
         except FloatingPointError:
             return x
 
@@ -571,5 +572,22 @@ if __name__=='__main__':
             tower = Tower(ExampleBuilder.normalize(vocabulary))
             for word,context,y in word2vec.generate_examples([indices],tower):
                 print (word,context,y)
+
+    class TestLoss(TestCase):
+        '''Test for LossCalculator'''
+        def setup(self):
+            self.calculator = LossCalculator()
+
+        def test_sigmoid(self):
+            self.assertEqual(0.5,LossCalculator.sigmoid(0))
+            self.assertEqual(0,LossCalculator.sigmoid(-np.inf))
+            self.assertEqual(0,LossCalculator.sigmoid(-1000000))
+            self.assertEqual(1,LossCalculator.sigmoid(np.inf))
+            self.assertEqual(1,LossCalculator.sigmoid(1000000))
+
+        def test_log_sigmoid(self):
+            self.assertEqual(-0.6931471805599453,LossCalculator.log_sigmoid(0))
+            self.assertEqual(0,LossCalculator.log_sigmoid(1000000))
+            self.assertEqual(-1000000,LossCalculator.log_sigmoid(-1000000))
 
     main()
