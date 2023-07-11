@@ -384,64 +384,53 @@ class Optimizer(ABC):
     Class representiong method of optimizing loss
     '''
     @staticmethod
-    def create(model,data,loss_calculator,m = 16,N = 2048,eta0 = 0.05,  final_ratio=0.01, tau = 512,rng=default_rng(),
+    def create(model,data,loss_calculator,m = 16,N = 2048,eta = 0.05,  final_ratio=0.01, tau = 512,rng=default_rng(),
                  checkpoint_file = 'checkpoint', freq = 25):
-        return StochasticGradientDescent(model,data,loss_calculator,m=m, N=N, eta0=eta0, final_ratio=final_ratio,tau=tau,rng=rng,
-                                         checkpoint_file = checkpoint_file, freq = freq)
+        return StochasticGradientDescent(model,data,loss_calculator, checkpoint_file = checkpoint_file,
+                                         freq = freq, N=N, eta=eta, final_ratio=final_ratio, tau=tau, m=m, rng=rng)
 
-    def __init__(self,model,data,loss_calculator,rng=default_rng(),
-                 checkpoint_file = 'checkpoint', freq = 25):
-        self.rng = rng
+    def __init__(self,model,data,loss_calculator,checkpoint_file = 'checkpoint',
+                 freq = 25,N = 2048, eta = 0.05,final_ratio=0.01, tau = 512):
+        '''
+        Parameters:
+            model             Model being trained
+            data              Training data
+            loss_calculator   Used to calculate errors during training
+            N                 Number of iterations
+            eta              Starting value for learning rate
+            final_ratio       Final learning rate as a fraction of the first
+            tau               Number of steps to decrease learning rate
+            checkpoint_file   Name of file to save checkpoint
+            freq              Report progress and save checkpoint every FREQ iteration
+        '''
         self.model = model
         self.data = data
-        y = data[:,2]
-        indices_positive = np.argwhere(y>0)
+        self.loss_calculator = loss_calculator
+        self.checkpoint_file = checkpoint_file
+        self.freq = freq
+        self.N = N
+        self.eta = eta
+        self.eta_tau = final_ratio * self.eta
+        self.tau = tau
+        y = data[:,2]                                                  # target values for training
+        indices_positive = np.argwhere(y>0)                            # Postions of positive examples
         self.gap = indices_positive.item(1) - indices_positive.item(0) # gap between positive examples
         m,n = data.shape
         self.n_groups = int(m/self.gap)          # Number of positive examples (each with bevy of negatives)
-        self.loss_calculator = loss_calculator
+        print (f'There are {int(m/self.gap)} groups.')
+        self.log = []    # Used to record losses
 
-    @abstractmethod
     def optimize(self):
-        ...
-
-class StochasticGradientDescent(Optimizer):
-    '''
-    Optimizer based on Stochastic Gradient
-    '''
-    def __init__(self,model,data,loss_calculator,
-                 m = 16, N = 2048, eta0 = 0.05,
-                 final_ratio=0.01, tau = 512, rng=default_rng(),
-                 checkpoint_file = 'checkpoint', freq = 25):
-        super().__init__(model,data,loss_calculator,rng=rng, checkpoint_file=checkpoint_file,freq=freq)
-        self.m = m # minibatch
-        self.N = N
-        self.eta0 = eta0
-        self.eta_tau = final_ratio * self.eta0
-        self.tau = tau
-        self.log = []
-        nrows,_ = data.shape
-        print (f'There are {int(nrows/self.gap)} groups. Recommend that tau be at least {int(nrows/(self.gap*m))}')
-        self.checkpoint_file = checkpoint_file
-        self.freq = freq
-
-    def optimize(self,report=10):
         '''
         Optimize loss: this performs stochastic gradient optimization,
         and calculates learning rate to be used at each step.
         '''
         oldargs = np.seterr(divide='raise', over='raise')   # Issue 23: we need to detect division by zero
         for k in range(self.N):
-            if k<self.tau:                    # steadily reduce eta until it reaches minimum
-                alpha = k/self.tau
-                eta = (1.0 - alpha)*self.eta0 + alpha*self.eta_tau
-
-            iws,dws,iwc,dcs = self.calculate_gradients()
-            self.step(iws,dws,iwc,dcs,eta)
-
+            self.step(self.get_eta(k))
             if k%self.freq==0:
                 total_loss = self.loss_calculator.get(self.gap, self.n_groups)
-                print (f'Iteration={k+1:5d}, eta={eta:.4f}, Loss={total_loss:.8e}')
+                print (f'Iteration={k+1:5d}, eta={self.get_eta(k):.4f}, Loss={total_loss:.8e}')
                 if abs(total_loss) < np.inf:
                     self.log.append(total_loss)
                     self.checkpoint()
@@ -450,6 +439,51 @@ class StochasticGradientDescent(Optimizer):
                     raise Exception('Total loss overflow')
 
         np.seterr(**oldargs) # Issue 23: put error handling back the way it was
+
+    def get_eta(self,k):
+        '''
+        Used to steadily reduce step-size eta until it reaches minimum
+
+        Parameters:
+            k Skip during optimization
+        '''
+        if k<self.tau:
+            alpha = k/self.tau
+            return (1.0 - alpha)*self.eta + alpha*self.eta_tau
+        else:
+            return self.eta
+
+    @abstractmethod
+    def step(self,eta):
+        ...
+
+class StochasticGradientDescent(Optimizer):
+    '''
+    Optimizer based on Stochastic Gradient
+    '''
+    def __init__(self,model,data,loss_calculator, checkpoint_file = 'checkpoint', freq = 25,  N = 2048, eta = 0.05,
+                 final_ratio=0.01, tau = 512, m = 16, rng=default_rng()):
+        '''
+        Parameters:
+            model             Model being trained
+            data              Training data
+            loss_calculator   Used to calculate errors during training
+            m                 minibatch size
+            N                 Number of iterations
+            eta               Starting value for learning rate
+            final_ratio       Final learning rate as a fraction of the first
+            tau               Number of steps to decrease learning rate
+            checkpoint_file   Name of file to save checkpoint
+            freq              Report progress and save checkpoint every FREQ iteration
+            rng               Random number generator
+        '''
+        super().__init__(model,data,loss_calculator, checkpoint_file=checkpoint_file,freq=freq,
+                         N=N,eta=eta,final_ratio=final_ratio,tau=tau)
+        self.m = m
+        self.rng = rng
+
+    def step(self,eta):
+        self.update_weights( *self.calculate_gradients(), eta)
 
     def calculate_gradients(self):
         '''
@@ -477,9 +511,9 @@ class StochasticGradientDescent(Optimizer):
 
         return iws,dws,iwc,dcs
 
-    def step(self,iws,dws,iwc,dcs,eta):
+    def update_weights(self,iws,dws,iwc,dcs,eta):
         '''
-        Take one step
+        Update weights using calculated derivatives
 
         Parameters:
             iws   Indices of the words that have been selected by minibatch

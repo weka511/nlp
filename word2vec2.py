@@ -116,10 +116,12 @@ def create_arguments():
        'args' object
     '''
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['create', 'train', 'test'],
+    parser.add_argument('command', choices=['create', 'train', 'test'],
                         help='''
-                        Action to be performed: create training examples from corpus;
-                        train weights using examples; test weights
+                        Command to be executed by program:
+                            create training examples from corpus;
+                            train weights using examples;
+                            test weights
                         ''')
     parser.add_argument('--seed', type=int,default=None, help='Used to initialize random number generator')
     parser.add_argument('--show', default=False, action='store_true', help='display plots')
@@ -156,7 +158,7 @@ if __name__=='__main__':
     start  = time()
     args = create_arguments()
     rng = default_rng(args.seed)
-    match args.action:
+    match args.command:
         case 'create':
             docnames = [doc for pattern in args.docnames for doc in glob(join(args.data,pattern))]
             vocabulary = create_vocabulary(docnames, verbose=args.verbose)
@@ -190,7 +192,7 @@ if __name__=='__main__':
                 model.build(data[:,0].max()+1,n=args.dimension,rng=rng)
             loss_calculator = LossCalculator(model,data)
             optimizer = Optimizer.create(model,data,loss_calculator,
-                                         m = args.minibatch,N = args.N,eta0 = args.eta,
+                                         m = args.minibatch,N = args.N,eta = args.eta,
                                          final_ratio=args.ratio, tau = args.tau, rng=rng,
                                          checkpoint_file=create_file_name(args.checkpoint,path=args.data),
                                          freq=args.freq)
@@ -232,7 +234,6 @@ if __name__=='__main__':
                 nearest_neighbours = [j for j in np.argpartition(InnerProductsWC[i,:], -args.L)[-args.L:] if i!=j]
                 for j in nearest_neighbours:
                     print ( f'\t{words.get_word(j)} ({InnerProductsWC[i,j]:.4f})')
-
 
             fig.savefig(args.plot)
 
