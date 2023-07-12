@@ -70,28 +70,36 @@ class Vocabulary:
         Determine the number of time a token appears in text
 
         Parameters:
-            token
+            token      The word whose count we want
         '''
         return self.counter[token]
 
     def items(self):
         '''
-        Used to iterate through all words in vocabulary, and also give the corresponding frequency for each word
+        Iterate through all words in vocabulary, and also give the corresponding frequency for each word
         '''
         class Items:
+            '''
+            Used to iterate through all words in vocabulary, and also give the corresponding frequency for each word
+            '''
             def __init__(self,vocabulary):
                 self.index = -1
                 self.vocabulary = vocabulary
 
             def __iter__(self):
+                '''
+                Return the iterator object itself
+                '''
                 return self
 
             def __next__(self):
+                '''Return the next item from the iterator. '''
                 self.index += 1
                 if self.index < len(self.vocabulary.counter):
                     return self.index,self.vocabulary.counter[self.index]
                 else:
                     raise StopIteration
+
         return Items(self)
 
     def load(self,name):
@@ -621,8 +629,6 @@ if __name__=='__main__':
             self.assertEqual((2,4,1),examples[24])
             self.assertEqual((10,2,1),examples[147])
             self.assertEqual((10,0,1),examples[144])
-
-
 
     class TestLoss(TestCase):
         '''Test for LossCalculator'''

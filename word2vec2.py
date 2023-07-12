@@ -172,6 +172,13 @@ if __name__=='__main__':
                 examples.writerow(['k',args.k])
                 examples.writerow(['width',args.width])
                 examples.writerow(['word','context','y'])
+
+                for sentence in extract_sentences(extract_tokens(read_text(file_names = docnames))):
+                    indices = vocabulary.parse(sentence)
+                vocabulary_file = create_file_name(args.vocabulary,path=args.data)
+                vocabulary.save(vocabulary_file)
+                print (f'Saved vocabulary of {len(vocabulary)} words to {vocabulary_file}')
+
                 n = 1
                 for sentence in extract_sentences(extract_tokens(read_text(file_names = docnames))):
                     indices = vocabulary.parse(sentence)
@@ -179,9 +186,7 @@ if __name__=='__main__':
                         examples.writerow([word,context,y])
                         n += 1
             print (f'Saved {n} examples to {examples_file}')
-            vocabulary_file = create_file_name(args.vocabulary,path=args.data)
-            vocabulary.save(vocabulary_file)
-            print (f'Saved vocabulary of {len(vocabulary)} words to {vocabulary_file}')
+
 
         case 'train':
             k,width,paths,data = read_training_data(join(args.data,args.examples))
