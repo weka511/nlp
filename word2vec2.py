@@ -29,6 +29,7 @@ import numpy as np
 from numpy.random import default_rng
 from skipgram import Vocabulary, ExampleBuilder, Tower, Optimizer, Word2Vec, LossCalculator, Index2Word
 from tokenizer import read_text, extract_sentences, extract_tokens
+from warnings import warn
 
 def read_training_data(file_name):
     '''
@@ -141,7 +142,7 @@ def create_arguments():
     group_train.add_argument('--N', '-N', type=int, default=2048, help='Number of iterations')
     group_train.add_argument('--eta', '-e', type=float, default=0.05, help='Starting value for learning rate')
     group_train.add_argument('--ratio', '-r', type=float, default=0.01, help='Final learning rate as a fraction of the first')
-    group_train.add_argument('--tau', '-t', type=int, default=512, help='Number of steps to decrease learning rate')
+    group_train.add_argument('--tau', '-t', type=int, default=None, help='Number of steps to decrease learning rate')
     group_train.add_argument('--plot', default='word2vec2', help='Plot file name')
     group_train.add_argument('--save', default='word2vec2', help='File name to save weights')
     group_train.add_argument('--resume', default=False, action='store_true', help='Resume training')
@@ -153,6 +154,27 @@ def create_arguments():
     group_train.add_argument('--L', '-L', type=int, default=6, help='Number of words to compare')
 
     return parser.parse_args()
+
+def establish_tau(tau,N=1000000,m = 128,M=1000000, target=0.03125):
+    '''
+    Fix to Issue #26: if tau has not been specified, fix it so most data points have been covered.
+
+    Parameters:
+        tau    From command line (may be None)
+        N      Number of iterations
+        m      Minibatch size
+        M      Training dataset size
+        target Target probability: we expect that no data has a higher probability than this of being covered
+    '''
+    if tau==None:
+        ln_target = np.log(target)
+        ratio = (M - m)/M
+        ln_ratio = np.log(ratio)
+        tau = int(ln_target/ln_ratio)
+        if tau>N:
+            warn(f'Calculated tau {tau} exceeds N {N}')
+
+    return tau
 
 if __name__=='__main__':
     start  = time()
@@ -198,7 +220,9 @@ if __name__=='__main__':
             loss_calculator = LossCalculator(model,data)
             optimizer = Optimizer.create(model,data,loss_calculator,
                                          m = args.minibatch,N = args.N,eta = args.eta,
-                                         final_ratio=args.ratio, tau = args.tau, rng=rng,
+                                         final_ratio=args.ratio,
+                                         tau = establish_tau(args.tau,N=args.N,m = args.minibatch,M=len(data)),
+                                         rng=rng,
                                          checkpoint_file=create_file_name(args.checkpoint,path=args.data),
                                          freq=args.freq)
             optimizer.optimize()
