@@ -342,7 +342,7 @@ class LossCalculator:
              gap        Gap between positive examples
              n_groups   Number of positive examples (each with bevy of negatives)
         '''
-        return sum(self.get_loss_for_data_group(gap, i) for i in range(n_groups))
+        return sum(self.get_loss_for_data_group(gap, i) for i in range(n_groups))/(gap*n_groups)
 
     def get_loss_for_data_group(self,gap, i_data_group):
         '''
