@@ -438,7 +438,7 @@ class Optimizer(ABC):
             self.step(self.get_eta(k))
             if k%self.freq==0:
                 total_loss = self.loss_calculator.get(self.gap, self.n_groups)
-                print (f'Iteration={k+1:5d}, eta={self.get_eta(k):.4f}, Loss={total_loss:.8e}')
+                print (f'Iteration={k+1:5d}, eta={self.get_eta(k):.5e}, Loss={total_loss:.8e}')
                 if abs(total_loss) < np.inf:
                     self.log.append(total_loss)
                     self.checkpoint()
