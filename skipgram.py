@@ -187,7 +187,7 @@ class ExampleBuilder:
         for sentence in text:
             for word,context in self.generate_words_and_context(sentence):
                 yield sentence[word],sentence[context],+1         # Emit Positive example
-                for sample in self.create_negatives_for1word(tower):
+                for sample in self.create_negatives_for1word(word,tower):
                     yield sentence[word],sample,-1               # Emit Negative example
 
     def generate_words_and_context(self,sentence):
@@ -199,14 +199,18 @@ class ExampleBuilder:
                 if j!=0 and i+j>=0 and i+j<len(sentence):
                     yield i,i+j
 
-    def create_negatives_for1word(self,tower):
+    def create_negatives_for1word(self,word,tower):
         '''
         Sample vocabulary to create negative examples
+
+        Parameters:
+            word    Word being matched
+            tower   Used for tower sampling
         '''
         Product = []
         while len(Product)<self.k:
             j = tower.get_sample()
-            if j not in Product:
+            if j !=word and j not in Product:
                 Product.append(j)
 
         return Product
