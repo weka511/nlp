@@ -28,6 +28,7 @@ from matplotlib.pyplot import figure, show
 import numpy as np
 from numpy.random import default_rng
 from skipgram import Vocabulary, ExampleBuilder, Tower, Optimizer, Word2Vec, LossCalculator, Index2Word
+from sys import exit
 from tokenizer import read_text, extract_sentences, extract_tokens
 from warnings import warn
 
@@ -211,6 +212,8 @@ if __name__=='__main__':
 
 
         case 'train':
+            if len(args.docnames)>0:   # Issue 21
+                exit(f'Docnames {args.docnames} with train does not make sense')
             k,width,paths,data = read_training_data(join(args.data,args.examples))
             model = Word2Vec()
             if args.resume:
