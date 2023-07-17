@@ -39,7 +39,20 @@ def create_arguments():
     parser.add_argument('--vocabulary', default='vocabulary', help='File name for vocabulary')
     parser.add_argument('--n', type=int, default=8, help='Number of clusters')
     parser.add_argument('--clusters', default='clusters.csv', help='File name for clustering results')
+    parser.add_argument('--vectors', choices=['words','contexts','both'], help='Establish whether we are clustering on words, context, or both')
     return parser.parse_args()
+
+def get_vectors(model,vector_type='both'):
+    '''
+    Establish whether we are clustering on words, context, or both
+    '''
+    match vector_type:
+        case 'words':
+            return model.w
+        case 'contexts':
+            return model.c
+        case _:
+            return model.w + model.c
 
 if __name__=='__main__':
     start  = time()
@@ -53,8 +66,9 @@ if __name__=='__main__':
     model_name = create_file_name(args.load,path=args.data)
     model.load(model_name)
     print (f'Loaded {model_name}')
-    kmeans = KMeans(n_clusters=args.n, random_state=0, n_init='auto').fit(model.w)
-    Distances = kmeans.transform(model.w)
+    vectors = get_vectors(model,args.vectors)
+    kmeans = KMeans(n_clusters=args.n, random_state=0, n_init='auto').fit(vectors)
+    Distances = kmeans.transform(vectors)
     clusters_file = create_file_name(args.clusters,ext='csv',path=args.data)
     with open(clusters_file,'w', newline='') as out:
         clusters = writer(out)
@@ -68,8 +82,9 @@ if __name__=='__main__':
             for word,distance in words_and_distances:
                 try:
                     clusters.writerow([i,word,distance])
-                except UnicodeEncodeError as oops:
-                    print (oops)
+                except UnicodeEncodeError as encode_error:
+                    print (encode_error)
+
     print (f'Wrote {clusters_file}')
     elapsed = time() - start
     minutes = int(elapsed/60)
