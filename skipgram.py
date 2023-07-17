@@ -432,13 +432,17 @@ class Optimizer(ABC):
         print (f'There are {int(m/self.gap)} groups.')
         self.log = []    # Used to record losses
 
-    def optimize(self):
+    def optimize(self,is_stopping=lambda :False):
         '''
         Optimize loss: this performs stochastic gradient optimization,
         and calculates learning rate to be used at each step.
+
+        Parameters:
+            is_stopping   A callback used to stop execution gracefully
         '''
         oldargs = np.seterr(divide='raise', over='raise')   # Issue 23: we need to detect division by zero
         for k in range(self.N):
+            if is_stopping(): break
             self.step(self.get_eta(k))
             if k%self.freq==0:
                 total_loss = self.loss_calculator.get(self.gap, self.n_groups)

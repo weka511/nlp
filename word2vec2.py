@@ -21,14 +21,14 @@
 from argparse import ArgumentParser
 from csv import reader, writer
 from glob import glob
-from os import system
-from os.path import join
+from os import remove, system
+from os.path import exists, join
+from sys import exit
 from time import time
 from matplotlib.pyplot import figure, show
 import numpy as np
 from numpy.random import default_rng
 from skipgram import Vocabulary, ExampleBuilder, Tower, Optimizer, Word2Vec, LossCalculator, Index2Word
-from sys import exit
 from tokenizer import read_text, extract_sentences, extract_tokens
 from warnings import warn
 
@@ -177,6 +177,24 @@ def establish_tau(tau,N=1000000,m = 128,M=1000000, target=0.03125):
 
     return tau
 
+def is_stopping(token='stop',message='Stopfile detected and deleted'):
+    '''
+    Used to allow a controlled stop using a stopfile.
+
+    Parameters:
+        token   Name of stopfile
+        message Message to be shown when stopping
+
+    Returns:
+        True iff stopfile exists
+
+    '''
+    stopping = exists(token)
+    if stopping:
+        remove(token)
+        print (message)
+    return stopping
+
 if __name__=='__main__':
     start  = time()
     args = create_arguments()
@@ -228,7 +246,7 @@ if __name__=='__main__':
                                          rng=rng,
                                          checkpoint_file=create_file_name(args.checkpoint,path=args.data),
                                          freq=args.freq)
-            optimizer.optimize()
+            optimizer.optimize(is_stopping=is_stopping)
             save_file_name = create_file_name(args.save,path=args.data)
             model.save(save_file_name)
             print (f'Saved weights in {save_file_name}')
