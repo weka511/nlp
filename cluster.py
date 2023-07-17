@@ -19,6 +19,7 @@
 
 from argparse import ArgumentParser
 from csv import writer
+from pathlib import Path
 from time import time
 import numpy as np
 from sklearn.cluster import KMeans
@@ -37,14 +38,18 @@ def create_arguments():
     parser.add_argument('--load', default='word2vec2', help='File name to load weights')
     parser.add_argument('--data', default='./data', help='Path to data files')
     parser.add_argument('--vocabulary', default='vocabulary', help='File name for vocabulary')
-    parser.add_argument('--n', type=int, default=8, help='Number of clusters')
-    parser.add_argument('--clusters', default='clusters.csv', help='File name for clustering results')
+    parser.add_argument('--k', type=int, default=8, help='Number of clusters')
+    parser.add_argument('--clusters', default = Path(__file__).stem, help='File name for clustering results')
     parser.add_argument('--vectors', choices=['words','contexts','both'], help='Establish whether we are clustering on words, context, or both')
     return parser.parse_args()
 
 def get_vectors(model,vector_type='both'):
     '''
     Establish whether we are clustering on words, context, or both
+
+    Parametere:
+        model
+        vector_type
     '''
     match vector_type:
         case 'words':
@@ -67,12 +72,12 @@ if __name__=='__main__':
     model.load(model_name)
     print (f'Loaded {model_name}')
     vectors = get_vectors(model,args.vectors)
-    kmeans = KMeans(n_clusters=args.n, random_state=0, n_init='auto').fit(vectors)
+    kmeans = KMeans(n_clusters=args.k, random_state=0, n_init='auto').fit(vectors)
     Distances = kmeans.transform(vectors)
     clusters_file = create_file_name(args.clusters,ext='csv',path=args.data)
     with open(clusters_file,'w', newline='') as out:
         clusters = writer(out)
-        for i in range(args.n):
+        for i in range(args.k):
             print (f'Cluster {i}')
             words_and_distances = []
             for j in range(len(kmeans.labels_)):
