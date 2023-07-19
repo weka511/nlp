@@ -308,8 +308,7 @@ class Word2Vec:
             total_loss Loss for final step
         '''
         np.savez(name,w=self.w,c=self.c,width=width,k=k,paths=paths,eta=eta,total_loss=total_loss)
-
-
+        print (f'Saved weights in {name}')
 
 class LossCalculator:
     '''

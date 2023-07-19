@@ -135,7 +135,7 @@ def create_arguments():
     group_create = parser.add_argument_group('create', 'Parameters for create')
     group_create.add_argument('docnames', nargs='*', help='A list of documents to be processed')
     group_create.add_argument('--width', '-w', type=int, default=2, help='Window size for building examples')
-    group_create.add_argument('--k', '-k', type=int, default=5, help='Number of negative examples for each positive')
+    group_create.add_argument('--k', '-k', type=int, default=2, help='Number of negative examples for each positive')
     group_create.add_argument('--verbose', default=False, action='store_true')
 
     group_train = parser.add_argument_group('train', 'Parameters for train')
@@ -245,9 +245,8 @@ if __name__=='__main__':
                                          tau=establish_tau(args.tau,N=args.N,m=args.minibatch,M=len(data)),rng=rng,
                                          checkpoint_file=create_file_name(args.checkpoint,path=args.data),freq=args.freq)
             eta,total_loss = optimizer.optimize(is_stopping=is_stopping)
-            save_file_name = create_file_name(args.save,path=args.data)
-            model.save(save_file_name, width=width,k=k,paths=paths,total_loss=total_loss,eta=eta)
-            print (f'Saved weights in {save_file_name}')
+            model.save(create_file_name(args.save,path=args.data), width=width,k=k,paths=paths,total_loss=total_loss,eta=eta)
+
             fig = figure()
             ax = fig.add_subplot(1,1,1)
             ax.plot(range(len(optimizer.log)),optimizer.log)
