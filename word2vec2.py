@@ -241,21 +241,18 @@ if __name__=='__main__':
                 model.build(data[:,0].max()+1,n=args.dimension,rng=rng)
             loss_calculator = LossCalculator(model,data)
             optimizer = Optimizer.create(model,data,loss_calculator,
-                                         m = args.minibatch,N = args.N,eta = args.eta,
-                                         final_ratio=args.ratio,
-                                         tau = establish_tau(args.tau,N=args.N,m = args.minibatch,M=len(data)),
-                                         rng=rng,
-                                         checkpoint_file=create_file_name(args.checkpoint,path=args.data),
-                                         freq=args.freq)
-            optimizer.optimize(is_stopping=is_stopping)
+                                         m=args.minibatch,N=args.N,eta=args.eta,final_ratio=args.ratio,
+                                         tau=establish_tau(args.tau,N=args.N,m=args.minibatch,M=len(data)),rng=rng,
+                                         checkpoint_file=create_file_name(args.checkpoint,path=args.data),freq=args.freq)
+            eta,total_loss = optimizer.optimize(is_stopping=is_stopping)
             save_file_name = create_file_name(args.save,path=args.data)
-            model.save(save_file_name)
+            model.save(save_file_name, width=width,k=k,paths=paths,total_loss=total_loss,eta=eta)
             print (f'Saved weights in {save_file_name}')
             fig = figure()
             ax = fig.add_subplot(1,1,1)
             ax.plot(range(len(optimizer.log)),optimizer.log)
             ax.ticklabel_format(style='plain',axis='x',useOffset=False)
-            ax.set_title(f'Minibatch={args.minibatch}, dimension={args.dimension}')
+            ax.set_title(f'Minibatch={args.minibatch}, dimension={model.n}')
             ax.set_xlabel(f'Increment of 1 corresponds to {args.freq} steps')
             ax.set_ylabel('Loss')
             fig.savefig(join(args.figs,args.plot))

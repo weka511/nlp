@@ -229,7 +229,7 @@ class Word2Vec:
              n     Dimension of word vectors
              rng   Random number generator
         '''
-        self.w = rng.standard_normal((m,n))    # word vectors
+        self.w = rng.standard_normal((m,n))    # Word vectors
         self.c = rng.standard_normal((m,n))    # Word vectors for constant
         self.n = n
         assert_array_less(self.w,np.inf)    # Issue #23
@@ -247,7 +247,10 @@ class Word2Vec:
 
     def create_productsW(self,normalized=True):
         '''
-        Calculate inner products of vectors
+        Calculate inner products of word vectors W
+
+        Parameters:
+            normalized    Inner product should be normalized
         '''
         m,_ = self.w.shape
         Product = np.full((m,m),np.nan)
@@ -264,7 +267,7 @@ class Word2Vec:
 
     def create_productsWC(self):
         '''
-        Calculate inner products of vectors
+        Calculate inner products of word and conext vectors, W and C
         '''
         m,_ = self.w.shape
         Product = np.full((m,m),np.nan)
@@ -277,18 +280,34 @@ class Word2Vec:
     def load(self,name):
         '''
         Initialize weights using stored data
+
+        Parameters:
+            name     File with stored weights
         '''
         with np.load(name) as data:
             self.w = data['w']
             self.c = data['c']
             _,self.n = self.w.shape
+            width = data['width']
+            k = data['k']
+            paths =data['paths']
+            eta = data['eta']
+            total_loss = data['total_loss']
+            print (f'Loaded {name} eta={eta}, loss {total_loss}, k={k}, width={width}')
 
-
-    def save(self,name,width=2,k=2,paths=[]):
+    def save(self,name,width=2,k=2,paths=[],eta=np.inf,total_loss=np.inf):
         '''
         Save weights in an external file
+
+        Parameters:
+            name       File name to save weights
+            width      Window width
+            k          For negative examples
+            paths      Files used to create training data
+            eta        Step size
+            total_loss Loss for final step
         '''
-        np.savez(name,w=self.w,c=self.c,width=width,k=k,paths=paths)
+        np.savez(name,w=self.w,c=self.c,width=width,k=k,paths=paths,eta=eta,total_loss=total_loss)
 
 
 
@@ -434,12 +453,17 @@ class Optimizer(ABC):
 
     def optimize(self,is_stopping=lambda :False):
         '''
-        Optimize loss: this performs stochastic gradient optimization,
+        Minimize loss: this performs stochastic gradient optimization,
         and calculates learning rate to be used at each step.
 
         Parameters:
             is_stopping   A callback used to stop execution gracefully
+
+        Returns:
+           Stepsize and Loss from last iteration
         '''
+        total_loss = self.loss_calculator.get(self.gap, self.n_groups)
+        print (f'Initial Loss={total_loss:.8e}')
         oldargs = np.seterr(divide='raise', over='raise')   # Issue 23: we need to detect division by zero
         for k in range(self.N):
             if is_stopping(): break
@@ -453,8 +477,9 @@ class Optimizer(ABC):
                 else:
                     np.seterr(**oldargs) # Issue 23: put error handling back the way it was
                     raise Exception('Total loss overflow')
-
+        print (f'Final Loss={total_loss:.8e}')
         np.seterr(**oldargs) # Issue 23: put error handling back the way it was
+        return self.get_eta(k),total_loss
 
     def get_eta(self,k):
         '''
