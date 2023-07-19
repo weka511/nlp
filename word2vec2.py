@@ -130,6 +130,7 @@ def create_arguments():
     parser.add_argument('--examples', default='examples.csv', help='File name for training examples')
     parser.add_argument('--vocabulary', default='vocabulary', help='File name for vocabulary')
     parser.add_argument('--data', default='./data', help='Path to data files')
+    parser.add_argument('--figs', default='./figs', help='Path to save plots')
 
     group_create = parser.add_argument_group('create', 'Parameters for create')
     group_create.add_argument('docnames', nargs='*', help='A list of documents to be processed')
@@ -257,7 +258,7 @@ if __name__=='__main__':
             ax.set_title(f'Minibatch={args.minibatch}, dimension={args.dimension}')
             ax.set_xlabel(f'Increment of 1 corresponds to {args.freq} steps')
             ax.set_ylabel('Loss')
-            fig.savefig(args.plot)
+            fig.savefig(join(args.figs,args.plot))
 
         case test:
             model = Word2Vec()
@@ -285,7 +286,7 @@ if __name__=='__main__':
                 for j in nearest_neighbours:
                     print ( f'\t{words.get_word(j)} ({InnerProductsWC[i,j]:.4f})')
 
-            fig.savefig(args.plot)
+            fig.savefig(join(args.figs,args.plot))
 
     elapsed = time() - start
     minutes = int(elapsed/60)
