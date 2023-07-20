@@ -234,7 +234,7 @@ if __name__=='__main__':
         case 'train':
             if len(args.docnames)>0:   # Issue 21
                 exit(f'Docnames {args.docnames} with train does not make sense')
-            k,width,paths,data = read_training_data(join(args.data,args.examples))
+            k,width,paths,data = read_training_data(create_file_name(args.examples,ext='csv',path=args.data))
             model = Word2Vec()
             if args.resume:
                 model.load(create_file_name(args.load,path=args.data))
@@ -250,15 +250,15 @@ if __name__=='__main__':
 
             fig = figure()
             ax1 = fig.add_subplot(1,1,1)
-            t = [args.freq*i for i in range(len(optimizer.log))]
-            ax1.plot(t,optimizer.log,color='xkcd:red')
+            x_scale = [args.freq*i for i in range(len(optimizer.log))]
+            ax1.plot(x_scale,optimizer.log,color='xkcd:red')
             ax1.ticklabel_format(style='plain',axis='x',useOffset=False)
-            ax1.set_title(f'Minibatch={args.minibatch}, dimension={model.n}')
+            ax1.set_title(f'{args.examples}/{args.vocabulary} Minibatch={args.minibatch}, dimension={model.n}')
             ax1.set_xlabel('step')
             ax1.set_ylabel('Loss',color='xkcd:red')
             ax1.set_ylim(bottom=0)
             ax2 = ax1.twinx()
-            ax2.plot(t,optimizer.etas,color='xkcd:blue')
+            ax2.plot(x_scale,optimizer.etas,color='xkcd:blue')
             ax2.set_ylabel(r'$\eta$',color='xkcd:blue')
             ax2.set_ylim(bottom=0)
             fig.savefig(join(args.figs,args.plot))
