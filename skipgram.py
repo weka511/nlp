@@ -21,7 +21,8 @@ from abc import ABC, abstractmethod
 from builtins import FloatingPointError
 from collections import Counter
 from os import replace
-from os.path import isfile
+from os.path import isfile, join
+from tempfile import TemporaryDirectory
 from unittest import main, TestCase, skip
 import numpy as np
 from numpy.random import default_rng
@@ -684,5 +685,19 @@ if __name__=='__main__':
             self.assertEqual(-0.6931471805599453,LossCalculator.log_sigmoid(0))
             self.assertEqual(0,LossCalculator.log_sigmoid(1000000))
             self.assertEqual(-1000000,LossCalculator.log_sigmoid(-1000000))
+
+    class TestWord2Vec(TestCase):
+        def test_save_load(self):
+            '''
+            Verify that weights can be loaded and saved correctly
+            '''
+            with TemporaryDirectory() as tmpdirname:
+                word2Vec1 = Word2Vec()
+                word2Vec1.build(2,2)
+                word2Vec1.save(join(tmpdirname,'test_save_load'))
+                word2Vec2 = Word2Vec()
+                word2Vec2.load(join(tmpdirname,'test_save_load.npz'))
+                assert_array_equal(word2Vec1.w,word2Vec2.w)
+                assert_array_equal(word2Vec1.c,word2Vec2.c)
 
     main()
