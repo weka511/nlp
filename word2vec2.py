@@ -25,7 +25,7 @@ from os import remove, system
 from os.path import exists, join
 from sys import exit
 from time import time
-from matplotlib.pyplot import figure, show
+from matplotlib.pyplot import figure, show, rcParams
 import numpy as np
 from numpy.random import default_rng
 from skipgram import Vocabulary, ExampleBuilder, Tower, Optimizer, Word2Vec, LossCalculator, Index2Word
@@ -197,6 +197,7 @@ def is_stopping(token='stop',message='Stopfile detected and deleted'):
     return stopping
 
 if __name__=='__main__':
+    rcParams['text.usetex'] = True
     start  = time()
     args = create_arguments()
     rng = default_rng(args.seed)
@@ -248,12 +249,18 @@ if __name__=='__main__':
             model.save(create_file_name(args.save,path=args.data), width=width,k=k,paths=paths,total_loss=total_loss,eta=eta)
 
             fig = figure()
-            ax = fig.add_subplot(1,1,1)
-            ax.plot(range(len(optimizer.log)),optimizer.log)
-            ax.ticklabel_format(style='plain',axis='x',useOffset=False)
-            ax.set_title(f'Minibatch={args.minibatch}, dimension={model.n}')
-            ax.set_xlabel(f'Increment of 1 corresponds to {args.freq} steps')
-            ax.set_ylabel('Loss')
+            ax1 = fig.add_subplot(1,1,1)
+            t = [args.freq*i for i in range(len(optimizer.log))]
+            ax1.plot(t,optimizer.log,color='xkcd:red')
+            ax1.ticklabel_format(style='plain',axis='x',useOffset=False)
+            ax1.set_title(f'Minibatch={args.minibatch}, dimension={model.n}')
+            ax1.set_xlabel('step')
+            ax1.set_ylabel('Loss',color='xkcd:red')
+            ax1.set_ylim(bottom=0)
+            ax2 = ax1.twinx()
+            ax2.plot(t,optimizer.etas,color='xkcd:blue')
+            ax2.set_ylabel(r'$\eta$',color='xkcd:blue')
+            ax2.set_ylim(bottom=0)
             fig.savefig(join(args.figs,args.plot))
 
         case test:

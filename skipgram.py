@@ -449,6 +449,7 @@ class Optimizer(ABC):
         self.n_groups = int(m/self.gap)          # Number of positive examples (each with bevy of negatives)
         print (f'There are {int(m/self.gap)} groups.')
         self.log = []    # Used to record losses
+        self.etas = []
 
     def optimize(self,is_stopping=lambda :False):
         '''
@@ -472,6 +473,7 @@ class Optimizer(ABC):
                 print (f'Iteration={k+1:5d}, eta={self.get_eta(k):.5e}, Loss={total_loss:.8e}')
                 if abs(total_loss) < np.inf:
                     self.log.append(total_loss)
+                    self.etas.append(self.get_eta(k))
                     self.checkpoint()
                 else:
                     np.seterr(**oldargs) # Issue 23: put error handling back the way it was
@@ -491,7 +493,7 @@ class Optimizer(ABC):
             alpha = k/self.tau
             return (1.0 - alpha)*self.eta + alpha*self.eta_tau
         else:
-            return self.eta
+            return self.eta_tau
 
     @abstractmethod
     def step(self,eta):
