@@ -278,12 +278,13 @@ class Word2Vec:
 
         return Product
 
-    def load(self,name):
+    def load(self,name,report=print):
         '''
         Initialize weights using stored data
 
         Parameters:
             name     File with stored weights
+            report   Function, used to report success
         '''
         with np.load(name) as data:
             self.w = data['w']
@@ -294,9 +295,9 @@ class Word2Vec:
             paths =data['paths']
             eta = data['eta']
             total_loss = data['total_loss']
-            print (f'Loaded {name} eta={eta}, loss {total_loss}, k={k}, width={width}')
+            report (f'Loaded {name} eta={eta}, loss {total_loss}, k={k}, width={width}')
 
-    def save(self,name,width=2,k=2,paths=[],eta=np.inf,total_loss=np.inf):
+    def save(self,name,width=2,k=2,paths=[],eta=np.inf,total_loss=np.inf,report=print):
         '''
         Save weights in an external file
 
@@ -307,9 +308,10 @@ class Word2Vec:
             paths      Files used to create training data
             eta        Step size
             total_loss Loss for final step
+            report     Function, used to report success
         '''
         np.savez(name,w=self.w,c=self.c,width=width,k=k,paths=paths,eta=eta,total_loss=total_loss)
-        print (f'Saved weights in {name}')
+        report (f'Saved weights in {name}')
 
 class LossCalculator:
     '''
@@ -668,7 +670,6 @@ if __name__=='__main__':
     class TestLoss(TestCase):
         '''Test for LossCalculator'''
         def setUp(self):
-            # self.calculator = LossCalculator()
             self.oldargs = np.seterr(divide='raise', over='raise')
 
         def tearDown(self):
@@ -677,26 +678,70 @@ if __name__=='__main__':
         def test_sigmoid(self):
             self.assertEqual(0.5,LossCalculator.sigmoid(0))
             self.assertEqual(0,LossCalculator.sigmoid(-np.inf))
-            # self.assertEqual(0,LossCalculator.sigmoid(-1000000))
+            self.assertAlmostEqual(0,LossCalculator.sigmoid(-100))
             self.assertEqual(1,LossCalculator.sigmoid(np.inf))
-            # self.assertEqual(1,LossCalculator.sigmoid(1000000))
+            self.assertAlmostEqual(1,LossCalculator.sigmoid(100))
 
         def test_log_sigmoid(self):
             self.assertEqual(-0.6931471805599453,LossCalculator.log_sigmoid(0))
             self.assertEqual(0,LossCalculator.log_sigmoid(1000000))
             self.assertEqual(-1000000,LossCalculator.log_sigmoid(-1000000))
 
+        def test_save_load(self):
+            '''
+            Verify that loss is calculated consistency following load and save (investigation of issue #32)
+            '''
+
+            with TemporaryDirectory() as tmpdirname:
+                Data = np.array([[0,1,1],
+                                 [0,1015,-1],
+                                 [0,1471,-1],
+                                 [0,959,-1],
+                                 [0,1573,-1],
+                                 [0,346,-1],
+                                 [0,2,1],
+                                 [0,4307,-1],
+                                 [0,883,-1],
+                                 [0,5087,-1],
+                                 [0,434,-1],
+                                 [0,63,-1],
+                                 [1,0,1],
+                                 [1,439,-1],
+                                 [1,444,-1],
+                                 [1,149,-1],
+                                 [1,5117,-1],
+                                 [1,2018,-1]])
+                word2Vec1 = Word2Vec()
+                word2Vec1.build(5118)
+                calculator1 = LossCalculator(word2Vec1,Data)
+                loss1 = calculator1.get(6,3)
+                word2Vec1.save(join(tmpdirname,'test_save_load'),report=lambda x:None)
+
+                word2Vec2 = Word2Vec()
+                word2Vec2.load(join(tmpdirname,'test_save_load.npz'),report=lambda x:None)
+                calculator2 = LossCalculator(word2Vec2,Data)
+                loss2 = calculator2.get(6,3)
+
+                self.assertEqual(loss1,loss2)
+
+
     class TestWord2Vec(TestCase):
         def test_save_load(self):
             '''
-            Verify that weights can be loaded and saved correctly
+            Verify that weights can be loaded and saved correctly (investigation of issue #32)
             '''
+            log = []
+            def report(x):
+                log.append(x)
+
             with TemporaryDirectory() as tmpdirname:
                 word2Vec1 = Word2Vec()
                 word2Vec1.build(2,2)
-                word2Vec1.save(join(tmpdirname,'test_save_load'))
+                word2Vec1.save(join(tmpdirname,'test_save_load'),report=report)
+                self.assertTrue(log[-1].startswith('Saved weights'))
                 word2Vec2 = Word2Vec()
-                word2Vec2.load(join(tmpdirname,'test_save_load.npz'))
+                word2Vec2.load(join(tmpdirname,'test_save_load.npz'),report=report)
+                self.assertTrue(log[-1].startswith('Loaded'))
                 assert_array_equal(word2Vec1.w,word2Vec2.w)
                 assert_array_equal(word2Vec1.c,word2Vec2.c)
 
