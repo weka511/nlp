@@ -301,7 +301,7 @@ class Word2Vec:
             paths =data['paths']
             eta = data['eta']
             total_loss = data['total_loss']
-            report (f'Loaded {name} eta={eta}, loss {total_loss}, k={k}, width={width}')
+            report (f'Loaded {name} eta={eta}, loss {total_loss:.8e}, k={k}, width={width}')
 
     def save(self,name,width=2,k=2,paths=[],eta=np.inf,total_loss=np.inf,report=print):
         '''
@@ -487,6 +487,7 @@ class Optimizer(ABC):
                 else:
                     np.seterr(**oldargs) # Issue 23: put error handling back the way it was
                     raise Exception('Total loss overflow')
+        total_loss = self.loss_calculator.get(self.gap, self.n_groups) #32 Update in case freq doesn't divide N!
         print (f'Final Loss={total_loss:.8e}')
         np.seterr(**oldargs) # Issue 23: put error handling back the way it was
         return self.get_eta(k),total_loss
