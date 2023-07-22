@@ -509,6 +509,17 @@ class Optimizer(ABC):
     def step(self,eta):
         ...
 
+    def checkpoint(self):
+        '''
+        Save model in checkpoint file. Keep one backup if file exists already.
+        '''
+        if self.checkpoint_file == None: return
+        checkpoint_file = f'{self.checkpoint_file}.npz'
+        if isfile(checkpoint_file):
+            replace(checkpoint_file,f'{self.checkpoint_file}.npz.bak')
+        self.model.save(self.checkpoint_file)
+
+
 class StochasticGradientDescent(Optimizer):
     '''
     Optimizer based on Stochastic Gradient
@@ -590,14 +601,6 @@ class StochasticGradientDescent(Optimizer):
         '''
         return self.rng.integers(self.n_groups,size=(self.m))
 
-    def checkpoint(self):
-        '''
-        Save model in checkpoint file. Keep one backup if file exists already.
-        '''
-        checkpoint_file = f'{self.checkpoint_file}.npz'
-        if isfile(checkpoint_file):
-            replace(checkpoint_file,f'{self.checkpoint_file}.npz.bak')
-        self.model.save(self.checkpoint_file)
 
 
 if __name__=='__main__':

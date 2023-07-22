@@ -148,7 +148,7 @@ def create_arguments():
     group_train.add_argument('--plot', default='word2vec2', help='Plot file name')
     group_train.add_argument('--save', default='word2vec2', help='File name to save weights')
     group_train.add_argument('--resume', default=False, action='store_true', help='Resume training')
-    group_train.add_argument('--checkpoint', default='checkpoint', help='File name to save weights at checkpoint')
+    group_train.add_argument('--checkpoint', default=None, help='File name to save weights at checkpoint')
     group_train.add_argument('--freq', type=int, default=25, help='Report progress and save checkpoint every FREQ iteration')
     group_train.add_argument('--init', choices = ['gaussian', 'uniform'], default='gaussian', help='Initializion for weights')
 
@@ -242,10 +242,11 @@ if __name__=='__main__':
             else:
                 model.build(data[:,0].max()+1,n=args.dimension,rng=rng,init=args.init)
             loss_calculator = LossCalculator(model,data)
+            checkpoint_file = None if args.checkpoint==None else create_file_name(args.checkpoint,path=args.data)
             optimizer = Optimizer.create(model,data,loss_calculator,
                                          m=args.minibatch,N=args.N,eta=args.eta,final_ratio=args.ratio,
                                          tau=establish_tau(args.tau,N=args.N,m=args.minibatch,M=len(data)),rng=rng,
-                                         checkpoint_file=create_file_name(args.checkpoint,path=args.data),freq=args.freq)
+                                         checkpoint_file=checkpoint_file,freq=args.freq)
             eta,total_loss = optimizer.optimize(is_stopping=is_stopping)
             model.save(create_file_name(args.save,path=args.data), width=width,k=k,paths=paths,total_loss=total_loss,eta=eta)
 
