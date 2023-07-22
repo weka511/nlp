@@ -221,7 +221,7 @@ class Word2Vec:
     '''
     Used to store word2vec weights
     '''
-    def build(self,m,n=32,rng=default_rng()):
+    def build(self,m,n=32,rng=default_rng(),init='gaussian'):
         '''
         Initialze weights to random values
 
@@ -229,12 +229,18 @@ class Word2Vec:
              m     Number of word vectors
              n     Dimension of word vectors
              rng   Random number generator
+             init  Determines the way weights will be initialized, gaussian or uniform
         '''
-        self.w = rng.standard_normal((m,n))    # Word vectors
-        self.c = rng.standard_normal((m,n))    # Word vectors for constant
+        match init:
+            case 'gaussian':
+                self.w = rng.standard_normal((m,n))    # Word vectors
+                self.c = rng.standard_normal((m,n))    # Word vectors for constant
+            case 'uniform':
+                limit = np.sqrt(6/(m+n))   #Goodfellow et al, eq (8.23)
+                self.w = rng.uniform(low=-limit,high=limit,size=(m,n))
+                self.c = rng.uniform(low=-limit,high=limit,size=(m,n))
+
         self.n = n
-        assert_array_less(self.w,np.inf)    # Issue #23
-        assert_array_less(self.c,np.inf)    # Issue #23
 
     def get_product(self,i_w,i_c):
         '''

@@ -150,6 +150,7 @@ def create_arguments():
     group_train.add_argument('--resume', default=False, action='store_true', help='Resume training')
     group_train.add_argument('--checkpoint', default='checkpoint', help='File name to save weights at checkpoint')
     group_train.add_argument('--freq', type=int, default=25, help='Report progress and save checkpoint every FREQ iteration')
+    group_train.add_argument('--init', choices = ['gaussian', 'uniform'], default='gaussian', help='Initializion for weights')
 
     group_test = parser.add_argument_group('test', 'Parameters for test')
     group_test.add_argument('--load', default='word2vec2', help='File name to load weights')
@@ -198,7 +199,7 @@ def is_stopping(token='stop',message='Stopfile detected and deleted'):
 
 if __name__=='__main__':
     rcParams['text.usetex'] = True
-    start  = time()
+    start = time()
     args = create_arguments()
     rng = default_rng(args.seed)
     match args.command:
@@ -239,7 +240,7 @@ if __name__=='__main__':
             if args.resume:
                 model.load(create_file_name(args.load,path=args.data))
             else:
-                model.build(data[:,0].max()+1,n=args.dimension,rng=rng)
+                model.build(data[:,0].max()+1,n=args.dimension,rng=rng,init=args.init)
             loss_calculator = LossCalculator(model,data)
             optimizer = Optimizer.create(model,data,loss_calculator,
                                          m=args.minibatch,N=args.N,eta=args.eta,final_ratio=args.ratio,
