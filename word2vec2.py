@@ -197,6 +197,105 @@ def is_stopping(token='stop',message='Stopfile detected and deleted'):
         print (message)
     return stopping
 
+def create_training_examples(args,rng):
+    '''
+    create training examples from corpus
+    '''
+    docnames = [doc for pattern in args.docnames for doc in glob(join(args.data,pattern))]
+    vocabulary = create_vocabulary(docnames, verbose=args.verbose)
+    word2vec = ExampleBuilder(k=args.k, width=args.width)
+    tower = Tower(ExampleBuilder.normalize(vocabulary),rng=rng)
+    examples_file = create_file_name(args.examples,ext='csv',path=args.data)
+    with open(examples_file,'w', newline='') as out:
+        examples = writer(out)
+        for doc in docnames:
+            examples.writerow([doc])
+        examples.writerow(['k',args.k])
+        examples.writerow(['width',args.width])
+        examples.writerow(['word','context','y'])
+
+        for sentence in extract_sentences(extract_tokens(read_text(file_names = docnames))):
+            indices = vocabulary.parse(sentence)
+        vocabulary_file = create_file_name(args.vocabulary,path=args.data)
+        vocabulary.save(vocabulary_file)
+        print (f'Saved vocabulary of {len(vocabulary)} words to {vocabulary_file}')
+
+        n = 1
+        for sentence in extract_sentences(extract_tokens(read_text(file_names = docnames))):
+            indices = vocabulary.parse(sentence)
+            for word,context,y in word2vec.generate_examples([indices],tower):
+                examples.writerow([word,context,y])
+                n += 1
+    print (f'Saved {n} examples to {examples_file}')
+
+def train(args,rng):
+    '''
+    train weights using examples
+    '''
+    if len(args.docnames)>0:   # Issue 21
+        exit(f'Docnames {args.docnames} with train does not make sense')
+    k,width,paths,data = read_training_data(create_file_name(args.examples,ext='csv',path=args.data))
+    model = Word2Vec()
+    if args.resume:
+        model.load(create_file_name(args.load,path=args.data))
+    else:
+        model.build(data[:,0].max()+1,n=args.dimension,rng=rng,init=args.init)
+    loss_calculator = LossCalculator(model,data)
+    checkpoint_file = None if args.checkpoint==None else create_file_name(args.checkpoint,path=args.data)
+    optimizer = Optimizer.create(model,data,loss_calculator,
+                                 m=args.minibatch,N=args.N,eta=args.eta,final_ratio=args.ratio,
+                                 tau=establish_tau(args.tau,N=args.N,m=args.minibatch,M=len(data)),rng=rng,
+                                 checkpoint_file=checkpoint_file,freq=args.freq)
+    eta,total_loss = optimizer.optimize(is_stopping=is_stopping)
+    model.save(create_file_name(args.save,path=args.data), width=width,k=k,paths=paths,total_loss=total_loss,eta=eta)
+
+    fig = figure()
+    ax1 = fig.add_subplot(1,1,1)
+    x_scale = [args.freq*i for i in range(len(optimizer.log))]
+    ax1.plot(x_scale,optimizer.log,color='xkcd:red')
+    ax1.ticklabel_format(style='plain',axis='x',useOffset=False)
+    ax1.set_title(f'{args.examples}/{args.vocabulary} Minibatch={args.minibatch}, dimension={model.n}')
+    ax1.set_xlabel('step')
+    ax1.set_ylabel('Loss',color='xkcd:red')
+    ax1.set_ylim(bottom=0)
+    ax2 = ax1.twinx()
+    ax2.plot(x_scale,optimizer.etas,color='xkcd:blue')
+    ax2.set_ylabel(r'$\eta$',color='xkcd:blue')
+    ax2.set_ylim(bottom=0)
+    fig.savefig(join(args.figs,args.plot))
+
+def postprocess(args):
+    '''
+    compute matrix of distances between vectors
+    '''
+    model = Word2Vec()
+    model_name = create_file_name(args.load,path=args.data)
+    model.load(model_name)
+    vocabulary = Vocabulary()
+    vocabulary_file = create_file_name(args.vocabulary,path=args.data)
+    vocabulary.load(vocabulary_file)
+    words = Index2Word(vocabulary)
+    CosineDistances = np.abs(model.create_products())
+    m,_ = CosineDistances.shape
+    distances_name = create_file_name(args.distances,path=args.data)
+    np.savez(distances_name,CosineDistances=CosineDistances)
+    print (f'Saved distances in {distances_name}')
+    fig = figure()
+    ax1 = fig.add_subplot(1,1,1)
+    n,bins,_ = ax1.hist([CosineDistances[i,j] for i in range(m) for j in range(i)],bins=100)
+    ax1.set_title(f'Cosine Distances')
+
+    for i in range(m):
+        print ( f'{words.get_word(i)}')
+        nearest_neighbours = [j for j in np.argpartition(CosineDistances[i,:], -args.L)[-args.L:] if i!=j]
+        for j in nearest_neighbours:
+            try:
+                print ( f'\t{words.get_word(j)} ({CosineDistances[i,j]:.4f})')
+            except UnicodeEncodeError as e:
+                print (e)
+
+    fig.savefig(join(args.figs,args.plot))
+
 if __name__=='__main__':
     rcParams['text.usetex'] = True
     start = time()
@@ -204,95 +303,13 @@ if __name__=='__main__':
     rng = default_rng(args.seed)
     match args.command:
         case 'create':
-            docnames = [doc for pattern in args.docnames for doc in glob(join(args.data,pattern))]
-            vocabulary = create_vocabulary(docnames, verbose=args.verbose)
-            word2vec = ExampleBuilder(k=args.k, width=args.width)
-            tower = Tower(ExampleBuilder.normalize(vocabulary),rng=rng)
-            examples_file = create_file_name(args.examples,ext='csv',path=args.data)
-            with open(examples_file,'w', newline='') as out:
-                examples = writer(out)
-                for doc in docnames:
-                    examples.writerow([doc])
-                examples.writerow(['k',args.k])
-                examples.writerow(['width',args.width])
-                examples.writerow(['word','context','y'])
-
-                for sentence in extract_sentences(extract_tokens(read_text(file_names = docnames))):
-                    indices = vocabulary.parse(sentence)
-                vocabulary_file = create_file_name(args.vocabulary,path=args.data)
-                vocabulary.save(vocabulary_file)
-                print (f'Saved vocabulary of {len(vocabulary)} words to {vocabulary_file}')
-
-                n = 1
-                for sentence in extract_sentences(extract_tokens(read_text(file_names = docnames))):
-                    indices = vocabulary.parse(sentence)
-                    for word,context,y in word2vec.generate_examples([indices],tower):
-                        examples.writerow([word,context,y])
-                        n += 1
-            print (f'Saved {n} examples to {examples_file}')
-
+            create_training_examples(args,rng)
 
         case 'train':
-            if len(args.docnames)>0:   # Issue 21
-                exit(f'Docnames {args.docnames} with train does not make sense')
-            k,width,paths,data = read_training_data(create_file_name(args.examples,ext='csv',path=args.data))
-            model = Word2Vec()
-            if args.resume:
-                model.load(create_file_name(args.load,path=args.data))
-            else:
-                model.build(data[:,0].max()+1,n=args.dimension,rng=rng,init=args.init)
-            loss_calculator = LossCalculator(model,data)
-            checkpoint_file = None if args.checkpoint==None else create_file_name(args.checkpoint,path=args.data)
-            optimizer = Optimizer.create(model,data,loss_calculator,
-                                         m=args.minibatch,N=args.N,eta=args.eta,final_ratio=args.ratio,
-                                         tau=establish_tau(args.tau,N=args.N,m=args.minibatch,M=len(data)),rng=rng,
-                                         checkpoint_file=checkpoint_file,freq=args.freq)
-            eta,total_loss = optimizer.optimize(is_stopping=is_stopping)
-            model.save(create_file_name(args.save,path=args.data), width=width,k=k,paths=paths,total_loss=total_loss,eta=eta)
-
-            fig = figure()
-            ax1 = fig.add_subplot(1,1,1)
-            x_scale = [args.freq*i for i in range(len(optimizer.log))]
-            ax1.plot(x_scale,optimizer.log,color='xkcd:red')
-            ax1.ticklabel_format(style='plain',axis='x',useOffset=False)
-            ax1.set_title(f'{args.examples}/{args.vocabulary} Minibatch={args.minibatch}, dimension={model.n}')
-            ax1.set_xlabel('step')
-            ax1.set_ylabel('Loss',color='xkcd:red')
-            ax1.set_ylim(bottom=0)
-            ax2 = ax1.twinx()
-            ax2.plot(x_scale,optimizer.etas,color='xkcd:blue')
-            ax2.set_ylabel(r'$\eta$',color='xkcd:blue')
-            ax2.set_ylim(bottom=0)
-            fig.savefig(join(args.figs,args.plot))
+            train(args,rng)
 
         case 'postprocess':
-            model = Word2Vec()
-            model_name = create_file_name(args.load,path=args.data)
-            model.load(model_name)
-            vocabulary = Vocabulary()
-            vocabulary_file = create_file_name(args.vocabulary,path=args.data)
-            vocabulary.load(vocabulary_file)
-            words = Index2Word(vocabulary)
-            CosineDistances = np.abs(model.create_products())
-            m,_ = CosineDistances.shape
-            distances_name = create_file_name(args.distances,path=args.data)
-            np.savez(distances_name,CosineDistances=CosineDistances)
-            print (f'Saved distances in {distances_name}')
-            fig = figure()
-            ax1 = fig.add_subplot(1,1,1)
-            n,bins,_ = ax1.hist([CosineDistances[i,j] for i in range(m) for j in range(i)],bins=100)
-            ax1.set_title(f'Cosine Distances')
-
-            for i in range(m):
-                print ( f'{words.get_word(i)}')
-                nearest_neighbours = [j for j in np.argpartition(CosineDistances[i,:], -args.L)[-args.L:] if i!=j]
-                for j in nearest_neighbours:
-                    try:
-                        print ( f'\t{words.get_word(j)} ({CosineDistances[i,j]:.4f})')
-                    except UnicodeEncodeError as e:
-                        print (e)
-
-            fig.savefig(join(args.figs,args.plot))
+            postprocess(args)
 
     elapsed = time() - start
     minutes = int(elapsed/60)
