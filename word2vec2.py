@@ -118,12 +118,12 @@ def create_arguments():
        'args' object
     '''
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['create', 'train', 'test'],
+    parser.add_argument('command', choices=['create', 'train', 'postprocess'],
                         help='''
                         Command to be executed by program:
                             create training examples from corpus;
                             train weights using examples;
-                            test weights
+                            postprocess - compute matrix of distances between vectors
                         ''')
     parser.add_argument('--seed', type=int,default=None, help='Used to initialize random number generator')
     parser.add_argument('--show', default=False, action='store_true', help='display plots')
@@ -132,13 +132,13 @@ def create_arguments():
     parser.add_argument('--data', default='./data', help='Path to data files')
     parser.add_argument('--figs', default='./figs', help='Path to save plots')
 
-    group_create = parser.add_argument_group('create', 'Parameters for create')
+    group_create = parser.add_argument_group('create', 'Parameters for creating training examples')
     group_create.add_argument('docnames', nargs='*', help='A list of documents to be processed')
     group_create.add_argument('--width', '-w', type=int, default=2, help='Window size for building examples')
     group_create.add_argument('--k', '-k', type=int, default=2, help='Number of negative examples for each positive')
     group_create.add_argument('--verbose', default=False, action='store_true')
 
-    group_train = parser.add_argument_group('train', 'Parameters for train')
+    group_train = parser.add_argument_group('train', 'Parameters for training weights')
     group_train.add_argument('--minibatch', '-m', type=int, default=64, help='Minibatch size')
     group_train.add_argument('--dimension', '-d', type=int, default=64, help='Dimension of word vectors')
     group_train.add_argument('--N', '-N', type=int, default=2048, help='Number of iterations')
@@ -152,10 +152,10 @@ def create_arguments():
     group_train.add_argument('--freq', type=int, default=25, help='Report progress and save checkpoint every FREQ iteration')
     group_train.add_argument('--init', choices = ['gaussian', 'uniform'], default='gaussian', help='Initializion for weights')
 
-    group_test = parser.add_argument_group('test', 'Parameters for test')
+    group_test = parser.add_argument_group('postprocess', 'Parameters for generating distance matrix')
     group_test.add_argument('--load', default='word2vec2', help='File name to load weights')
     group_train.add_argument('--L', '-L', type=int, default=6, help='Number of words to compare')
-
+    group_test.add_argument('--distances', default='distances', help='File name to sav distance matrices')
     return parser.parse_args()
 
 def establish_tau(tau,N=1000000,m = 128,M=1000000, target=0.03125):
@@ -265,31 +265,32 @@ if __name__=='__main__':
             ax2.set_ylim(bottom=0)
             fig.savefig(join(args.figs,args.plot))
 
-        case test:
+        case 'postprocess':
             model = Word2Vec()
             model_name = create_file_name(args.load,path=args.data)
             model.load(model_name)
-            print (f'Loaded {model_name}')
             vocabulary = Vocabulary()
             vocabulary_file = create_file_name(args.vocabulary,path=args.data)
             vocabulary.load(vocabulary_file)
             words = Index2Word(vocabulary)
-            print (f'Loaded {vocabulary_file}')
-            NormalizedInnerProductsW = np.abs(model.create_productsW())
-            InnerProductsWC = np.abs(model.create_productsWC())
-            m,_ = NormalizedInnerProductsW.shape
+            CosineDistances = np.abs(model.create_products())
+            m,_ = CosineDistances.shape
+            distances_name = create_file_name(args.distances,path=args.data)
+            np.savez(distances_name,CosineDistances=CosineDistances)
+            print (f'Saved distances in {distances_name}')
             fig = figure()
-            ax1 = fig.add_subplot(2,1,1)
-            n,bins,_ = ax1.hist([NormalizedInnerProductsW[i,j] for i in range(m) for j in range(i)],bins=20)
-            ax1.set_title(f'Weights')
-            ax2 = fig.add_subplot(2,1,2)
-            n,bins,_ = ax2.hist([InnerProductsWC[i,j] for i in range(m) for j in range(i)],bins=20)
-            ax2.set_title(f'Weights by Context')
+            ax1 = fig.add_subplot(1,1,1)
+            n,bins,_ = ax1.hist([CosineDistances[i,j] for i in range(m) for j in range(i)],bins=100)
+            ax1.set_title(f'Cosine Distances')
+
             for i in range(m):
                 print ( f'{words.get_word(i)}')
-                nearest_neighbours = [j for j in np.argpartition(InnerProductsWC[i,:], -args.L)[-args.L:] if i!=j]
+                nearest_neighbours = [j for j in np.argpartition(CosineDistances[i,:], -args.L)[-args.L:] if i!=j]
                 for j in nearest_neighbours:
-                    print ( f'\t{words.get_word(j)} ({InnerProductsWC[i,j]:.4f})')
+                    try:
+                        print ( f'\t{words.get_word(j)} ({CosineDistances[i,j]:.4f})')
+                    except UnicodeEncodeError as e:
+                        print (e)
 
             fig.savefig(join(args.figs,args.plot))
 

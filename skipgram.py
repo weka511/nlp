@@ -110,6 +110,7 @@ class Vocabulary:
         with np.load(name,allow_pickle=True) as data:
             self.indices = data['indices'].item()
             self.counter = data['counter'].item()
+        print (f'Loaded {name}')
 
 
     def save(self,name):
@@ -252,7 +253,7 @@ class Word2Vec:
         '''
         return np.dot(self.w[i_w,:],self.c[i_c,:])
 
-    def create_productsW(self,normalized=True):
+    def create_products(self,normalized=True):
         '''
         Calculate inner products of word vectors W
 
@@ -261,9 +262,10 @@ class Word2Vec:
         '''
         m,_ = self.w.shape
         Product = np.full((m,m),np.nan)
+        WC = self.w + self.c
         for i in range(m):
             for j in range(i,m):
-                Product[i,j] = np.dot(self.w[i,:],self.w[j,:])
+                Product[i,j] = np.dot(WC[i,:],WC[j,:])
                 Product[j,i] = Product[i,j]
 
         if normalized:
@@ -272,17 +274,6 @@ class Word2Vec:
         else:
             return Product
 
-    def create_productsWC(self):
-        '''
-        Calculate inner products of word and conext vectors, W and C
-        '''
-        m,_ = self.w.shape
-        Product = np.full((m,m),np.nan)
-        for i in range(m):
-            for j in range(m):
-                Product[i,j] = np.dot(self.w[i,:],self.c[j,:])
-
-        return Product
 
     def load(self,name,report=print):
         '''
@@ -377,7 +368,7 @@ class LossCalculator:
 
     def get_loss_for_data_group(self,gap, i_data_group):
         '''
-        Calculate loss for one data group (positive example and accompanying nagatives)
+        Calculate loss for one data group (positive example and accompanying negatives)
 
         Parameters:
             gap          Gap between positive examples
