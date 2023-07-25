@@ -118,12 +118,13 @@ def create_arguments():
        'args' object
     '''
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['create', 'train', 'postprocess'],
+    parser.add_argument('command', choices=['create', 'train', 'postprocess', 'extract'],
                         help='''
                         Command to be executed by program:
                             create training examples from corpus;
                             train weights using examples;
-                            postprocess - compute matrix of distances between vectors
+                            postprocess - compute matrix of distances between vectors;
+                            extract
                         ''')
     parser.add_argument('--seed', type=int,default=None, help='Used to initialize random number generator')
     parser.add_argument('--show', default=False, action='store_true', help='display plots')
@@ -281,20 +282,36 @@ def postprocess(args):
     np.savez(distances_name,CosineDistances=CosineDistances)
     print (f'Saved distances in {distances_name}')
     fig = figure()
-    ax1 = fig.add_subplot(1,1,1)
-    n,bins,_ = ax1.hist([CosineDistances[i,j] for i in range(m) for j in range(i)],bins=100)
-    ax1.set_title(f'Cosine Distances')
-
-    for i in range(m):
-        print ( f'{words.get_word(i)}')
-        nearest_neighbours = [j for j in np.argpartition(CosineDistances[i,:], -args.L)[-args.L:] if i!=j]
-        for j in nearest_neighbours:
-            try:
-                print ( f'\t{words.get_word(j)} ({CosineDistances[i,j]:.4f})')
-            except UnicodeEncodeError as e:
-                print (e)
-
+    ax = fig.add_subplot(1,1,1)
+    ax.hist(CosineDistances.flatten(),bins=100)
+    ax.set_title(f'Cosine Distances from {args.load}')
     fig.savefig(join(args.figs,args.plot))
+
+def extract(args):
+    def generate_pairs(CosineDistances,K=256):
+        k = 0
+        m,n = CosineDistances.shape
+        indices = np.argsort(CosineDistances,axis=None)
+        Is,Js = np.unravel_index(indices, CosineDistances.shape)
+        for i,j in zip(Is,Js):
+            if k>K: return
+            if i<j:
+                yield i,j
+                k += 1
+
+    vocabulary = Vocabulary()
+    vocabulary_file = create_file_name(args.vocabulary,path=args.data)
+    vocabulary.load(vocabulary_file)
+    words = Index2Word(vocabulary)
+    distances_name = create_file_name(args.distances,path=args.data)
+    with np.load(distances_name) as data:
+        CosineDistances = data['CosineDistances']
+        print (f'Loaded {distances_name}')
+    for i,j in generate_pairs(CosineDistances):
+        try:
+            print (f'{words.get_word(i):20} {words.get_word(j):20} {CosineDistances[i,j]:.6e}')
+        except UnicodeEncodeError as err:
+            print (err)
 
 if __name__=='__main__':
     rcParams['text.usetex'] = True
@@ -310,6 +327,9 @@ if __name__=='__main__':
 
         case 'postprocess':
             postprocess(args)
+
+        case 'extract':
+            extract(args)
 
     elapsed = time() - start
     minutes = int(elapsed/60)
