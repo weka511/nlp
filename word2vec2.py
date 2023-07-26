@@ -124,7 +124,7 @@ def create_arguments():
                             create training examples from corpus;
                             train weights using examples;
                             postprocess - compute matrix of distances between vectors;
-                            extract
+                            extract - extract pairs of words, starting with closest
                         ''')
     parser.add_argument('--seed', type=int,default=None, help='Used to initialize random number generator')
     parser.add_argument('--show', default=False, action='store_true', help='display plots')
@@ -153,10 +153,14 @@ def create_arguments():
     group_train.add_argument('--freq', type=int, default=25, help='Report progress and save checkpoint every FREQ iteration')
     group_train.add_argument('--init', choices = ['gaussian', 'uniform'], default='gaussian', help='Initializion for weights')
 
-    group_test = parser.add_argument_group('postprocess', 'Parameters for generating distance matrix')
-    group_test.add_argument('--load', default='word2vec2', help='File name to load weights')
-    group_train.add_argument('--L', '-L', type=int, default=6, help='Number of words to compare')
-    group_test.add_argument('--distances', default='distances', help='File name to sav distance matrices')
+    group_postprocess = parser.add_argument_group('postprocess', 'Parameters for generating distance matrix')
+    group_postprocess.add_argument('--load', default='word2vec2', help='File name to load weights')
+    group_postprocess.add_argument('--L', '-L', type=int, default=6, help='Number of words to compare')
+    group_postprocess.add_argument('--distances', default='distances', help='File name to save distance matrices')
+
+    group_extract = parser.add_argument_group('extract', 'Parameters for generating distance matrix')
+    group_extract.add_argument('--triplets', default='triplets', help='File name to save distance matrices')
+
     return parser.parse_args()
 
 def establish_tau(tau,N=1000000,m = 128,M=1000000, target=0.03125):
@@ -265,7 +269,7 @@ def train(args,rng):
     ax2.set_ylim(bottom=0)
     fig.savefig(join(args.figs,args.plot))
 
-def postprocess(args):
+def postprocess(args,rng):
     '''
     compute matrix of distances between vectors
     '''
@@ -287,17 +291,27 @@ def postprocess(args):
     ax.set_title(f'Cosine Distances from {args.load}')
     fig.savefig(join(args.figs,args.plot))
 
-def extract(args):
-    def generate_pairs(CosineDistances,K=256):
-        k = 0
-        m,n = CosineDistances.shape
-        indices = np.argsort(CosineDistances,axis=None)
-        Is,Js = np.unravel_index(indices, CosineDistances.shape)
+def extract(args,rng):
+    '''
+     extract pairs of words, starting with closest
+     '''
+    def generate_pairs(Distances):
+        '''
+        Used to iterate through an array of distances, starting with the two closest points
+
+        Parameters:
+            Distances
+
+        Yields:
+           A sequence of pairs {...,(i1,j1), (i2,j2), ...} such that
+           i1<j2, i2<j2 and Distances(i1,j1)<= Distances(i2,j2)
+        '''
+        m,n = Distances.shape
+        indices = np.argsort(Distances,axis=None)   # Indices into flattened array in desired sequence
+        Is,Js = np.unravel_index(indices, Distances.shape)
         for i,j in zip(Is,Js):
-            if k>K: return
             if i<j:
                 yield i,j
-                k += 1
 
     vocabulary = Vocabulary()
     vocabulary_file = create_file_name(args.vocabulary,path=args.data)
@@ -307,30 +321,28 @@ def extract(args):
     with np.load(distances_name) as data:
         CosineDistances = data['CosineDistances']
         print (f'Loaded {distances_name}')
-    for i,j in generate_pairs(CosineDistances):
-        try:
-            print (f'{words.get_word(i):20} {words.get_word(j):20} {CosineDistances[i,j]:.6e}')
-        except UnicodeEncodeError as err:
-            print (err)
+    triplets_file = create_file_name(args.triplets,ext='csv',path=args.data)
+    with open(triplets_file,'w', newline='') as out:
+        triplets = writer(out)
+        for i,j in generate_pairs(CosineDistances):
+            try:
+                triplets.writerow ([words.get_word(i),words.get_word(j),CosineDistances[i,j]])
+            except UnicodeEncodeError as err:
+                print (i, j, err)
+    print (f'Saved triplets in {triplets_file}')
+
+Commands = {
+    'create'      :create_training_examples,
+    'train'       : train,
+    'postprocess' : postprocess,
+    'extract'     : extract
+}
 
 if __name__=='__main__':
     rcParams['text.usetex'] = True
     start = time()
     args = create_arguments()
-    rng = default_rng(args.seed)
-    match args.command:
-        case 'create':
-            create_training_examples(args,rng)
-
-        case 'train':
-            train(args,rng)
-
-        case 'postprocess':
-            postprocess(args)
-
-        case 'extract':
-            extract(args)
-
+    Commands[args.command](args,default_rng(args.seed))
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
