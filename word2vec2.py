@@ -18,11 +18,12 @@
 
 '''Skipgrams as described in Chapter 6 of Jurafsky & Martin'''
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from csv import reader, writer
 from glob import glob
 from os import remove, system
 from os.path import exists, join
+from pathlib import Path
 from sys import exit
 from time import time
 from matplotlib.pyplot import figure, show, rcParams
@@ -117,7 +118,7 @@ def create_arguments():
     Returns:
        'args' object
     '''
-    parser = ArgumentParser(description=__doc__)
+    parser = ArgumentParser(description=__doc__)#,formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument('command', choices=['create', 'train', 'postprocess', 'extract'],
                         help='''
                         Command to be executed by program:
@@ -127,39 +128,42 @@ def create_arguments():
                             extract - extract pairs of words, starting with closest
                         ''')
     parser.add_argument('--seed', type=int,default=None, help='Used to initialize random number generator')
-    parser.add_argument('--show', default=False, action='store_true', help='display plots')
-    parser.add_argument('--examples', default='examples.csv', help='File name for training examples')
-    parser.add_argument('--vocabulary', default='vocabulary', help='File name for vocabulary')
-    parser.add_argument('--data', default='./data', help='Path to data files')
-    parser.add_argument('--figs', default='./figs', help='Path to save plots')
+    parser.add_argument('--show', default=False, action='store_true', help='display plots (default: %(default)s)')
+    parser.add_argument('--examples', default='examples.csv', help='File name for training examples (default: %(default)s)')
+    parser.add_argument('--vocabulary', default='vocabulary', help='File name for vocabulary (default: %(default)s)')
+    parser.add_argument('--data', default='./data', help='Path to data files (default: %(default)s)')
+    parser.add_argument('--figs', default='./figs', help='Path to save plots (default: %(default)s)')
 
     group_create = parser.add_argument_group('create', 'Parameters for creating training examples')
     group_create.add_argument('docnames', nargs='*', help='A list of documents to be processed')
-    group_create.add_argument('--width', '-w', type=int, default=2, help='Window size for building examples')
-    group_create.add_argument('--k', '-k', type=int, default=2, help='Number of negative examples for each positive')
+    group_create.add_argument('--width', '-w', type=int, default=2, help='Window size for building examples (default: %(default)s)')
+    group_create.add_argument('--k', '-k', type=int, default=2, help='Number of negative examples for each positive (default: %(default)s)')
     group_create.add_argument('--verbose', default=False, action='store_true')
 
     group_train = parser.add_argument_group('train', 'Parameters for training weights')
-    group_train.add_argument('--minibatch', '-m', type=int, default=64, help='Minibatch size')
-    group_train.add_argument('--dimension', '-d', type=int, default=64, help='Dimension of word vectors')
-    group_train.add_argument('--N', '-N', type=int, default=2048, help='Number of iterations')
-    group_train.add_argument('--eta', '-e', type=float, default=0.05, help='Starting value for learning rate')
-    group_train.add_argument('--ratio', '-r', type=float, default=0.01, help='Final learning rate as a fraction of the first')
-    group_train.add_argument('--tau', '-t', type=int, default=None, help='Number of steps to decrease learning rate')
-    group_train.add_argument('--plot', default='word2vec2', help='Plot file name')
-    group_train.add_argument('--save', default='word2vec2', help='File name to save weights')
-    group_train.add_argument('--resume', default=False, action='store_true', help='Resume training')
+    group_train.add_argument('--minibatch', '-m', type=int, default=64, help='Minibatch size (default: %(default)s)')
+    group_train.add_argument('--dimension', '-d', type=int, default=64, help='Dimension of word vectors (default: %(default)s)')
+    group_train.add_argument('--N', '-N', type=int, default=2048, help='Number of iterations (default: %(default)s)')
+    group_train.add_argument('--eta', '-e', type=float, default=0.05,
+                             help='Starting value for learning rate (default: %(default)s)')
+    group_train.add_argument('--ratio', '-r', type=float, default=0.01,
+                             help='Final learning rate as a fraction of the first (default: %(default)s)')
+    group_train.add_argument('--tau', '-t', type=int, default=None,
+                             help='Number of steps to decrease learning rate. if tau has not been specified,'
+                             ' fix it so most data points have been covered')
+    group_train.add_argument('--plot', default=Path(__file__).stem, help='Plot file name (default: %(default)s)')
+    group_train.add_argument('--save', default=Path(__file__).stem, help='File name to save weights (default: %(default)s)')
+    group_train.add_argument('--resume', default=False, action='store_true', help='Resume training (default: %(default)s)')
     group_train.add_argument('--checkpoint', default=None, help='File name to save weights at checkpoint')
-    group_train.add_argument('--freq', type=int, default=25, help='Report progress and save checkpoint every FREQ iteration')
-    group_train.add_argument('--init', choices = ['gaussian', 'uniform'], default='gaussian', help='Initializion for weights')
+    group_train.add_argument('--freq', type=int, default=25, help='Report progress and save checkpoint every FREQ iteration (default: %(default)s)')
+    group_train.add_argument('--init', choices = ['gaussian', 'uniform'], default='gaussian', help='Initializion for weights (default: %(default)s)')
 
     group_postprocess = parser.add_argument_group('postprocess', 'Parameters for generating distance matrix')
-    group_postprocess.add_argument('--load', default='word2vec2', help='File name to load weights')
-    group_postprocess.add_argument('--L', '-L', type=int, default=6, help='Number of words to compare')
-    group_postprocess.add_argument('--distances', default='distances', help='File name to save distance matrices')
+    group_postprocess.add_argument('--load', default=Path(__file__).stem, help='File name to load weights (default: %(default)s)')
+    group_postprocess.add_argument('--distances', default='distances', help='File name to save distance matrices (default: %(default)s)')
 
     group_extract = parser.add_argument_group('extract', 'Parameters for generating distance matrix')
-    group_extract.add_argument('--triplets', default='triplets', help='File name to save distance matrices')
+    group_extract.add_argument('--triplets', default='triplets', help='File name to save distance matrices (default: %(default)s)')
 
     return parser.parse_args()
 
