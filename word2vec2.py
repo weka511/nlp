@@ -18,7 +18,7 @@
 
 '''Skipgrams as described in Chapter 6 of Jurafsky & Martin'''
 
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from argparse import ArgumentParser
 from csv import reader, writer
 from glob import glob
 from os import remove, system
@@ -118,7 +118,7 @@ def create_arguments():
     Returns:
        'args' object
     '''
-    parser = ArgumentParser(description=__doc__)#,formatter_class=ArgumentDefaultsHelpFormatter)
+    parser = ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=['create', 'train', 'postprocess', 'extract'],
                         help='''
                         Command to be executed by program:
