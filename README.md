@@ -8,6 +8,7 @@ File | Description
 -----------------|---------------------------------------------------------------
 bt.py|Explore variability of Bradley-Terry
 cluster.py|Find clusters in word vectors
+corpora.py|Library for reading text ffrom corpora
 plot.py|Plot learning curves for a single corpus
 rnn.py|[Sean Robertsons's NLP demo: Classifying Names](https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html)
 rnn2.py|[Sean Robertsons's NLP demo: Generating Names with a Character-Level RNN](https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html)
