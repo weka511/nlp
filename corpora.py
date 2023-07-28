@@ -15,34 +15,32 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-'''Template for python script using pytorch'''
+'''Read data from corpus'''
 
-# https://machinelearningmastery.com/develop-your-first-neural-network-with-pytorch-step-by-step/
 
 from argparse import ArgumentParser
 from os import remove
 from os.path import exists, join
 from pathlib import Path
+from string import punctuation
 from time import time
 from xml.dom import minidom
 from xml.parsers.expat import ExpatError
 import zipfile as zf
-from matplotlib.pyplot import figure,show
-import numpy as np
+
 
 def generate_from_zipped_xml(dataset):
     with zf.ZipFile(dataset) as zipfile:
         for file_name in zipfile.namelist():
-            print (file_name)
             if file_name.endswith('/'): continue
             path = zf.Path(zipfile, at=file_name)
             try:
                 contents = path.read_text(encoding='UTF-8')
                 doc = minidom.parseString(contents)
                 post = doc.getElementsByTagName('post')
-                # print (contents)
                 for p in post:
-                    print (p.firstChild.nodeValue)
+                    for word in p.firstChild.nodeValue.split():
+                        yield word.translate(str.maketrans('', '', punctuation))
             except UnicodeDecodeError as err:
                 print (err)
             except ExpatError as err:
@@ -65,7 +63,8 @@ def parse_args():
 if __name__=='__main__':
     start  = time()
     args = parse_args()
-    generate_from_zipped_xml(join(args.data,args.dataset))
+    for word in generate_from_zipped_xml(join(args.data,args.dataset)):
+        print (word)
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
