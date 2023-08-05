@@ -25,6 +25,7 @@ from os.path import exists, join
 from pathlib import Path
 from re import split
 from string import punctuation
+from sys import exc_info
 from time import time
 from xml.dom import minidom
 from xml.parsers.expat import ExpatError
@@ -58,19 +59,18 @@ class CorpusZippedXml(Corpus):
                 if file_name.endswith('/'): continue
                 path = zf.Path(zipfile, at=file_name)
                 try:
-                    contents = path.read_text(encoding='UTF-8')
+                    contents = path.read_text(encoding='ISO-8859-1')
                     doc = minidom.parseString(contents)
                     for post in doc.getElementsByTagName('post'):
-                        # lexical_elements = split(r'(\W+)',post.firstChild.nodeValue)
                         for lexical_element in split(r'(\W+)',post.firstChild.nodeValue):
                             if not lexical_element.isspace():
                                 yield lexical_element
-                        # for word in p.firstChild.nodeValue.split():
-                            # yield word.translate(str.maketrans('', '', punctuation))
                 except UnicodeDecodeError as err:
-                    print (err)
+                    print (f'UnicodeDecodeError: {file_name}  {err.lineno} {err}')
                 except ExpatError as err:
-                    print (err)
+                    exc_type, exc_obj, exc_tb = exc_info()
+                    print (f'ExpatError: {file_name} {exc_tb.tb_lineno} {err.lineno} {err}')
+
 
 
 def parse_args():
