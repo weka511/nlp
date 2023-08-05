@@ -17,34 +17,60 @@
 
 '''Read data from corpus'''
 
+from abc import ABC, abstractmethod
 
 from argparse import ArgumentParser
 from os import remove
 from os.path import exists, join
 from pathlib import Path
+from re import split
 from string import punctuation
 from time import time
 from xml.dom import minidom
 from xml.parsers.expat import ExpatError
 import zipfile as zf
 
+class Corpus(ABC):
+    @abstractmethod
+    def create_vocabulary(self,verbose=False):
+        '''
+        Build vocabulary first, so we have frequencies
 
-def generate_from_zipped_xml(dataset):
-    with zf.ZipFile(dataset) as zipfile:
-        for file_name in zipfile.namelist():
-            if file_name.endswith('/'): continue
-            path = zf.Path(zipfile, at=file_name)
-            try:
-                contents = path.read_text(encoding='UTF-8')
-                doc = minidom.parseString(contents)
-                post = doc.getElementsByTagName('post')
-                for p in post:
-                    for word in p.firstChild.nodeValue.split():
-                        yield word.translate(str.maketrans('', '', punctuation))
-            except UnicodeDecodeError as err:
-                print (err)
-            except ExpatError as err:
-                print (err)
+        Parameters:
+            docnames  List of all documents to be read
+
+        Returns:
+            Vocabulary built from all documents
+
+        '''
+    ...
+
+class CorpusZippedXml(Corpus):
+    def __init__(self,dataset):
+        self.dataset = dataset
+
+    def create_vocabulary(self,verbose=False):
+        pass
+
+    def generate_from_zipped_xml(self):
+        with zf.ZipFile(self.dataset) as zipfile:
+            for file_name in zipfile.namelist():
+                if file_name.endswith('/'): continue
+                path = zf.Path(zipfile, at=file_name)
+                try:
+                    contents = path.read_text(encoding='UTF-8')
+                    doc = minidom.parseString(contents)
+                    for post in doc.getElementsByTagName('post'):
+                        # lexical_elements = split(r'(\W+)',post.firstChild.nodeValue)
+                        for lexical_element in split(r'(\W+)',post.firstChild.nodeValue):
+                            if not lexical_element.isspace():
+                                yield lexical_element
+                        # for word in p.firstChild.nodeValue.split():
+                            # yield word.translate(str.maketrans('', '', punctuation))
+                except UnicodeDecodeError as err:
+                    print (err)
+                except ExpatError as err:
+                    print (err)
 
 
 def parse_args():
@@ -63,7 +89,8 @@ def parse_args():
 if __name__=='__main__':
     start  = time()
     args = parse_args()
-    for word in generate_from_zipped_xml(join(args.data,args.dataset)):
+    corpus = CorpusZippedXml(join(args.data,args.dataset))
+    for word in corpus.generate_from_zipped_xml():
         print (word)
     elapsed = time() - start
     minutes = int(elapsed/60)
