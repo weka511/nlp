@@ -29,13 +29,21 @@ from time import time
 from xml.dom import minidom
 from xml.parsers.expat import ExpatError
 import zipfile as zf
+from skipgram import Vocabulary
 
 # nltk.download('punkt')
 # nltk.download('averaged_perceptron_tagger')
 
 class Corpus(ABC):
+    @staticmethod
+    def create(dataset,format='ZippedXml'):
+        return  CorpusZippedXml(dataset)
+
     @abstractmethod
-    def create_vocabulary(self,verbose=False):
+    def generate_tags(self):
+        ...
+
+    def create_vocabulary(self,verbose=False,max_files=None):
         '''
         Build vocabulary first, so we have frequencies
 
@@ -46,19 +54,25 @@ class Corpus(ABC):
             Vocabulary built from all documents
 
         '''
-    ...
+
+        Product = Vocabulary()
+        for word,tag in self.generate_tags(max_files):
+            if tag.isalpha():
+                Product.add(word.lower())
+        return Product
+
 
 class CorpusZippedXml(Corpus):
     def __init__(self,dataset):
         self.dataset = dataset
 
-    def create_vocabulary(self,verbose=False):
-        pass
-
-    def generate_from_zipped_xml(self):
+    def generate_tags(self,max_files=None):
         with zf.ZipFile(self.dataset) as zipfile:
+            n_files = 0
             for file_name in zipfile.namelist():
                 if file_name.endswith('/'): continue
+                n_files += 1
+                if max_files != None and n_files > max_files: return
                 path = zf.Path(zipfile, at=file_name)
                 try:
                     contents = path.read_text(encoding='ISO-8859-1')
@@ -90,9 +104,11 @@ def parse_args():
 if __name__=='__main__':
     start  = time()
     args = parse_args()
-    corpus = CorpusZippedXml(join(args.data,args.dataset))
-    for word,tag in corpus.generate_from_zipped_xml():
-        print (word,tag)
+    corpus = Corpus.create(join(args.data,args.dataset))
+    vocabulary = corpus.create_vocabulary(max_files=5)
+
+    for key,value in vocabulary.get_items():
+        print (key,value)
 
     elapsed = time() - start
     minutes = int(elapsed/60)

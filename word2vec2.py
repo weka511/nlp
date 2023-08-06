@@ -26,12 +26,13 @@ from os.path import exists, join
 from pathlib import Path
 from sys import exit
 from time import time
+from warnings import warn
 from matplotlib.pyplot import figure, show, rcParams
 import numpy as np
 from numpy.random import default_rng
 from skipgram import Vocabulary, ExampleBuilder, Tower, Optimizer, Word2Vec, LossCalculator, Index2Word
 from tokenizer import read_text, extract_sentences, extract_tokens
-from warnings import warn
+from corpora import Corpus
 
 def read_training_data(file_name):
     '''
@@ -119,7 +120,7 @@ def create_arguments():
        'args' object
     '''
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['create', 'train', 'postprocess', 'extract'],
+    parser.add_argument('command', choices=['build', 'create', 'train', 'postprocess', 'extract'],
                         help='''
                         Command to be executed by program:
                             create training examples from corpus;
@@ -133,6 +134,9 @@ def create_arguments():
     parser.add_argument('--vocabulary', default='vocabulary', help='File name for vocabulary (default: %(default)s)')
     parser.add_argument('--data', default='./data', help='Path to data files (default: %(default)s)')
     parser.add_argument('--figs', default='./figs', help='Path to save plots (default: %(default)s)')
+
+    group_build = parser.add_argument_group('build', 'Parameters for building vocabulary')
+    group_build.add_argument('--n', '-n', type=int, default=None, help='Number of files from corpus')
 
     group_create = parser.add_argument_group('create', 'Parameters for creating training examples')
     group_create.add_argument('docnames', nargs='*', help='A list of documents to be processed')
@@ -205,6 +209,19 @@ def is_stopping(token='stop',message='Stopfile detected and deleted'):
         remove(token)
         print (message)
     return stopping
+
+def build_vocabulary(args,rng):
+    docnames = [doc for pattern in args.docnames for doc in glob(join(args.data,pattern))]
+    vocabulary = Vocabulary()
+    for doc in docnames:
+        corpus = Corpus.create(doc)
+        for word,tag in corpus.generate_tags(args.n):
+            if tag.isalpha():
+                vocabulary.add(word.lower())
+
+    vocabulary_file = create_file_name(args.vocabulary,path=args.data)
+    vocabulary.save(vocabulary_file)
+    print (f'Saved vocabulary of {len(vocabulary)} words to {vocabulary_file}')
 
 def create_training_examples(args,rng):
     '''
@@ -335,7 +352,10 @@ def extract(args,rng):
                 print (i, j, err)
     print (f'Saved triplets in {triplets_file}')
 
+
+
 Commands = {
+    'build'       : build_vocabulary,
     'create'      :create_training_examples,
     'train'       : train,
     'postprocess' : postprocess,

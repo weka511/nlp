@@ -66,6 +66,11 @@ class Vocabulary:
                     print(f'Skipping {word}')
         return Result
 
+    def add(self,word):
+        if not word in self.indices:
+            self.indices[word] = len(self.indices)
+        self.counter.update([self.indices[word]])
+
     def get_count(self,token):
         '''
         Determine the number of time a token appears in text
@@ -75,7 +80,7 @@ class Vocabulary:
         '''
         return self.counter[token]
 
-    def items(self):
+    def get_items(self):
         '''
         Iterate through all words in vocabulary, and also give the corresponding frequency for each word
         '''
