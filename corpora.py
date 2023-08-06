@@ -20,16 +20,18 @@
 from abc import ABC, abstractmethod
 
 from argparse import ArgumentParser
+from  nltk import word_tokenize, pos_tag
 from os import remove
 from os.path import exists, join
 from pathlib import Path
-from re import split
-from string import punctuation
 from sys import exc_info
 from time import time
 from xml.dom import minidom
 from xml.parsers.expat import ExpatError
 import zipfile as zf
+
+# nltk.download('punkt')
+# nltk.download('averaged_perceptron_tagger')
 
 class Corpus(ABC):
     @abstractmethod
@@ -62,9 +64,8 @@ class CorpusZippedXml(Corpus):
                     contents = path.read_text(encoding='ISO-8859-1')
                     doc = minidom.parseString(contents)
                     for post in doc.getElementsByTagName('post'):
-                        for lexical_element in split(r'(\W+)',post.firstChild.nodeValue):
-                            if not lexical_element.isspace():
-                                yield lexical_element
+                        for tag in pos_tag( word_tokenize( post.firstChild.nodeValue)):
+                            yield tag
                 except UnicodeDecodeError as err:
                     print (f'UnicodeDecodeError: {file_name}  {err.lineno} {err}')
                 except ExpatError as err:
@@ -90,8 +91,9 @@ if __name__=='__main__':
     start  = time()
     args = parse_args()
     corpus = CorpusZippedXml(join(args.data,args.dataset))
-    for word in corpus.generate_from_zipped_xml():
-        print (word)
+    for word,tag in corpus.generate_from_zipped_xml():
+        print (word,tag)
+
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
