@@ -180,8 +180,8 @@ class ExampleBuilder:
             vocabulary
             alpha      Exponent used in  equation (6.32) of Jurafsky & Martin
         '''
-        Z = sum(count**alpha for _,count in vocabulary.items())
-        return {item : count**alpha / Z for item,count in vocabulary.items()}
+        Z = sum(count**alpha for _,count in vocabulary.get_items())
+        return {item : count**alpha / Z for item,count in vocabulary.get_items()}
 
     def __init__(self, width=2, k=2):
         self.width = width

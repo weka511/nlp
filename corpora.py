@@ -33,8 +33,25 @@ from nltk import word_tokenize, pos_tag
 # nltk.download('averaged_perceptron_tagger')
 
 class Sentence:
+    '''
+    Represent a sentence as a list of lower case words without punctuation
+    '''
     def __init__(self):
         self.words = []
+
+    def __iter__(self):
+        self.pos = 0
+        return self
+
+    def __len__(self):
+        return len(self.words)
+
+    def __next__(self):
+        if self.pos < len(self.words):
+            self.pos += 1
+            return self.words[self.pos-1]
+        else:
+            raise StopIteration
 
     def __str__(self):
         return ' '.join(self.words)
@@ -42,10 +59,13 @@ class Sentence:
     def add(self,word):
         self.words.append(word.lower())
 
-    def reset(self):
-        self.words = []
+    def clear(self):
+        self.words.clear()
 
 class Corpus(ABC):
+    '''
+    Represents a text corpus
+    '''
     @staticmethod
     def create(dataset,format='ZippedXml'):
         match (format):
@@ -64,18 +84,23 @@ class Corpus(ABC):
 
     def generate_sentences(self,n=None):
         sentence = Sentence()
-        for word,tag in corpus.generate_tags(n):
+        for word,tag in self.generate_tags(n):
             match tag:
-                case '.':
+                case '.' |':' | ';' :
                     yield sentence
-                    sentence.reset()
-                case ',' | ':' | ';' | '"' | "'" | '`':
+                    sentence.clear()
+                case ',' |  '"' | "'" | '`':
                     pass
                 case _:
                     sentence.add(word)
+        if len(sentence)>0:
+            yield sentence
 
 
 class CorpusText(Corpus):
+    '''
+    A Corpus comprining one or more text files
+    '''
     def __init__(self,dataset):
         self.dataset = dataset
 
@@ -86,6 +111,9 @@ class CorpusText(Corpus):
 
 
 class CorpusZippedXml(Corpus):
+    '''
+    A corpus comprising a set of zipped XML files
+    '''
     def __init__(self,dataset):
         self.dataset = dataset
 

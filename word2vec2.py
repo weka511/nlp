@@ -24,7 +24,7 @@ from glob import glob
 from os import remove, system
 from os.path import exists, join
 from pathlib import Path
-from sys import exit
+from sys import exit, stderr
 from time import time
 from warnings import warn
 from matplotlib.pyplot import figure, show, rcParams
@@ -213,6 +213,16 @@ def is_stopping(token='stop',message='Stopfile detected and deleted'):
         print (message)
     return stopping
 
+def generate_sentences(doc,format='ZippedXml',n=None,log_file=stderr):
+    corpus = Corpus.create(doc,format=format)
+    sentence = []
+    for word,tag in corpus.generate_tags(n,log_file=log_file):
+        if tag.isalpha():
+            sentence.append(word.lower())
+        elif tag=='.':
+            yield sentence
+            sentence = []
+
 def build_vocabulary(args,rng):
     with open(args.logfile,'w') as logfile:
         docnames = [doc for pattern in args.docnames for doc in glob(join(args.data,pattern))]
@@ -231,8 +241,12 @@ def create_training_examples(args,rng):
     '''
     create training examples from corpus
     '''
+    vocabulary = Vocabulary()
+    vocabulary_file = create_file_name(args.vocabulary,path=args.data)
+    vocabulary.load(vocabulary_file)
+
     docnames = [doc for pattern in args.docnames for doc in glob(join(args.data,pattern))]
-    vocabulary = create_vocabulary(docnames, verbose=args.verbose)
+    # vocabulary = create_vocabulary(docnames, verbose=args.verbose)
     word2vec = ExampleBuilder(k=args.k, width=args.width)
     tower = Tower(ExampleBuilder.normalize(vocabulary),rng=rng)
     examples_file = create_file_name(args.examples,ext='csv',path=args.data)
@@ -243,20 +257,15 @@ def create_training_examples(args,rng):
         examples.writerow(['k',args.k])
         examples.writerow(['width',args.width])
         examples.writerow(['word','context','y'])
-
-        for sentence in extract_sentences(extract_tokens(read_text(file_names = docnames))):
-            indices = vocabulary.parse(sentence)
-        vocabulary_file = create_file_name(args.vocabulary,path=args.data)
-        vocabulary.save(vocabulary_file)
-        print (f'Saved vocabulary of {len(vocabulary)} words to {vocabulary_file}')
-
-        n = 1
-        for sentence in extract_sentences(extract_tokens(read_text(file_names = docnames))):
-            indices = vocabulary.parse(sentence)
-            for word,context,y in word2vec.generate_examples([indices],tower):
-                examples.writerow([word,context,y])
-                n += 1
-    print (f'Saved {n} examples to {examples_file}')
+        m = 1
+        for doc in docnames:
+            corpus = Corpus.create(doc,format=args.format)
+            for sentence in corpus.generate_sentences(args.n):
+                indices = vocabulary.parse(sentence)
+                for word,context,y in word2vec.generate_examples([indices],tower):
+                    examples.writerow([word,context,y])
+                    m += 1
+        print (f'Saved {m} examples to {examples_file}')
 
 def train(args,rng):
     '''
