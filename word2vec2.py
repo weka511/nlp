@@ -16,7 +16,7 @@
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
-'''Skipgrams as described in Chapter 6 of Jurafsky & Martin'''
+'''Train Skipgrams from supplied corpus. See Chapter 6 of Jurafsky & Martin'''
 
 from argparse import ArgumentParser
 from csv import reader, writer
@@ -123,6 +123,7 @@ def create_arguments():
     parser.add_argument('command', choices=['build', 'create', 'train', 'postprocess', 'extract'],
                         help='''
                         Command to be executed by program:
+                            build vocabulary from corpus;
                             create training examples from corpus;
                             train weights using examples;
                             postprocess - compute matrix of distances between vectors;
@@ -134,9 +135,11 @@ def create_arguments():
     parser.add_argument('--vocabulary', default='vocabulary', help='File name for vocabulary (default: %(default)s)')
     parser.add_argument('--data', default='./data', help='Path to data files (default: %(default)s)')
     parser.add_argument('--figs', default='./figs', help='Path to save plots (default: %(default)s)')
+    parser.add_argument('--logfile', default='logfile.txt', help='Path to save error messages (default: %(default)s)')
 
     group_build = parser.add_argument_group('build', 'Parameters for building vocabulary')
     group_build.add_argument('--n', '-n', type=int, default=None, help='Number of files from corpus')
+    group_build.add_argument('--format', choices=['ZippedXml', 'Text'], default='ZippedXml', help='Format for corpus (default: %(default))')
 
     group_create = parser.add_argument_group('create', 'Parameters for creating training examples')
     group_create.add_argument('docnames', nargs='*', help='A list of documents to be processed')
@@ -211,16 +214,17 @@ def is_stopping(token='stop',message='Stopfile detected and deleted'):
     return stopping
 
 def build_vocabulary(args,rng):
-    docnames = [doc for pattern in args.docnames for doc in glob(join(args.data,pattern))]
-    vocabulary = Vocabulary()
-    for doc in docnames:
-        corpus = Corpus.create(doc)
-        for word,tag in corpus.generate_tags(args.n):
-            if tag.isalpha():
-                vocabulary.add(word.lower())
+    with open(args.logfile,'w') as logfile:
+        docnames = [doc for pattern in args.docnames for doc in glob(join(args.data,pattern))]
+        vocabulary = Vocabulary()
+        for doc in docnames:
+            corpus = Corpus.create(doc,format=args.format)
+            for word,tag in corpus.generate_tags(args.n,log_file=logfile):
+                if tag.isalpha():
+                    vocabulary.add(word.lower())
 
-    vocabulary_file = create_file_name(args.vocabulary,path=args.data)
-    vocabulary.save(vocabulary_file)
+        vocabulary_file = create_file_name(args.vocabulary,path=args.data)
+        vocabulary.save(vocabulary_file,docnames=docnames)
     print (f'Saved vocabulary of {len(vocabulary)} words to {vocabulary_file}')
 
 def create_training_examples(args,rng):
@@ -356,7 +360,7 @@ def extract(args,rng):
 
 Commands = {
     'build'       : build_vocabulary,
-    'create'      :create_training_examples,
+    'create'      : create_training_examples,
     'train'       : train,
     'postprocess' : postprocess,
     'extract'     : extract

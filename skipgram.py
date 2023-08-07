@@ -118,11 +118,11 @@ class Vocabulary:
         print (f'Loaded {name}')
 
 
-    def save(self,name):
+    def save(self,name,docnames=[]):
         '''
         Save vocabulary in an external file
         '''
-        np.savez(name,indices=self.indices,counter=self.counter)
+        np.savez(name,indices=self.indices,counter=self.counter,docnames=docnames)
 
 class Index2Word:
     '''

@@ -24,12 +24,12 @@ from  nltk import word_tokenize, pos_tag
 from os import remove
 from os.path import exists, join
 from pathlib import Path
-from sys import exc_info
+from sys import exc_info, stderr
 from time import time
 from xml.dom import minidom
 from xml.parsers.expat import ExpatError
 import zipfile as zf
-from skipgram import Vocabulary
+
 
 # nltk.download('punkt')
 # nltk.download('averaged_perceptron_tagger')
@@ -37,36 +37,40 @@ from skipgram import Vocabulary
 class Corpus(ABC):
     @staticmethod
     def create(dataset,format='ZippedXml'):
-        return  CorpusZippedXml(dataset)
+        match (format):
+            case 'Text' :
+                return CorpusText(dataset)
+            case 'ZippedXml':
+                return CorpusZippedXml(dataset)
+
 
     @abstractmethod
     def generate_tags(self):
+        '''
+        Convert text from corpus to a list of words and tags
+        '''
         ...
 
-    def create_vocabulary(self,verbose=False,max_files=None):
-        '''
-        Build vocabulary first, so we have frequencies
 
-        Parameters:
-            docnames  List of all documents to be read
 
-        Returns:
-            Vocabulary built from all documents
+class CorpusText(Corpus):
+    def __init__(self,dataset):
+        self.dataset = dataset
 
-        '''
-
-        Product = Vocabulary()
-        for word,tag in self.generate_tags(max_files):
-            if tag.isalpha():
-                Product.add(word.lower())
-        return Product
+    def generate_tags(self,max_files=None,log_file=stderr):
+        with open(self.dataset,encoding='utf-8') as text_file:
+            for tag in pos_tag( word_tokenize( text_file.read())):
+                yield tag
 
 
 class CorpusZippedXml(Corpus):
     def __init__(self,dataset):
         self.dataset = dataset
 
-    def generate_tags(self,max_files=None):
+    def generate_tags(self,max_files=None,log_file=stderr):
+        '''
+        Convert text from corpus to a list of words and tags
+        '''
         with zf.ZipFile(self.dataset) as zipfile:
             n_files = 0
             for file_name in zipfile.namelist():
@@ -81,11 +85,10 @@ class CorpusZippedXml(Corpus):
                         for tag in pos_tag( word_tokenize( post.firstChild.nodeValue)):
                             yield tag
                 except UnicodeDecodeError as err:
-                    print (f'UnicodeDecodeError: {file_name}  {err.lineno} {err}')
+                    log_file.write(f'UnicodeDecodeError: {file_name}  {err.lineno} {err}\n')
                 except ExpatError as err:
                     exc_type, exc_obj, exc_tb = exc_info()
-                    print (f'ExpatError: {file_name} {exc_tb.tb_lineno} {err.lineno} {err}')
-
+                    log_file.write(f'ExpatError: {file_name} {exc_tb.tb_lineno} {err.lineno} {err}\n')
 
 
 def parse_args():
@@ -99,16 +102,18 @@ def parse_args():
     parser.add_argument('--N', default=100,type=int, help='Number of iterations (default: %(default)s)')
     parser.add_argument('--n', default=10,type=int)
     parser.add_argument('--freq', default=5,type=int, help='Controls how frequently progress will be shown (default: %(default)s)')
+    parser.add_argument('--format', choices=['ZippedXml', 'Text'], default='ZippedXml', help='Format for corpus (default: %(default))')
+
     return parser.parse_args()
 
 if __name__=='__main__':
     start  = time()
     args = parse_args()
-    corpus = Corpus.create(join(args.data,args.dataset))
-    vocabulary = corpus.create_vocabulary(max_files=5)
+    corpus = Corpus.create(join(args.data,args.dataset),format=args.format)
 
-    for key,value in vocabulary.get_items():
-        print (key,value)
+    for word,tag in corpus.generate_tags(args.n):
+        print (word,tag)
+
 
     elapsed = time() - start
     minutes = int(elapsed/60)
