@@ -18,9 +18,7 @@
 '''Read data from corpus'''
 
 from abc import ABC, abstractmethod
-
 from argparse import ArgumentParser
-from  nltk import word_tokenize, pos_tag
 from os import remove
 from os.path import exists, join
 from pathlib import Path
@@ -29,10 +27,23 @@ from time import time
 from xml.dom import minidom
 from xml.parsers.expat import ExpatError
 import zipfile as zf
-
+from nltk import word_tokenize, pos_tag
 
 # nltk.download('punkt')
 # nltk.download('averaged_perceptron_tagger')
+
+class Sentence:
+    def __init__(self):
+        self.words = []
+
+    def __str__(self):
+        return ' '.join(self.words)
+
+    def add(self,word):
+        self.words.append(word.lower())
+
+    def reset(self):
+        self.words = []
 
 class Corpus(ABC):
     @staticmethod
@@ -51,6 +62,17 @@ class Corpus(ABC):
         '''
         ...
 
+    def generate_sentences(self,n=None):
+        sentence = Sentence()
+        for word,tag in corpus.generate_tags(n):
+            match tag:
+                case '.':
+                    yield sentence
+                    sentence.reset()
+                case ',' | ':' | ';' | '"' | "'" | '`':
+                    pass
+                case _:
+                    sentence.add(word)
 
 
 class CorpusText(Corpus):
@@ -114,7 +136,8 @@ if __name__=='__main__':
     for word,tag in corpus.generate_tags(args.n):
         print (word,tag)
 
-
+    for s in corpus.generate_sentences(args.n):
+        print (s)
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
