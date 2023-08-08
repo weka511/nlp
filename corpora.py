@@ -15,7 +15,10 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-'''Read data from corpus'''
+'''
+    This module is responsibe for reading data from corpus.
+    Data is supported in several different formats, e.g. text, zipped XML.
+'''
 
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser
@@ -55,6 +58,7 @@ class Sentence:
         return SentenceIterator(self.words)
 
     def __len__(self):
+        '''Length of sentence in words'''
         return len(self.words)
 
     def __str__(self):
