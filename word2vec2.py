@@ -31,7 +31,6 @@ from matplotlib.pyplot import figure, show, rcParams
 import numpy as np
 from numpy.random import default_rng
 from skipgram import Vocabulary, ExampleBuilder, Tower, Optimizer, Word2Vec, LossCalculator, Index2Word
-from tokenizer import read_text, extract_sentences, extract_tokens
 from corpora import Corpus
 
 def read_training_data(file_name):
@@ -42,7 +41,7 @@ def read_training_data(file_name):
         file_name    Name of file that is to be read
 
     Returns:
-       A numpy array, each word consisting of a word, context, and an indicator of +/-
+       A numpy array, each row consisting of a word, context, and an indicator of +/-
     '''
     def count_rows():
         '''
@@ -79,23 +78,7 @@ def read_training_data(file_name):
 
     return k,width,paths,training_data
 
-def create_vocabulary(docnames,verbose=False):
-    '''
-    Build vocabulary first, so we have frequencies
 
-    Parameters:
-        docnames  List of all documents to be read
-
-    Returns:
-        Vocabulary built from all documents
-
-    '''
-    Product = Vocabulary()
-
-    for sentence in extract_sentences(extract_tokens(read_text(file_names = docnames))):
-        Product.parse(sentence,verbose=verbose)
-
-    return Product
 
 def create_file_name(name,ext='npz',path=None):
     '''
@@ -246,7 +229,6 @@ def create_training_examples(args,rng):
     vocabulary.load(vocabulary_file)
 
     docnames = [doc for pattern in args.docnames for doc in glob(join(args.data,pattern))]
-    # vocabulary = create_vocabulary(docnames, verbose=args.verbose)
     word2vec = ExampleBuilder(k=args.k, width=args.width)
     tower = Tower(ExampleBuilder.normalize(vocabulary),rng=rng)
     examples_file = create_file_name(args.examples,ext='csv',path=args.data)
