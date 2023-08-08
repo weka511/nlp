@@ -122,7 +122,7 @@ def create_arguments():
 
     group_build = parser.add_argument_group('build', 'Parameters for building vocabulary')
     group_build.add_argument('--n', '-n', type=int, default=None, help='Number of files from corpus')
-    group_build.add_argument('--format', choices=['ZippedXml', 'Text'], default='ZippedXml', help='Format for corpus (default: %(default))')
+    group_build.add_argument('--format', choices=['ZippedXml', 'Text'], default='ZippedXml', help='Format for corpus (default: ZippedXml)')
 
     group_create = parser.add_argument_group('create', 'Parameters for creating training examples')
     group_create.add_argument('docnames', nargs='*', help='A list of documents to be processed')
