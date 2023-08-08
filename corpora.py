@@ -40,18 +40,22 @@ class Sentence:
         self.words = []
 
     def __iter__(self):
-        self.pos = 0
-        return self
+        '''Iterate through the words in the sentence'''
+        class SentenceIterator:
+            def __init__(self,words):
+                self.words = words
+                self.n = 0
+            def __next__(self):
+                if self.n < len(self.words):
+                    self.n += 1
+                    return self.words[self.n-1]
+                else:
+                    raise StopIteration
+
+        return SentenceIterator(self.words)
 
     def __len__(self):
         return len(self.words)
-
-    def __next__(self):
-        if self.pos < len(self.words):
-            self.pos += 1
-            return self.words[self.pos-1]
-        else:
-            raise StopIteration
 
     def __str__(self):
         return ' '.join(self.words)
