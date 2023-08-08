@@ -158,8 +158,7 @@ def parse_args():
     parser.add_argument('--dataset', default='...', help='Name of dataset (default: %(default)s)')
     parser.add_argument('--show', default=False, action='store_true')
     parser.add_argument('--N', default=100,type=int, help='Number of iterations (default: %(default)s)')
-    parser.add_argument('--n', default=10,type=int)
-    parser.add_argument('--freq', default=5,type=int, help='Controls how frequently progress will be shown (default: %(default)s)')
+    parser.add_argument('--n', default=10,type=int, help='Number of files (for testing)')
     parser.add_argument('--format', choices=['ZippedXml', 'Text'], default='ZippedXml', help='Format for corpus (default: %(default))')
 
     return parser.parse_args()
