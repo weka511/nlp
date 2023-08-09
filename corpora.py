@@ -131,19 +131,23 @@ class CorpusZippedXml(Corpus):
         '''
         with zf.ZipFile(self.dataset) as zipfile:
             n_files = 0
+            if max_files == None:
+                max_files = len(zipfile.namelist())
             for file_name in zipfile.namelist():
                 if file_name.endswith('/'): continue
-                n_files += 1
-                if max_files != None and n_files > max_files: return
+                if n_files > max_files: return
                 contents = zf.Path(zipfile, at=file_name).read_text(encoding=encoding)
                 start = 0
                 while True:
                     p1 = contents.find('<post>',start)
                     if p1 < 0: break
-                    p2 = contents.find('</post>',p1 + len('<post>'))
+                    p1 += len('<post>')
+                    p2 = contents.find('</post>',p1)
                     start = p2 + len('</post>')
+                    p2 -= 1
                     for tag in pos_tag( word_tokenize( contents[p1:p2])):
                         yield tag
+                n_files += 1
 
 
 
