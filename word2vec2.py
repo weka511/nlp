@@ -221,12 +221,18 @@ def build_vocabulary(args,rng):
     print (f'Saved vocabulary of {len(vocabulary)} words to {vocabulary_file}')
 
 def list_vocabulary(args,_):
+    '''
+    List items in vocabulary
+    '''
     vocabulary = Vocabulary()
     vocabulary_file = create_file_name(args.vocabulary,path=args.data)
     vocabulary.load(vocabulary_file)
     word = Index2Word(vocabulary)
     for i,freq in vocabulary.items():
-        print (word[i],freq)
+        try:
+            print (word[i],freq)
+        except UnicodeEncodeError as err:
+            print (err)
 
 def create_training_examples(args,rng):
     '''
