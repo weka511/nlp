@@ -80,7 +80,7 @@ class Vocabulary:
         '''
         return self.counter[token]
 
-    def get_items(self):
+    def items(self):
         '''
         Iterate through all words in vocabulary, and also give the corresponding frequency for each word
         '''
@@ -131,17 +131,17 @@ class Index2Word:
     def __init__(self,vocabulary):
         self.words = [word for word,_ in sorted([(word,position) for word,position in vocabulary.indices.items()],key=lambda tup: tup[1])]
 
-    def get_word(self,index):
+    def __getitem__(self, key):
         '''
         Find word given index
 
         Parameters:
-            index    Index number of word fromm Vocabulary
+            key    Index number of word from Vocabulary
 
         Returns:
             word corresponding to index
         '''
-        return self.words[index]
+        return self.words[key]
 
 class Tower:
     '''
@@ -180,8 +180,8 @@ class ExampleBuilder:
             vocabulary
             alpha      Exponent used in  equation (6.32) of Jurafsky & Martin
         '''
-        Z = sum(count**alpha for _,count in vocabulary.get_items())
-        return {item : count**alpha / Z for item,count in vocabulary.get_items()}
+        Z = sum(count**alpha for _,count in vocabulary.items())
+        return {item : count**alpha / Z for item,count in vocabulary.items()}
 
     def __init__(self, width=2, k=2):
         self.width = width

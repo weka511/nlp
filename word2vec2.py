@@ -103,7 +103,7 @@ def create_arguments():
        'args' object
     '''
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['build', 'create', 'train', 'postprocess', 'extract'],
+    parser.add_argument('command', choices=['build', 'create', 'train', 'postprocess', 'extract', 'list'],
                         help='''
                         Command to be executed by program:
                             build vocabulary from corpus;
@@ -219,6 +219,14 @@ def build_vocabulary(args,rng):
         vocabulary_file = create_file_name(args.vocabulary,path=args.data)
         vocabulary.save(vocabulary_file,docnames=docnames)
     print (f'Saved vocabulary of {len(vocabulary)} words to {vocabulary_file}')
+
+def list_vocabulary(args,_):
+    vocabulary = Vocabulary()
+    vocabulary_file = create_file_name(args.vocabulary,path=args.data)
+    vocabulary.load(vocabulary_file)
+    word = Index2Word(vocabulary)
+    for i,freq in vocabulary.items():
+        print (word[i],freq)
 
 def create_training_examples(args,rng):
     '''
@@ -342,19 +350,18 @@ def extract(args,rng):
         triplets = writer(out)
         for i,j in generate_pairs(CosineDistances):
             try:
-                triplets.writerow ([words.get_word(i),words.get_word(j),CosineDistances[i,j]])
+                triplets.writerow ([words[i],words[j],CosineDistances[i,j]])
             except UnicodeEncodeError as err:
                 print (i, j, err)
     print (f'Saved triplets in {triplets_file}')
-
-
 
 Commands = {
     'build'       : build_vocabulary,
     'create'      : create_training_examples,
     'train'       : train,
     'postprocess' : postprocess,
-    'extract'     : extract
+    'extract'     : extract,
+    'list'        : list_vocabulary
 }
 
 if __name__=='__main__':

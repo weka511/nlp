@@ -82,7 +82,7 @@ if __name__=='__main__':
             words_and_distances = []
             for j in range(len(kmeans.labels_)):
                 if kmeans.labels_[j]==i:
-                    words_and_distances.append((words.get_word(j),Distances[j,i]))
+                    words_and_distances.append((words[j],Distances[j,i]))
             words_and_distances.sort(key=lambda tup: tup[1])
             for word,distance in words_and_distances:
                 try:
