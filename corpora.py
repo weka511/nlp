@@ -25,10 +25,9 @@ from argparse import ArgumentParser
 from os import remove
 from os.path import exists, join
 from pathlib import Path
+from re import split
 from sys import exc_info, stderr
 from time import time
-from xml.dom import minidom
-from xml.parsers.expat import ExpatError
 import zipfile as zf
 from nltk import word_tokenize, pos_tag
 
@@ -107,7 +106,7 @@ class Corpus(ABC):
 
 class CorpusText(Corpus):
     '''
-    A Corpus comprining one or more text files
+    A Corpus comprising one or more text files
     '''
     def __init__(self,dataset):
         self.dataset = dataset
@@ -120,12 +119,13 @@ class CorpusText(Corpus):
 
 class CorpusZippedXml(Corpus):
     '''
-    A corpus comprising a set of zipped XML files
+    A corpus comprising a set of zipped XML files. I'm parsing the xml myself, as the blogs.zip
+    dataset contains numersous encoding errors.
     '''
     def __init__(self,dataset):
         self.dataset = dataset
 
-    def generate_tags(self,max_files=None,log_file=stderr):
+    def generate_tags(self,max_files=None,log_file=stderr,encoding='ISO-8859-1'):
         '''
         Convert text from corpus to a list of words and tags
         '''
@@ -135,29 +135,22 @@ class CorpusZippedXml(Corpus):
                 if file_name.endswith('/'): continue
                 n_files += 1
                 if max_files != None and n_files > max_files: return
-                path = zf.Path(zipfile, at=file_name)
-                try:
-                    contents = path.read_text(encoding='ISO-8859-1')
-                    doc = minidom.parseString(contents)
-                    for post in doc.getElementsByTagName('post'):
-                        for tag in pos_tag( word_tokenize( post.firstChild.nodeValue)):
-                            yield tag
-                except UnicodeDecodeError as err:
-                    log_file.write(f'UnicodeDecodeError: {file_name}  {err.lineno} {err}\n')
-                except ExpatError as err:
-                    exc_type, exc_obj, exc_tb = exc_info()
-                    log_file.write(f'ExpatError: {file_name} {exc_tb.tb_lineno} {err.lineno} {err}\n')
+                contents = zf.Path(zipfile, at=file_name).read_text(encoding=encoding)
+                start = 0
+                while True:
+                    p1 = contents.find('<post>',start)
+                    if p1 < 0: break
+                    p2 = contents.find('</post>',p1 + len('<post>'))
+                    start = p2 + len('</post>')
+                    for tag in pos_tag( word_tokenize( contents[p1:p2])):
+                        yield tag
+
 
 
 def parse_args():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--data', default='./data', help='Path to data files (default: %(default)s)')
-    parser.add_argument('--figs', default='./figs', help='Path to plot files (default: %(default)s)')
-    parser.add_argument('--plot', default = Path(__file__).stem)
-    parser.add_argument('--save', default = Path(__file__).stem)
     parser.add_argument('--dataset', default='...', help='Name of dataset (default: %(default)s)')
-    parser.add_argument('--show', default=False, action='store_true')
-    parser.add_argument('--N', default=100,type=int, help='Number of iterations (default: %(default)s)')
     parser.add_argument('--n', default=10,type=int, help='Number of files (for testing)')
     parser.add_argument('--format', choices=['ZippedXml', 'Text'], default='ZippedXml', help='Format for corpus (default: %(default))')
 
