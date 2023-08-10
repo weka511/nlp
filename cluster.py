@@ -23,7 +23,7 @@ from pathlib import Path
 from time import time
 import numpy as np
 from sklearn.cluster import KMeans
-from skipgram import Word2Vec, Vocabulary,Index2Word
+from skipgram import Word2Vec, Vocabulary
 from word2vec2 import create_file_name
 
 def create_arguments():
@@ -65,7 +65,7 @@ if __name__=='__main__':
     vocabulary = Vocabulary()
     vocabulary_file = create_file_name(args.vocabulary,path=args.data)
     vocabulary.load(vocabulary_file)
-    words = Index2Word(vocabulary)
+    words = vocabulary.create_index()
     print (f'Loaded {vocabulary_file}--{len(vocabulary)} words')
     model = Word2Vec()
     model_name = create_file_name(args.load,path=args.data)

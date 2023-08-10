@@ -124,24 +124,27 @@ class Vocabulary:
         '''
         np.savez(name,indices=self.indices,counter=self.counter,docnames=docnames)
 
-class Index2Word:
-    '''
-    Companion to Vocabulary: used to find word given index
-    '''
-    def __init__(self,vocabulary):
-        self.words = [word for word,_ in sorted([(word,position) for word,position in vocabulary.indices.items()],key=lambda tup: tup[1])]
-
-    def __getitem__(self, key):
+    def create_index(self):
         '''
-        Find word given index
-
-        Parameters:
-            key    Index number of word from Vocabulary
-
-        Returns:
-            word corresponding to index
+        Create companion to Vocabulary: used to find word given index
         '''
-        return self.words[key]
+        class Index2Word:
+            def __init__(self,vocabulary):
+                self.words = [word for word,_ in sorted([(word,position) for word,position in vocabulary.indices.items()],key=lambda tup: tup[1])]
+
+            def __getitem__(self, key):
+                '''
+                Find word given index
+
+                Parameters:
+                    key    Index number of word from Vocabulary
+
+                Returns:
+                    word corresponding to index
+                '''
+                return self.words[key]
+
+        return Index2Word(self)
 
 class Tower:
     '''

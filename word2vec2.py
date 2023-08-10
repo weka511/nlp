@@ -30,7 +30,7 @@ from warnings import warn
 from matplotlib.pyplot import figure, show, rcParams
 import numpy as np
 from numpy.random import default_rng
-from skipgram import Vocabulary, ExampleBuilder, Tower, Optimizer, Word2Vec, LossCalculator, Index2Word
+from skipgram import Vocabulary, ExampleBuilder, Tower, Optimizer, Word2Vec, LossCalculator
 from corpora import Corpus
 
 def read_training_data(file_name):
@@ -227,7 +227,7 @@ def list_vocabulary(args,_):
     vocabulary = Vocabulary()
     vocabulary_file = create_file_name(args.vocabulary,path=args.data)
     vocabulary.load(vocabulary_file)
-    word = Index2Word(vocabulary)
+    word = vocabulary.create_index()
     for i,freq in vocabulary.items():
         try:
             print (word[i],freq)
@@ -309,7 +309,7 @@ def postprocess(args,rng):
     vocabulary = Vocabulary()
     vocabulary_file = create_file_name(args.vocabulary,path=args.data)
     vocabulary.load(vocabulary_file)
-    words = Index2Word(vocabulary)
+    words = vocabulary.create_index()
     CosineDistances = np.abs(model.create_products())
     m,_ = CosineDistances.shape
     distances_name = create_file_name(args.distances,path=args.data)
@@ -346,7 +346,7 @@ def extract(args,rng):
     vocabulary = Vocabulary()
     vocabulary_file = create_file_name(args.vocabulary,path=args.data)
     vocabulary.load(vocabulary_file)
-    words = Index2Word(vocabulary)
+    words = vocabulary.create_index()
     distances_name = create_file_name(args.distances,path=args.data)
     with np.load(distances_name) as data:
         CosineDistances = data['CosineDistances']
