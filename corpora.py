@@ -61,12 +61,16 @@ class Sentence:
         return len(self.words)
 
     def __str__(self):
+        '''Used to display words in sentence'''
         return ' '.join(self.words)
 
     def add(self,word):
-        self.words.append(word.lower())
+        '''Add one word to sentence'''
+        if word.isalpha():
+            self.words.append(word.lower())
 
     def clear(self):
+        '''Used to empty sentence'''
         self.words.clear()
 
 class Corpus(ABC):
@@ -90,6 +94,9 @@ class Corpus(ABC):
         ...
 
     def generate_sentences(self,n=None):
+        '''
+        Used to iterate through sentence in corpus
+        '''
         sentence = Sentence()
         for word,tag in self.generate_tags(n):
             match tag:
