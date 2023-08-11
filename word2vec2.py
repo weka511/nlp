@@ -200,7 +200,7 @@ def generate_sentences(doc,format='ZippedXml',n=None,log_file=stderr):
     corpus = Corpus.create(doc,format=format)
     sentence = []
     for word,tag in corpus.generate_tags(n,log_file=log_file):
-        if tag.isalpha():
+        if word.isalpha():
             sentence.append(word.lower())
         elif tag=='.':
             yield sentence
@@ -213,7 +213,7 @@ def build_vocabulary(args,rng):
         for doc in docnames:
             corpus = Corpus.create(doc,format=args.format)
             for word,tag in corpus.generate_tags(args.n,log_file=logfile):
-                if tag.isalpha():
+                if tag.isalpha():   # Should be word!
                     vocabulary.add(word.lower())
 
         vocabulary_file = create_file_name(args.vocabulary,path=args.data)

@@ -67,6 +67,9 @@ class Vocabulary:
         return Result
 
     def add(self,word):
+        '''
+        Add word to vocabulary. Caller is responsible for verifying that word is valid for language.
+        '''
         if not word in self.indices:
             self.indices[word] = len(self.indices)
         self.counter.update([self.indices[word]])

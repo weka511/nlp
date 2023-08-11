@@ -115,11 +115,12 @@ class CorpusText(Corpus):
     '''
     A Corpus comprising one or more text files
     '''
-    def __init__(self,dataset):
+    def __init__(self,dataset,encoding='utf-8'):
         self.dataset = dataset
+        self.encoding = encoding
 
     def generate_tags(self,max_files=None,log_file=stderr):
-        with open(self.dataset,encoding='utf-8') as text_file:
+        with open(self.dataset,encoding=self.encoding) as text_file:
             for tag in pos_tag( word_tokenize( text_file.read())):
                 yield tag
 
@@ -129,10 +130,11 @@ class CorpusZippedXml(Corpus):
     A corpus comprising a set of zipped XML files. I'm parsing the xml myself, as the blogs.zip
     dataset contains numersous encoding errors.
     '''
-    def __init__(self,dataset):
+    def __init__(self,dataset,encoding='ISO-8859-1'):
         self.dataset = dataset
+        self.encoding = encoding
 
-    def generate_tags(self,max_files=None,log_file=stderr,encoding='ISO-8859-1'):
+    def generate_tags(self,max_files=None,log_file=stderr):
         '''
         Convert text from corpus to a list of words and tags
         '''
@@ -143,7 +145,7 @@ class CorpusZippedXml(Corpus):
             for file_name in zipfile.namelist():
                 if file_name.endswith('/'): continue
                 if n_files > max_files: return
-                contents = zf.Path(zipfile, at=file_name).read_text(encoding=encoding)
+                contents = zf.Path(zipfile, at=file_name).read_text(encoding=self.encoding)
                 start = 0
                 while True:
                     p1 = contents.find('<post>',start)
