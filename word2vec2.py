@@ -20,6 +20,7 @@
 
 from argparse import ArgumentParser
 from csv import reader, writer
+from functools import reduce
 from glob import glob
 from os import remove, system
 from os.path import exists, join
@@ -213,7 +214,8 @@ def build_vocabulary(args,rng):
         for doc in docnames:
             corpus = Corpus.create(doc,format=args.format)
             for word,tag in corpus.generate_tags(args.n,log_file=logfile):
-                if tag.isalpha():   # Should be word!
+                if reduce(lambda x,y: x and y,['a' <= c and c <= 'z' for c in word.lower()]):
+                # if tag.isalpha():   # Should be word!
                     vocabulary.add(word.lower())
 
         vocabulary_file = create_file_name(args.vocabulary,path=args.data)
