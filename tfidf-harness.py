@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#   Copyright (C) 2023 Simon Crase
+#   Copyright (C) 2023-2026 Simon Crase
 
 #   This program is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@ from time import time
 import numpy as np
 from tfidf import TfIdf, create_inner_products
 
-if __name__=='__main__':
+def main():
     start  = time()
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('docnames', nargs='+', help='A list of documents to be processed')
@@ -41,3 +41,6 @@ if __name__=='__main__':
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
     print (f'Elapsed Time {minutes} m {seconds:.2f} s')
+    
+if __name__=='__main__':
+    main()

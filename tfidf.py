@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#   Copyright (C) 2023 Simon Crase
+#   Copyright (C) 2023-2026 Simon Crase
 
 #   This program is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -15,7 +15,10 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-'''Compute tf-idf scores for list of documents'''
+'''
+    Compute tf-idf scores for list of documents. Based on
+    Dan Jurafsky & James H. Martin - Speech and Language Processing
+'''
 
 from collections import ChainMap, Counter
 from pathlib import Path
@@ -91,29 +94,30 @@ def create_inner_products(tf_idf):
             product[i,j] = np.dot(tf_idf[:,i],tf_idf[:,j]) if j>=i else product[j,i]
     return product
 
+class TestTfIdf(TestCase):
+    def test_count_words(self):
+        '''
+        Verify that vocabulary has the right words, and that the word counts are in the same sequence
+        as the file names for the corpus
+        '''
+        vocabulary,word_counts = count_words(['data/nano-corpus.txt',
+                                              'data/nano-corpus1.txt'])
+        self.assertIn('earl',vocabulary)
+        self.assertIn('queen',vocabulary)
+        wc_nano_corpus= word_counts[0]
+        self.assertEqual(1,wc_nano_corpus['king'])
+        self.assertEqual(0,wc_nano_corpus['earl'])
+        wc_nano_corpus1= word_counts[1]
+        self.assertEqual(0,wc_nano_corpus1['king'])
+        self.assertEqual(1,wc_nano_corpus1['earl'])
+
+    def test_TfIdf(self):
+        vocabulary,tf_idf=TfIdf(docnames = [
+            'data/nano-corpus.txt',
+            'data/nano-corpus1.txt'
+        ])
+        self.assertEqual(5,len(vocabulary))
+        self.assertIn('countess',vocabulary)
+        
 if __name__=='__main__':
-    class TestTfIdf(TestCase):
-        def test_count_words(self):
-            '''
-            Verify that vocabulary has the right words, and that the word counts are in the same sequence
-            as the file names for the corpus
-            '''
-            vocabulary,word_counts = count_words(['nano-corpus.txt','nano-corpus1.txt'])
-            self.assertIn('earl',vocabulary)
-            self.assertIn('queen',vocabulary)
-            wc_nano_corpus= word_counts[0]
-            self.assertEqual(1,wc_nano_corpus['king'])
-            self.assertEqual(0,wc_nano_corpus['earl'])
-            wc_nano_corpus1= word_counts[1]
-            self.assertEqual(0,wc_nano_corpus1['king'])
-            self.assertEqual(1,wc_nano_corpus1['earl'])
-
-        def test_TfIdf(self):
-            vocabulary,tf_idf=TfIdf(docnames = [
-                'nano-corpus.txt',
-                'nano-corpus1.txt'
-            ])
-            self.assertEqual(5,len(vocabulary))
-            self.assertIn('countess',vocabulary)
-
     main()
