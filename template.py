@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#   Copyright (C) 2023 Simon Crase
+#   Copyright (C) 2023-2026 Simon Crase
 
 #   This program is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -21,14 +21,18 @@ from argparse import ArgumentParser
 from time import time
 import numpy as np
 
-if __name__=='__main__':
-    start  = time()
+def parse_args():
     parser = ArgumentParser(description=__doc__)
-
     args = parser.parse_args()
-
-
+    
+def main():
+    start  = time()
+    args = parse_args()
+    
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
     print (f'Elapsed Time {minutes} m {seconds:.2f} s')
+    
+if __name__=='__main__':
+    main()
