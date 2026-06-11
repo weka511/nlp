@@ -19,81 +19,85 @@
 
 from re import split
 
-
-def read_text(file_names=[]):
+class Token:
+    Apostrophe = "'"
+    Period = '.'
+    
+def generate_text(file_names : [str] = []):
     '''
     Generator for reading text from a corpus. It allows us to read the file, one line at a time.
 
     Parameters:
         file_names   One or more text files that make up corpus
     '''
-    if len(file_names) == 0:
-        raise Exception('read_text() needs a list of file names')
+    if len(file_names) == 0: raise Exception('generate_text() needs a list of file names')
+    
     for file_name in file_names:
         with open(file_name, encoding='utf-8') as text_file:
             for line in text_file:
                 yield line.strip()
 
-
-def extract_tokens(text):
+def consolidate_apostrophes(tokens : [str]):
     '''
-    Extract tokens from text
+    A generator to consolidate apostrophes. It handle words such as "we've"
+
+        [..."we", "'", "ve"...] -> [..."we've"...]
+        
+    Parameters:
+        tokens    A list of words and punctutaion symbols
     '''
-
-    def consolidate_apostrophes(tokens):
-        '''
-        consolidate_apostrophes
-
-        Handle words such as "we,ve"
-
-            [..."we", "'", "ve"...] -> [..."we've"...]
-        '''
-        Result = []
-        word = tokens[0]
-        i = 1
-        while i < len(tokens):
-            if tokens[i] == "'":
-                i += 1
-                if i < len(tokens) - 1:
-                    word = f"{word}'{tokens[i]}"
-                    Result.append(word)
-                    i += 1
-                    word = tokens[i]
-                else:
-                    word = f"{word}'"
-                    Result.append(word)
-            else:
-                Result.append(word)
+    if len(tokens) == 0: return
+    
+    word = tokens[0]
+    i = 1
+    while i < len(tokens):
+        if tokens[i] == Token.Apostrophe:
+            i += 1     # point beyond apostrophe
+            if i < len(tokens) - 1:
+                yield f'{word}{Token.Apostrophe}{tokens[i]}'
+                i += 1   # point beyond part following the apostrophe
                 word = tokens[i]
                 i += 1
-        Result.append(word)
-        return Result
-
+            else:
+                yield  f'{word}{Token.Apostrophe}'
+        else:
+            yield word
+            word = tokens[i]
+            i += 1
+            
+    yield word 
+    
+def generate_tokens(text: [str]):
+    '''
+    Extract tokens from text
+    
+    Parameters:
+        text     A list of strings of text
+    '''
     for line in text:
         Tokens = [token.strip() for token in split(r'(\W+)', line.strip()) if len(token.replace(' ', '')) != 0]
-        if len(Tokens) == 0:
-            continue
         for token in consolidate_apostrophes(Tokens):
             yield token.lower()
 
 
-def extract_sentences(Tokens):
+def generate_sentences(Tokens : [str]):
     '''
     Split list of tokens into list of lists
+    
+    Parameters:
+        Tokens
     '''
     sentence = []
     for token in Tokens:
-        if token == '.':
+        if token == Token.Period:
             yield sentence
             sentence = []
         else:
             sentence.append(token)
 
-
 def main():
-    for sentence in extract_sentences(extract_tokens(read_text(file_names=['data/gatsby1.txt']))):
+    for sentence in generate_sentences(generate_tokens(generate_text(file_names=['data/gatsby1.txt']))):
         print(sentence)
-
 
 if __name__ == '__main__':
     main()

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#    Copyright (C) 2021-2023 Simon A. Crase   simon@greenweaves.nz
+#    Copyright (C) 2021-2026 Simon A. Crase   simon@greenweaves.nz
 #
 #    This is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -39,7 +39,7 @@ import torch
 from torch.autograd import Variable
 from torch.nn import Module
 from torch.nn.functional import log_softmax, nll_loss
-from tokenizer import extract_sentences, extract_tokens, read_text
+from tokenizer import generate_sentences, generate_tokens, generate_text
 
 class Word2Vec(Module):
     '''
@@ -488,7 +488,7 @@ if __name__=='__main__':
     if args.action == 'train':
         output_file = get_output(output=args.output, corpus=args.corpus)
         file_names = [globbed for name in args.corpus for globbed in glob(join(args.data,name))]
-        tokenized_corpus = [word for word in extract_sentences(extract_tokens(read_text(file_names=file_names)))]
+        tokenized_corpus = [word for word in generate_sentences(generate_tokens(generate_text(file_names=file_names)))]
         vocabulary,word2idx,idx2word = create_vocabulary(tokenized_corpus)
         vocabulary_size = len(vocabulary)
         idx_pairs = create_idx_pairs(tokenized_corpus, word2idx, window_size = args.window)

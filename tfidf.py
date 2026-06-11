@@ -25,7 +25,7 @@ from pathlib import Path
 from time import time
 from unittest import main, TestCase
 import numpy as np
-from tokenizer import read_text, extract_sentences, extract_tokens
+from tokenizer import generate_text, generate_sentences, generate_tokens
 
 def count_words(docnames):
     '''
@@ -42,11 +42,12 @@ def count_words(docnames):
     dicts = ChainMap()
     word_counts = []
     for file_name in docnames:
-        text = list(read_text(file_names=[file_name]))
-        tokens = extract_tokens(text)
-        words = [word for sentence in extract_sentences(tokens) for word in sentence if word.isalpha()]
-        word_counts.append(Counter(words))
-        dicts.maps.append(word_counts[-1])
+        text = list(generate_text(file_names=[file_name]))
+        tokens = generate_tokens(text)
+        words = [word for sentence in generate_sentences(tokens) for word in sentence if word.isalpha()]
+        count = Counter(words)
+        word_counts.append(count)
+        dicts.maps.append(count)
     return list(dicts), word_counts
 
 def TfIdf(docnames=[]):
@@ -91,10 +92,13 @@ def create_inner_products(tf_idf):
     product = np.zeros((n,n))
     for i in range(n):
         for j in range(n):
-            product[i,j] = np.dot(tf_idf[:,i],tf_idf[:,j]) if j>=i else product[j,i]
+            product[i,j] = np.dot(tf_idf[:,i],tf_idf[:,j]) if j >= i else product[j,i]
     return product
 
 class TestTfIdf(TestCase):
+    '''
+    Tests for tfidf
+    '''
     def test_count_words(self):
         '''
         Verify that vocabulary has the right words, and that the word counts are in the same sequence
