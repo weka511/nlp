@@ -5,7 +5,7 @@ My experiments with Natural Language Processing
 ## Code
 
 File | Description
------------------|---------------------------------------------------------------
+------------------|---------------------------------------------------------------
 bt.py|Explore variability of Bradley-Terry
 cluster.py|Find clusters in word vectors
 corpora.py|Library for reading text from corpora in various formats
