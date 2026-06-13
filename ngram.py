@@ -37,6 +37,17 @@ class Ngram:
         symbols
         tuples
     '''
+    
+    @staticmethod
+    def create(file_name):
+        '''
+        A factory method to instantiate an Ngram from a saved file
+        '''
+        with open(file_name, 'rb') as inp:
+            product = load(inp) 
+            print (f'Loaded ngrams from {file_name.resolve()}')
+            return product
+                    
     def __init__(self,n):
         self.n = n
         self.vocabulary = {}
@@ -99,6 +110,11 @@ class Ngram:
             tokens
         '''
         return tuple([self.symbols[i] for i in tokens if i > -1])
+    
+    def save(self,output_file):
+        with open(output_file,'wb') as out:
+            dump(self, out, HIGHEST_PROTOCOL)
+            print (f'Saved ngrams to {output_file.resolve()}')        
         
 def parse_args():
     parser = ArgumentParser(description=__doc__)
@@ -116,18 +132,13 @@ def main():
     for sentence in generate_sentences(generate_tokens(generate_text(file_names=file_names))):
         ngram.add_sentence(sentence)
  
-    output_file = (Path(args.data) / args.output).with_suffix('.pkl')
-    with open(output_file,'wb') as out:
-        dump(ngram, out, HIGHEST_PROTOCOL)
-        print (f'Saved ngrams to {output_file.resolve()}')
-
-    with open(output_file, 'rb') as inp:
-        ngram1 = load(inp) 
-        print (f'Loaded ngrams from {output_file.resolve()}')
-        for key,value in ngram1.tuples.items():
-            if value > 3:
-                print (ngram.get_ngram(key),value)
-                
+    ngram.save((Path(args.data) / args.output).with_suffix('.pkl'))
+    
+    ngram1 = Ngram.create((Path(args.data) / args.output).with_suffix('.pkl'))
+    for key,value in ngram1.tuples.items():
+        if value > 2:
+            print (ngram.get_ngram(key),value)    
+           
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
