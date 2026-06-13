@@ -15,7 +15,11 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-'''Exercises from Chapter 3 of Jurafsky and Martin'''
+'''
+    Exercise 3.8 from Jurafsky and Martin
+    
+    Build ngram table from corpus
+'''
 
 from argparse import ArgumentParser
 from glob import glob
@@ -124,6 +128,12 @@ class Ngram:
             print (f'Saved ngrams to {output_file.resolve()}')
     
     def get_frequencies(self,min_count=0):
+        '''
+        Determine frequencies of ngrams
+        
+        Parameters:
+            min_count
+        '''
         counts = []
         for key,count in self.tuples.items():
             ngram = self.get_ngram(key)
@@ -131,6 +141,21 @@ class Ngram:
                 counts.append(count)
 
         return counts
+    
+    def get_description(self):
+        '''
+        Used to describe n-grams for display
+        '''
+        match self.n:
+            case 1:
+                return 'word'
+            case 2:
+                return 'bigram'
+            case 3:
+                return 'trigram'
+            case _:
+                return f'{self.n}-gram'
+                
         
 def parse_args():
     parser = ArgumentParser(description=__doc__)
@@ -140,7 +165,6 @@ def parse_args():
     parser.add_argument('-o', '--output',default=Path(__file__).stem)
     parser.add_argument('--show', default=False,action='store_true')
     parser.add_argument('--figs', default='./figs')
-    parser.add_argument('--load',default=None)
     return parser.parse_args()
     
 def main():
@@ -155,19 +179,13 @@ def main():
     
     fig = figure(figsize=(10,10))
     ax1 = fig.add_subplot(2,1,1)
-    ax1.hist(ngram.get_frequencies(),bins=100,color='xkcd:blue',density=True)
-    ax1.set_title('Frequencies for all tuples')
+    ax1.hist(ngram.get_frequencies(),bins='sqrt',color='xkcd:blue',density=True)
+    ax1.set_title(f'Frequencies for all {ngram.get_description()}s')
     ax2 = fig.add_subplot(2,1,2)
     ax2.hist(ngram.get_frequencies(min_count=2),bins='fd',color='xkcd:red',density=True)
-    ax2.set_title('Frequencies for tuples with two occurences or more')
+    ax2.set_title(f'Frequencies for {ngram.get_description()}s with two occurences or more')
     fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))
     
-    if args.load != None:
-        ngram1 = Ngram.create((Path(args.data) / args.load).with_suffix('.pkl'))
-        for key,value in ngram1.tuples.items():
-            if value > 2:
-                print (ngram.get_ngram(key),value)    
-           
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes

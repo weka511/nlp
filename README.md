@@ -5,11 +5,12 @@ My experiments with Natural Language Processing
 ## Code
 
 File | Description
-------------------|---------------------------------------------------------------
+------------------|------------------------------------------------------------
 bt.py|Explore variability of Bradley-Terry
 cluster.py|Find clusters in word vectors
 corpora.py|Library for reading text from corpora in various formats
-bgrams.py|Exercises from Chapter 3 of Jurafsky and Martin
+ngram.py|Exercise 3.8 from Jurafsky and Martin: build ngram table from corpus
+ngram_generate.py|Exercise 3.10 from Jurafsky and Martin: use ngrams to generate random sequences
 plot.py|Plot learning curves for a single corpus
 rnn.py|[Sean Robertsons's NLP demo: Classifying Names](https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html)
 rnn2.py|[Sean Robertsons's NLP demo: Generating Names with a Character-Level RNN](https://pytorch.org/tutorials/intermediate/char_rnn_generation_tutorial.html)
