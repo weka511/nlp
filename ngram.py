@@ -25,6 +25,7 @@ from pathlib import Path
 from pickle import dump, HIGHEST_PROTOCOL, load
 from time import time
 import numpy as np
+from matplotlib.pyplot import figure,show
 from tokenizer import generate_sentences, generate_text, generate_tokens,Token
 
 class Ngram:
@@ -112,16 +113,34 @@ class Ngram:
         return tuple([self.symbols[i] for i in tokens if i > -1])
     
     def save(self,output_file):
+        '''
+        Save Ngram using pickle.
+        
+        Parameters:
+            output_file
+        '''
         with open(output_file,'wb') as out:
             dump(self, out, HIGHEST_PROTOCOL)
-            print (f'Saved ngrams to {output_file.resolve()}')        
+            print (f'Saved ngrams to {output_file.resolve()}')
+    
+    def get_frequencies(self,min_count=0):
+        counts = []
+        for key,count in self.tuples.items():
+            ngram = self.get_ngram(key)
+            if self.n == len(ngram) and count >= min_count:
+                counts.append(count)
+
+        return counts
         
 def parse_args():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--corpus', default=None, nargs='+', help='Name(s) of corpus file(s)')
     parser.add_argument('--data', default='./data')
     parser.add_argument('-n', '--n',default=3, type=int)
-    parser.add_argument('-', '--output',default=Path(__file__).stem)
+    parser.add_argument('-o', '--output',default=Path(__file__).stem)
+    parser.add_argument('--show', default=False,action='store_true')
+    parser.add_argument('--figs', default='./figs')
+    parser.add_argument('--load',default=None)
     return parser.parse_args()
     
 def main():
@@ -134,15 +153,27 @@ def main():
  
     ngram.save((Path(args.data) / args.output).with_suffix('.pkl'))
     
-    ngram1 = Ngram.create((Path(args.data) / args.output).with_suffix('.pkl'))
-    for key,value in ngram1.tuples.items():
-        if value > 2:
-            print (ngram.get_ngram(key),value)    
+    fig = figure(figsize=(10,10))
+    ax1 = fig.add_subplot(2,1,1)
+    ax1.hist(ngram.get_frequencies(),bins=100,color='xkcd:blue',density=True)
+    ax1.set_title('Frequencies for all tuples')
+    ax2 = fig.add_subplot(2,1,2)
+    ax2.hist(ngram.get_frequencies(min_count=2),bins='fd',color='xkcd:red',density=True)
+    ax2.set_title('Frequencies for tuples with two occurences or more')
+    fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))
+    
+    if args.load != None:
+        ngram1 = Ngram.create((Path(args.data) / args.load).with_suffix('.pkl'))
+        for key,value in ngram1.tuples.items():
+            if value > 2:
+                print (ngram.get_ngram(key),value)    
            
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
     print (f'Elapsed Time {minutes} m {seconds:.2f} s')
+    if args.show:
+        show()
     
 if __name__=='__main__':
     main()
