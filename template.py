@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#   Copyright (C) 2023-2026 Simon Crase
+#   Copyright (C) 2026 Simon Crase
 
 #   This program is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@ import numpy as np
 
 def parse_args():
     parser = ArgumentParser(description=__doc__)
-    args = parser.parse_args()
+    return parser.parse_args()
     
 def main():
     start  = time()
