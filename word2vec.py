@@ -145,10 +145,13 @@ class GradientDescent:
         for index in indices:
             yield idx_pairs[index]
 
-    def train(self, model, epoch, idx_pairs):
+    def step(self, model, epoch, idx_pairs):
+        '''
+        Calculate losses and update weights
+        '''
         loss_val = 0
         n = 0
-        lr = self.lr / (1 + self.decay * epoch)
+        lr = self.lr / (1 + self.decay * epoch)  # FIXME
 
         for word_index, target in self.shuffled(idx_pairs):
             loss_val += model.calculate_loss(word_index, target)
@@ -175,9 +178,12 @@ class StochasticGradient:
         self.alpha = alpha
         self.n = n
 
-    def train(self, model, epoch, idx_pairs):
+    def step(self, model, epoch, idx_pairs):
+        '''
+        Calculate losses and update weights
+        '''        
         loss_val = 0
-        lr = self.lr / (1 + self.decay * epoch)
+        lr = self.lr / (1 + self.decay * epoch)   #FIXME
 
         for i in sample(range(len(idx_pairs)), self.n):
             word_index, target = idx_pairs[i]
@@ -316,7 +322,7 @@ def train(model,
     optimizer = create_optimizer(optimizer_name,lr=lr,decay=decay,shuffle=shuffle,alpha=alpha,n=n)
 
     for epoch in range(num_epochs):
-        mean_loss = optimizer.train(model, epoch, idx_pairs)
+        mean_loss = optimizer.step(model, epoch, idx_pairs)
 
         if epoch % frequency == 0:
             print(f'Mean Loss at Epoch {epoch}: {mean_loss:.2f}. Time/epoch = {(time() - start) / (epoch + 1):.3f} seconds')
@@ -362,8 +368,8 @@ def get_output(output=None, saved=None, corpus=[]):
     '''
     Used to determine output file name
     '''
-    if output != None:
-        return output
+    if output != None: return output
+    
     if saved != None:
         match = compile(r'(\D+)(\d*)').search(saved)
         if match:
@@ -376,30 +382,33 @@ def get_output(output=None, saved=None, corpus=[]):
         return f'{parts[0]}-0'
 
 
-def plot_weights(model,args):
+def plot_weights(model,output):
     '''
     Plot a histogram for weights
+    
+    Parameters:
+        model
+        output
     '''
     fig = figure(figsize=(10, 10))
     ax = fig.add_subplot(1, 1, 1)
     w1, w2 = model.get_weights()
-    ax.hist(w1, 50,
-            density=True,
-            alpha=0.5,
-            label='W1')
-    ax.hist(w2, 50,
-            density=True,
-            alpha=0.5,
-            label='W2')
+    ax.hist(w1,50,density=True,alpha=0.5,label='W1')
+    ax.hist(w2, 50,density=True,alpha=0.5,label='W2')
     ax.legend()
     ax.set_xlabel('W1,W2')
     ax.set_title('Weights')
-    fig.savefig(f'{args.output}-weights')
+    fig.savefig(f'{output}-weights')
 
 
-def plot_losses(Epochs, Losses, args):
+def plot_losses(Epochs, Losses, output):
     '''
     Show the evolution of Loss with time
+    
+    Parameters:
+        Epochs
+        Losses
+        output
     '''
     fig = figure(figsize=(10, 10))
     ax = fig.add_subplot(1, 1, 1)
@@ -408,7 +417,7 @@ def plot_losses(Epochs, Losses, args):
     ax.set_ylabel('Loss')
 
     ax.set_title(f'{args.corpus} -- Embedding dimensions={args.embedding}, momentum={args.alpha},optimizer={args.optimizer}')
-    fig.savefig(args.output)
+    fig.savefig(output)
 
 
 def parse_args():
@@ -471,8 +480,8 @@ def train_model(args):
                            optimizer_name=args.optimizer,
                            n=args.minibatch)
 
-    plot_losses(Epochs, Losses, args)
-    plot_weights(model,args)
+    plot_losses(Epochs, Losses, args.output)
+    plot_weights(model,args.output)
     minimum_loss = float_info.max
     if Losses[-1] < minimum_loss:
         minimum_loss = Losses[-1]
