@@ -27,7 +27,8 @@ from unittest import main, TestCase
 import numpy as np
 from tokenizer import generate_text, generate_sentences, generate_tokens
 
-def count_words(docnames):
+
+def count_words(docnames: [str]):
     '''
     Count all words in a collection of documents
 
@@ -50,7 +51,8 @@ def count_words(docnames):
         dicts.maps.append(count)
     return list(dicts), word_counts
 
-def TfIdf(docnames=[]):
+
+def tf_idf(docnames: [str] = []):
     '''
     Compute tf-idf scores for list of documents. Based on
     Dan Jurafsky & James H. Martin - Speech and Language Processing
@@ -65,63 +67,66 @@ def TfIdf(docnames=[]):
                        n is the number of documents in the corpus
     '''
 
-
     vocabulary, word_counts = count_words(docnames)
     m = len(vocabulary)
     n = len(docnames)
-    tf = np.zeros((m,n))
-    tf_idf = np.zeros((m,n))
+    tf = np.zeros((m, n))
+    tf_idf = np.zeros((m, n))
     idf = np.zeros((m))
 
-    for i,word in enumerate(vocabulary):
+    for i, word in enumerate(vocabulary):
         df = 0
-        for j,wc in enumerate(word_counts):
-            tf[i,j] = np.log(wc[word]+1)
-            if wc[word]>0:
+        for j, wc in enumerate(word_counts):
+            tf[i, j] = np.log(wc[word] + 1)
+            if wc[word] > 0:
                 df += 1
-        idf[i] = np.log(n/df)
-        tf_idf[i,:] = tf[i,:] * idf[i]
+        idf[i] = np.log(n / df)
+        tf_idf[i, :] = tf[i, :] * idf[i]
+        
     selector = np.argwhere(tf_idf.any(axis=1)).flatten()
-    tf_idf_reduced = np.zeros((len(selector),n))
-    for i,k in enumerate(selector):
-        tf_idf_reduced[i,:] =tf_idf[k,:]
-    return [vocabulary[i] for i in selector],tf_idf_reduced
+    tf_idf_reduced = np.zeros((len(selector), n))
+    for i, k in enumerate(selector):
+        tf_idf_reduced[i, :] = tf_idf[k, :]
+    return [vocabulary[i] for i in selector], tf_idf_reduced
+
 
 def create_inner_products(tf_idf):
-    _,n = tf_idf.shape
-    product = np.zeros((n,n))
+    _, n = tf_idf.shape
+    product = np.zeros((n, n))
     for i in range(n):
         for j in range(n):
-            product[i,j] = np.dot(tf_idf[:,i],tf_idf[:,j]) if j >= i else product[j,i]
+            product[i, j] = np.dot(tf_idf[:, i], tf_idf[:, j]) if j >= i else product[j, i]
     return product
+
 
 class TestTfIdf(TestCase):
     '''
     Tests for tfidf
     '''
+
     def test_count_words(self):
         '''
         Verify that vocabulary has the right words, and that the word counts are in the same sequence
         as the file names for the corpus
         '''
-        vocabulary,word_counts = count_words(['data/nano-corpus.txt',
+        vocabulary, word_counts = count_words(['data/nano-corpus.txt',
                                               'data/nano-corpus1.txt'])
-        self.assertIn('earl',vocabulary)
-        self.assertIn('queen',vocabulary)
-        wc_nano_corpus= word_counts[0]
-        self.assertEqual(1,wc_nano_corpus['king'])
-        self.assertEqual(0,wc_nano_corpus['earl'])
-        wc_nano_corpus1= word_counts[1]
-        self.assertEqual(0,wc_nano_corpus1['king'])
-        self.assertEqual(1,wc_nano_corpus1['earl'])
+        self.assertIn('earl', vocabulary)
+        self.assertIn('queen', vocabulary)
+        wc_nano_corpus = word_counts[0]
+        self.assertEqual(1, wc_nano_corpus['king'])
+        self.assertEqual(0, wc_nano_corpus['earl'])
+        wc_nano_corpus1 = word_counts[1]
+        self.assertEqual(0, wc_nano_corpus1['king'])
+        self.assertEqual(1, wc_nano_corpus1['earl'])
 
     def test_TfIdf(self):
-        vocabulary,tf_idf=TfIdf(docnames = [
+        vocabulary, _ = tf_idf(docnames=[
             'data/nano-corpus.txt',
             'data/nano-corpus1.txt'
         ])
-        self.assertEqual(5,len(vocabulary))
-        self.assertIn('countess',vocabulary)
-        
-if __name__=='__main__':
+        self.assertEqual(5, len(vocabulary))
+        self.assertIn('countess', vocabulary)
+
+if __name__ == '__main__':
     main()

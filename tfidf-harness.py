@@ -19,24 +19,25 @@ from argparse import ArgumentParser
 from glob import glob
 from time import time
 import numpy as np
-from tfidf import TfIdf, create_inner_products
+from tfidf import tf_idf, create_inner_products
 
 def main():
     start  = time()
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('docnames', nargs='+', help='A list of documents to be processed')
-    parser.add_argument('--log', action='store_true', default=False)
+    parser.add_argument('--log', action='store_true', default=False,help='Record results')
     args = parser.parse_args()
     docnames = [doc for pattern in args.docnames for doc in glob(pattern)]
     print (docnames)
-    words,tf_idf = TfIdf(docnames=docnames)
-    tf_idf = tf_idf/np.linalg.norm(tf_idf,axis=0,keepdims=True)
+    words,tf_idf_score = tf_idf(docnames=docnames)
+    tf_idf_score /= np.linalg.norm(tf_idf_score,axis=0,keepdims=True)
     if args.log:
         for i,word in enumerate(words):
-            if np.any(tf_idf[i,:]>0):
-                print (word, tf_idf[i,:])
-    D =  create_inner_products(tf_idf)
-    print(D)
+            if np.any(tf_idf_score[i,:]>0):
+                print (word, tf_idf_score[i,:])
+    
+    print(create_inner_products(tf_idf_score))
+    
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
