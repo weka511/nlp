@@ -31,17 +31,38 @@ def parse_args():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('ngrams')
     parser.add_argument('--data', default='./data')
+    parser.add_argument('--seed',default=None,type=int)
+    parser.add_argument('--m',default=25,type=int)
+    parser.add_argument('--N',default=25,type=int)
+    parser.add_argument('--epsilon',default=1,type=float)
     return parser.parse_args()
+
+def create_sentence(ngrams,m=25,rng = np.random.default_rng(),epsilon=1):
+    '''
+    Create one sentence using ngram table
     
+    Parameters:
+        ngrams    Statistics for ngrams
+        m         Maximum lenght of each sentence
+        rng       Random number generator
+    '''
+    prefix = [-1] * (ngrams.n - 1)
+    sentence = []
+    for i in range(m):
+        P = ngrams.get_probabilities(prefix=tuple(prefix),epsilon=epsilon)
+        next_token = rng.choice(len(P),p=P)
+        prefix = prefix[1:] + [next_token]
+        sentence.append(ngrams.get_word(next_token))
+    return ' '.join(sentence)
+
 def main():
     start  = time()
     args = parse_args()
- 
+    rng = np.random.default_rng(seed=args.seed)
     ngrams = Ngram.create((Path(args.data) / args.ngrams).with_suffix('.pkl'))
-    for key,value in ngrams.tuples.items():
-        if value > 2:
-            print (ngrams.get_ngram(key),value)    
-                
+    for i in range(args.N):
+        print (create_sentence(ngrams,m=args.m,rng=rng,epsilon=args.epsilon))
+               
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
