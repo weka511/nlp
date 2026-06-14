@@ -23,6 +23,7 @@
 
 from argparse import ArgumentParser
 from pathlib import Path
+from sys import float_info
 from time import time
 import numpy as np
 from ngram import Ngram
@@ -34,10 +35,10 @@ def parse_args():
     parser.add_argument('--seed',default=None,type=int)
     parser.add_argument('--m',default=25,type=int)
     parser.add_argument('--N',default=25,type=int)
-    parser.add_argument('--epsilon',default=1,type=float)
+    parser.add_argument('--epsilon',default=float_info.min,type=float)
     return parser.parse_args()
 
-def create_sentence(ngrams,m=25,rng = np.random.default_rng(),epsilon=1):
+def create_sentence(ngrams,m=25,rng = np.random.default_rng(),epsilon=float_info.min):
     '''
     Create one sentence using ngram table
     
@@ -51,6 +52,7 @@ def create_sentence(ngrams,m=25,rng = np.random.default_rng(),epsilon=1):
     for i in range(m):
         P = ngrams.get_probabilities(prefix=tuple(prefix),epsilon=epsilon)
         next_token = rng.choice(len(P),p=P)
+        if next_token == -1: break
         prefix = prefix[1:] + [next_token]
         sentence.append(ngrams.get_word(next_token))
     return ' '.join(sentence)

@@ -27,9 +27,11 @@ from io import BytesIO
 from os.path import join
 from pathlib import Path
 from pickle import dump, HIGHEST_PROTOCOL, load
+from sys import float_info
 from time import time
 import numpy as np
 from matplotlib.pyplot import figure,show
+from matplotlib import rc
 from tokenizer import generate_sentences, generate_text, generate_tokens,Token
 
 class Ngram:
@@ -47,6 +49,9 @@ class Ngram:
     def create(file_name):
         '''
         A factory method to instantiate an Ngram from a saved file
+        
+        Parameters:
+            file_name    Name of file where ngrams have been stored
         '''
         with open(file_name, 'rb') as inp:
             product = load(inp) 
@@ -54,6 +59,10 @@ class Ngram:
             return product
                     
     def __init__(self,n):
+        '''
+        Parameters:
+            n       Length of n-grams
+        '''
         self.n = n
         self.vocabulary = {}
         self.tuples = {}
@@ -64,7 +73,7 @@ class Ngram:
         Build ngrams using a generator for sentences
         
         Parameters:
-            sentence_generator
+            sentence_generator    Used to iterate through sentences in corpus
         '''
         for sentence in sentence_generator:
             self._add_sentence(sentence)
@@ -109,20 +118,22 @@ class Ngram:
             case _:
                 return f'{self.n}-gram'
             
-    def get_probabilities(self,prefix=(-1,-1),epsilon=1):
+    def get_probabilities(self,prefix=(-1,-1),epsilon=float_info.min):
         '''
         Determine probabilities of each token given the prefix
         
         Parameters:
-            prefix
-            epsilon
+            prefix    A tuple that is one shorter than our ngrams. We will
+                      calculate the proabailities for all ngrams that start
+                      with prefix.
+            epsilon   An amount that will be added to all counts for smoothing
         '''
         P = np.full((len(self.vocabulary)),epsilon,dtype=float)
         for ngram,count in self.tuples.items():
             if ngram[:-1] == prefix:
                 token = ngram[-1]
                 P[token] += count
- 
+
         return P/P.sum()
     
     def get_word(self,token):
@@ -130,7 +141,7 @@ class Ngram:
         Look up the word that corresponds to a token
         
         Parameters:
-            token
+            token      An index into symbol table
         '''
         return self.symbols[token]
     
@@ -187,7 +198,7 @@ class Ngram:
         Convert a tuple of tokens to display form
         
         Parameters:
-            tokens
+            tokens   Tuple to be converted
         '''
         return tuple([self.symbols[i] for i in tokens if i > -1])            
         
@@ -200,17 +211,36 @@ def parse_args():
     parser.add_argument('--show', default=False,action='store_true')
     parser.add_argument('--figs', default='./figs')
     return parser.parse_args()
+
+def plot_P(ngram,prefix=(0,1),ax=None,epsilon=float_info.min):
+    '''
+    Plot probabilities for specified prefix
+    '''
+    P = np.log(ngram.get_probabilities(prefix=(0,1),epsilon=epsilon))
+    ax.hist(P,bins=np.linspace(-4,-2,num=100),density=True)
+    ax.set_title(f'prefix={prefix}, ' + r'$\epsilon$' + f'={epsilon:.3e}')
+    ax.set_xlabel(r'$\log(P)$')
     
 def main():
+    rc('font', **{'family': 'serif',
+                  'serif': ['Palatino'],
+                  'size': 8})
+    rc('text', usetex=True)
+
     start  = time()
     args = parse_args()
     ngram = Ngram(args.n)
-    file_names = [globbed for name in args.corpus for globbed in glob(join(args.data, name))]
-    ngram.build(generate_sentences(generate_tokens(generate_text(file_names=file_names))))
-
+    ngram.build(
+        generate_sentences(
+            generate_tokens(
+                generate_text(
+                    file_names=[globbed for name in args.corpus for globbed in glob(join(args.data, name))]))))
+    
     ngram.save((Path(args.data) / args.output).with_suffix('.pkl'))
     
     fig = figure(figsize=(10,10))
+    fig.suptitle(f'Generating {args.n}-grams from {" ".join(args.corpus)}')
+    
     ax1 = fig.add_subplot(2,2,1)
     ax1.hist(ngram.get_frequencies(),bins='sqrt',color='xkcd:blue',density=True)
     ax1.set_title(f'Frequencies for all {ngram.get_description()}s')
@@ -219,14 +249,17 @@ def main():
     ax2.hist(ngram.get_frequencies(min_count=2),bins='fd',color='xkcd:red',density=True)
     ax2.set_title(f'Frequencies for {ngram.get_description()}s with two occurences or more')
     
-    ax3 = fig.add_subplot(2,2,3)
-    ax3.hist(ngram.get_probabilities(prefix=(0,1)),bins='fd')
+    plot_P(ngram,prefix=(0,1),ax = fig.add_subplot(2,2,3))
+    plot_P(ngram,prefix=(-1,-1),ax = fig.add_subplot(2,2,4))
+    
+    fig.tight_layout(h_pad=2)
     fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))
     
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
     print (f'Elapsed Time {minutes} m {seconds:.2f} s')
+    
     if args.show:
         show()
     
