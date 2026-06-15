@@ -94,15 +94,11 @@ class Ngram:
         Determine frequencies of ngrams
         
         Parameters:
-            min_count
+            min_count  Include only ngrams whose count is at least this value
         '''
-        counts = []
-        for key,count in self.tuples.items():
-            ngram = self._get_ngram(key)
-            if self.n == len(ngram) and count >= min_count:
-                counts.append(count)
-
-        return counts
+        return [count 
+                for key,count in self.tuples.items() 
+                if self.n == len(self._get_ngram(key)) and count >= min_count ]
     
     def get_description(self):
         '''
@@ -234,7 +230,8 @@ def main():
         generate_sentences(
             generate_tokens(
                 generate_text(
-                    file_names=[globbed for name in args.corpus for globbed in glob(join(args.data, name))]))))
+                    file_names=[globbed for name in args.corpus for globbed in glob(join(args.data, name))]
+                ))))
     
     ngram.save((Path(args.data) / args.output).with_suffix('.pkl'))
     
