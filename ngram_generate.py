@@ -28,6 +28,37 @@ from time import time
 import numpy as np
 from ngram import Ngram
 
+class SentenceFactory:
+    '''
+    This class creates sentences from the ngram table
+    '''
+    def __init__(self,ngrams,m=25,rng = np.random.default_rng(),epsilon=float_info.min):
+        self.ngrams = ngrams
+        self.m = m
+        self.rng = rng
+        self.epsilon = epsilon
+        self.n = ngrams.n
+    
+    def create(self):
+        '''
+        Create one sentence using ngram table
+        
+        Parameters:
+            ngrams    Statistics for ngrams
+            m         Maximum length of each sentence
+            rng       Random number generator
+            epsilon   Used to avoid zero probabilities
+        '''
+        prefix = [-1] * (self.n - 1)
+        sentence = []
+        for i in range(self.m):
+            P = self.ngrams.get_probabilities(prefix=tuple(prefix),epsilon=self.epsilon)
+            next_token = self.rng.choice(len(P),p=P)
+            if next_token == -1: break
+            prefix = prefix[1:] + [next_token]
+            sentence.append(self.ngrams.get_word(next_token))
+        return ' '.join(sentence)
+
 def parse_args():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('ngrams')
@@ -37,34 +68,15 @@ def parse_args():
     parser.add_argument('--N',default=25,type=int,help='Number of sentences to generate')
     parser.add_argument('--epsilon',default=float_info.min,type=float,help='Used to avoid zero probabilities')
     return parser.parse_args()
-
-def create_sentence(ngrams,m=25,rng = np.random.default_rng(),epsilon=float_info.min):
-    '''
-    Create one sentence using ngram table
     
-    Parameters:
-        ngrams    Statistics for ngrams
-        m         Maximum length of each sentence
-        rng       Random number generator
-        epsilon   Used to avoid zero probabilities
-    '''
-    prefix = [-1] * (ngrams.n - 1)
-    sentence = []
-    for i in range(m):
-        P = ngrams.get_probabilities(prefix=tuple(prefix),epsilon=epsilon)
-        next_token = rng.choice(len(P),p=P)
-        if next_token == -1: break
-        prefix = prefix[1:] + [next_token]
-        sentence.append(ngrams.get_word(next_token))
-    return ' '.join(sentence)
-
 def main():
     start  = time()
     args = parse_args()
     rng = np.random.default_rng(seed=args.seed)
     ngrams = Ngram.create((Path(args.data) / args.ngrams).with_suffix('.pkl'))
+    sentence = SentenceFactory(ngrams,m=args.m,rng=rng,epsilon=args.epsilon)
     for i in range(args.N):
-        print (create_sentence(ngrams,m=args.m,rng=rng,epsilon=args.epsilon))
+        print (sentence.create())
                
     elapsed = time() - start
     minutes = int(elapsed/60)
