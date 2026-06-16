@@ -31,11 +31,11 @@ from ngram import Ngram
 def parse_args():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('ngrams')
-    parser.add_argument('--data', default='./data')
-    parser.add_argument('--seed',default=None,type=int)
-    parser.add_argument('--m',default=25,type=int)
-    parser.add_argument('--N',default=25,type=int)
-    parser.add_argument('--epsilon',default=float_info.min,type=float)
+    parser.add_argument('--data', default='./data',help='Path to corpus')
+    parser.add_argument('--seed',default=None,type=int,help='Used to make random number generator reproducible')
+    parser.add_argument('--m',default=25,type=int,help='Maximum length of each sentence')
+    parser.add_argument('--N',default=25,type=int,help='Number of sentences to generate')
+    parser.add_argument('--epsilon',default=float_info.min,type=float,help='Used to avoid zero probabilities')
     return parser.parse_args()
 
 def create_sentence(ngrams,m=25,rng = np.random.default_rng(),epsilon=float_info.min):
@@ -44,8 +44,9 @@ def create_sentence(ngrams,m=25,rng = np.random.default_rng(),epsilon=float_info
     
     Parameters:
         ngrams    Statistics for ngrams
-        m         Maximum lenght of each sentence
+        m         Maximum length of each sentence
         rng       Random number generator
+        epsilon   Used to avoid zero probabilities
     '''
     prefix = [-1] * (ngrams.n - 1)
     sentence = []
