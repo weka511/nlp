@@ -62,7 +62,7 @@ class SentenceFactory:
 def parse_args():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('ngrams')
-    parser.add_argument('--data', default='./data',help='Path to corpus')
+    parser.add_argument('--data', default='./data',help='Path to ngram data')
     parser.add_argument('--seed',default=None,type=int,help='Used to make random number generator reproducible')
     parser.add_argument('--m',default=25,type=int,help='Maximum length of each sentence')
     parser.add_argument('--N',default=25,type=int,help='Number of sentences to generate')

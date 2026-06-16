@@ -226,11 +226,11 @@ class Ngram:
 def parse_args():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--corpus', default=None, nargs='+', help='Name(s) of corpus file(s)')
-    parser.add_argument('--data', default='./data')
-    parser.add_argument('-n', '--n',default=3, type=int)
-    parser.add_argument('-o', '--output',default=Path(__file__).stem)
-    parser.add_argument('--show', default=False,action='store_true')
-    parser.add_argument('--figs', default='./figs')
+    parser.add_argument('--data', default='./data',help='Path to corpus; also used to store ngrams')
+    parser.add_argument('-n', '--n',default=3, type=int,help='Lenghth of ngrams')
+    parser.add_argument('-o', '--output',default=Path(__file__).stem,help='File name for storing ngrams')
+    parser.add_argument('--show', default=False,action='store_true',help='Controls whether plots are shown')
+    parser.add_argument('--figs', default='./figs',help='Path used to store plots')
     return parser.parse_args()
 
     
