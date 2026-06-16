@@ -32,6 +32,7 @@ from time import time
 import numpy as np
 from matplotlib.pyplot import figure,show
 from matplotlib import rc
+import matplotlib.patches as mpatches
 from tokenizer import generate_sentences, generate_text, generate_tokens,Token
 
 class Ngram:
@@ -40,11 +41,11 @@ class Ngram:
     
     Attributes:
         n            Length of n-grams
-        vocabulary   Maps text string to tokens
+        token        Maps text strings to tokens
         symbols      Maps tokens to text strings
         tuples       Counts for tuples
     '''
-    
+
     @staticmethod
     def create(file_name):
         '''
@@ -64,7 +65,7 @@ class Ngram:
             n       Length of n-grams
         '''
         self.n = n
-        self.vocabulary = {}
+        self.token = {}
         self.tuples = {}
         self.symbols = []
         
@@ -120,11 +121,11 @@ class Ngram:
         
         Parameters:
             prefix    A tuple that is one shorter than our ngrams. We will
-                      calculate the proabailities for all ngrams that start
-                      with prefix.
+                      calculate the probabilities for all ngrams that start
+                      with this prefix.
             epsilon   An amount that will be added to all counts for smoothing
         '''
-        P = np.full((len(self.vocabulary)),epsilon,dtype=float)
+        P = np.full((len(self.token)),epsilon,dtype=float)
         for ngram,count in self.tuples.items():
             if ngram[:-1] == prefix:
                 token = ngram[-1]
@@ -140,6 +141,30 @@ class Ngram:
             token      An index into symbol table
         '''
         return self.symbols[token]
+    
+    def get_branching_factors(self):
+        '''
+        Calculate branching factors
+        
+        Returns:
+            Branching factors
+            Word with counts, in descending order by count
+        '''
+        m = len(self.token)
+        pairs = np.zeros((m,m),dtype=int)
+        for ngram,count in self.tuples.items():
+            for i in range(self.n-1):
+                if ngram[i] != -1 and ngram[i+1] != -1:
+                    pairs[ngram[i],ngram[i+1]] = 1
+        branching_factors = pairs.sum(axis=1)
+        
+        indices = np.argsort(branching_factors)[::-1]
+        words_with_counts = []
+        for i in range(m):
+            token = indices[i]
+            words_with_counts.append((self.get_word(token),branching_factors[token]))
+            
+        return branching_factors,words_with_counts             
     
     def _add_sentence(self,sentence):
         '''
@@ -183,11 +208,11 @@ class Ngram:
             word     A string of characters comprising a single wird
         '''
         try:
-            return self.vocabulary[word]
+            return self.token[word]
         except KeyError:
-            self.vocabulary[word] = len(self.symbols)
+            self.token[word] = len(self.symbols)
             self.symbols.append(word)
-            return self.vocabulary[word]
+            return self.token[word]
 
     def _get_ngram(self,tokens):
         '''
@@ -208,14 +233,6 @@ def parse_args():
     parser.add_argument('--figs', default='./figs')
     return parser.parse_args()
 
-def plot_P(ngram,prefix=(0,1),ax=None,epsilon=float_info.min):
-    '''
-    Plot probabilities for specified prefix
-    '''
-    P = np.log(ngram.get_probabilities(prefix=(0,1),epsilon=epsilon))
-    ax.hist(P,bins=np.linspace(-4,-2,num=100),density=True)
-    ax.set_title(f'prefix={prefix}, ' + r'$\epsilon$' + f'={epsilon:.3e}')
-    ax.set_xlabel(r'$\log(P)$')
     
 def main():
     rc('font', **{'family': 'serif',
@@ -243,11 +260,23 @@ def main():
     ax1.set_title(f'Frequencies for all {ngram.get_description()}s')
     
     ax2 = fig.add_subplot(2,2,2)
-    ax2.hist(ngram.get_frequencies(min_count=2),bins='fd',color='xkcd:red',density=True)
+    ax2.hist(ngram.get_frequencies(min_count=2),bins='fd',color='xkcd:blue',density=True)
     ax2.set_title(f'Frequencies for {ngram.get_description()}s with two occurences or more')
     
-    plot_P(ngram,prefix=(0,1),ax = fig.add_subplot(2,2,3))
-    plot_P(ngram,prefix=(-1,-1),ax = fig.add_subplot(2,2,4))
+    ax3 = fig.add_subplot(2,2,3)
+    branching_factors,tokens_with_counts = ngram.get_branching_factors()
+    ax3.plot(branching_factors,color='xkcd:blue')
+    ax3.set_title(f'Branching Factors: mean={np.mean(branching_factors):.1f}')
+    ax3.set_xlabel('Token')
+    ax3.set_ylabel('Branching Factor')
+    legend_texts = []
+    m = 15
+    for i in range(m):
+        word,count = tokens_with_counts[i]
+        legend_texts.append(f'{word} {count}')
+    blank_handles = [mpatches.Patch(color='none') for _ in legend_texts]
+    ax3.legend(blank_handles, legend_texts, 
+               title=f'Top {m} words',handlelength=0, handletextpad=0)
     
     fig.tight_layout(h_pad=2)
     fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))
