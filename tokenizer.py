@@ -18,6 +18,7 @@
 '''A library for extract tokens from a text'''
 
 from re import split
+from unittest import TestCase,main
 
 class Token:
     Apostrophe = "'"
@@ -45,7 +46,7 @@ def consolidate_apostrophes(tokens : [str]):
         [..."we", "'", "ve"...] -> [..."we've"...]
         
     Parameters:
-        tokens    A list of words and punctutaion symbols
+        tokens    A list of words and punctuation symbols
     '''
     if len(tokens) == 0: return
     
@@ -59,7 +60,7 @@ def consolidate_apostrophes(tokens : [str]):
                 i += 1   # point beyond part following the apostrophe
                 try:
                     word = tokens[i]
-                except IndexError:
+                except IndexError:     # Handle case where apostrophized word is the last token
                     return
                 i += 1
             else:
@@ -86,25 +87,45 @@ def generate_tokens(text: [str]):
             yield token.lower()
 
 
-def generate_sentences(Tokens : [str]):
+def generate_sentences(tokens : [str]):
     '''
     Split list of tokens into list of lists
     
     Parameters:
-        Tokens
+        tokens   This list that will be split
     '''
     sentence = []
-    for token in Tokens:
+    for token in tokens:
         if token == Token.Period:
             yield sentence
             sentence = []
         else:
             sentence.append(token)
 
-def main():
-    #for t in generate_tokens(["Buccleuch, but the actual founder of my line was my grandfather's",'']):
-        #print (t)   
-    for t in generate_tokens(["The valley of ashes is bounded on one side by a small foul river, and, when the drawbridge is up to let barges through, the passengers on waiting trains can stare at the dismal scene for as long as half an hour. There is always a halt there of at least a minute, and it was because of this that I first met Tom Buchanan’s mistress."]):
-        print (t)
+class TestApostropheTest(TestCase):
+    def test1(self):
+        '''
+        Test for Issue #45
+        '''
+        tokens = list(generate_tokens([
+            "Buccleuch, but the actual founder of my line was my grandfather's"
+        ]))
+        self.assertEqual(12,len(tokens))
+        self.assertEqual("grandfather's",tokens[-1])
+        self.assertEqual("buccleuch",tokens[0])
+     
+    def test2(self):
+        '''
+        Test for Issue #45
+        '''        
+        tokens = list(generate_tokens([
+            "The valley of ashes is bounded on one side by a small foul river, and,"
+            " when the drawbridge is up to let barges through, the passengers"
+            " on waiting trains can stare at the dismal scene for as long as half an hour."
+            " There is always a halt there of at least a minute, and it was because"
+            " of this that I first met Tom Buchanan’s mistress."
+        ]))
+        self.assertEqual("buchanan's",tokens[-3])
+        
 if __name__ == '__main__':
     main()
