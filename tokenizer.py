@@ -22,6 +22,7 @@ from re import split
 class Token:
     Apostrophe = "'"
     Period = '.'
+    Apostrophe2 = '’'  #FIXME - Issue #45
     
 def generate_text(file_names : [str] = []):
     '''
@@ -51,12 +52,15 @@ def consolidate_apostrophes(tokens : [str]):
     word = tokens[0]
     i = 1
     while i < len(tokens):
-        if tokens[i] == Token.Apostrophe:
+        if tokens[i] == Token.Apostrophe or tokens[i] == Token.Apostrophe2:
             i += 1     # point beyond apostrophe
-            if i < len(tokens) - 1:
+            if i < len(tokens):
                 yield f'{word}{Token.Apostrophe}{tokens[i]}'
                 i += 1   # point beyond part following the apostrophe
-                word = tokens[i]
+                try:
+                    word = tokens[i]
+                except IndexError:
+                    return
                 i += 1
             else:
                 yield  f'{word}{Token.Apostrophe}'
@@ -77,6 +81,8 @@ def generate_tokens(text: [str]):
     for line in text:
         Tokens = [token.strip() for token in split(r'(\W+)', line.strip()) if len(token.replace(' ', '')) != 0]
         for token in consolidate_apostrophes(Tokens):
+            if token == 's':
+                print (line)
             yield token.lower()
 
 
@@ -96,8 +102,9 @@ def generate_sentences(Tokens : [str]):
             sentence.append(token)
 
 def main():
-    for sentence in generate_sentences(generate_tokens(generate_text(file_names=['data/gatsby1.txt']))):
-        print(sentence)
-
+    #for t in generate_tokens(["Buccleuch, but the actual founder of my line was my grandfather's",'']):
+        #print (t)   
+    for t in generate_tokens(["The valley of ashes is bounded on one side by a small foul river, and, when the drawbridge is up to let barges through, the passengers on waiting trains can stare at the dismal scene for as long as half an hour. There is always a halt there of at least a minute, and it was because of this that I first met Tom Buchanan’s mistress."]):
+        print (t)
 if __name__ == '__main__':
     main()
