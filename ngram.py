@@ -252,7 +252,7 @@ def main():
     
     ngram.save((Path(args.data) / args.output).with_suffix('.pkl'))
     
-    fig = figure(figsize=(10,10))
+    fig = figure(figsize=(12,12))
     fig.suptitle(f'Generating {args.n}-grams from {" ".join(args.corpus)}')
     
     ax1 = fig.add_subplot(2,2,1)
@@ -270,13 +270,13 @@ def main():
     ax3.set_xlabel('Token')
     ax3.set_ylabel('Branching Factor')
     legend_texts = []
-    m = 15
+    m = 60
     for i in range(m):
         word,count = tokens_with_counts[i]
         legend_texts.append(f'{word} {count}')
     blank_handles = [mpatches.Patch(color='none') for _ in legend_texts]
     ax3.legend(blank_handles, legend_texts, 
-               title=f'Top {m} words',handlelength=0, handletextpad=0)
+               title=f'Top {m} words',handlelength=0, handletextpad=0,ncols=4)
     
     fig.tight_layout(h_pad=2)
     fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))
