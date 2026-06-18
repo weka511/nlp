@@ -33,8 +33,10 @@ import numpy as np
 from matplotlib.pyplot import figure,show
 from matplotlib import rc
 import matplotlib.patches as mpatches
-from tokenizer import generate_sentences, generate_text, generate_tokens,Token
-
+from tokenizer import generate_sentences,generate_text,generate_tokens,Token
+from vocabulary import Vocabulary
+  
+    
 class Ngram:
     '''
     This class represents a collection of n-grams
@@ -65,9 +67,8 @@ class Ngram:
             n       Length of n-grams
         '''
         self.n = n
-        self.token = {}
+        self.vocabulary = Vocabulary()
         self.tuples = {}
-        self.symbols = []
         
     def build(self,sentence_generator):
         '''
@@ -125,7 +126,7 @@ class Ngram:
                       with this prefix.
             epsilon   An amount that will be added to all counts for smoothing
         '''
-        P = np.full((len(self.token)),epsilon,dtype=float)
+        P = np.full((len(self.vocabulary.token)),epsilon,dtype=float)
         for ngram,count in self.tuples.items():
             if ngram[:-1] == prefix:
                 token = ngram[-1]
@@ -139,9 +140,9 @@ class Ngram:
         
         Parameters:
             token      An index into symbol table
-        '''
-        return self.symbols[token]
-    
+        '''        
+        return self.vocabulary.symbols[token]
+
     def get_branching_factors(self):
         '''
         Calculate branching factors
@@ -150,7 +151,7 @@ class Ngram:
             Branching factors
             Word with counts, in descending order by count
         '''
-        m = len(self.token)
+        m = len(self.vocabulary.token)
         pairs = np.zeros((m,m),dtype=int)
         for ngram,count in self.tuples.items():
             for i in range(self.n-1):
@@ -198,7 +199,7 @@ class Ngram:
         Parameters:
             s       The string to be tested
         '''
-        return s.replace(Token.Apostrophe,'').isalpha()
+        return s.replace(Token.Apostrophe,'').replace(Token.Apostrophe2,'').isalpha()
     
     def _tokenize(self,word):
         '''
@@ -206,13 +207,8 @@ class Ngram:
         
         Parameters:
             word     A string of characters comprising a single wird
-        '''
-        try:
-            return self.token[word]
-        except KeyError:
-            self.token[word] = len(self.symbols)
-            self.symbols.append(word)
-            return self.token[word]
+        '''        
+        return self.vocabulary.tokenize(word)
 
     def _get_ngram(self,tokens):
         '''
@@ -221,7 +217,7 @@ class Ngram:
         Parameters:
             tokens   Tuple to be converted
         '''
-        return tuple([self.symbols[i] for i in tokens if i > -1])            
+        return tuple([self.vocabulary.symbols[i] for i in tokens if i > -1])            
         
 def parse_args():
     parser = ArgumentParser(description=__doc__)
