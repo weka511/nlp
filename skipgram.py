@@ -27,127 +27,7 @@ from unittest import main, TestCase, skip
 import numpy as np
 from numpy.random import default_rng
 from numpy.testing import assert_array_equal, assert_array_less
-
-class Vocabulary:
-    '''
-    This class is responsible for the custody of words from a corpus.
-    '''
-    def __init__(self):
-        self.indices = dict()
-        self.counter = Counter()
-
-    def __len__(self):
-        '''
-        Get number of words in vocabulary
-        '''
-        return len(self.indices)
-
-    def parse(self,text,verbose=False):
-        '''
-        Parse a text into a list of indices of tokens
-        '''
-        def is_word(word):
-            if word.isalpha(): return True
-            if len(word) > 2 and "'" in word:  # not the apostrophe from keyboard: pasted from text
-                return True
-            return False
-
-        Result = np.zeros(len(text),dtype=np.int64)
-        i = 0
-        for word in text:
-            if is_word(word):
-                if not word in self.indices:
-                    self.indices[word] = len(self.indices)
-                Result[i] = self.indices[word]
-                self.counter.update([Result[i]])
-                i += 1
-            else:
-                if verbose:
-                    print(f'Skipping {word}')
-        return Result
-
-    def add(self,word):
-        '''
-        Add word to vocabulary. Caller is responsible for verifying that word is valid for language.
-        '''
-        if not word in self.indices:
-            self.indices[word] = len(self.indices)
-        self.counter.update([self.indices[word]])
-
-    def get_count(self,token):
-        '''
-        Determine the number of time a token appears in text
-
-        Parameters:
-            token      The word whose count we want
-        '''
-        return self.counter[token]
-
-    def items(self):
-        '''
-        Iterate through all words in vocabulary, and also give the corresponding frequency for each word
-        '''
-        class Items:
-            '''
-            Used to iterate through all words in vocabulary, and also give the corresponding frequency for each word
-            '''
-            def __init__(self,vocabulary):
-                self.index = -1
-                self.vocabulary = vocabulary
-
-            def __iter__(self):
-                '''
-                Return the iterator object itself
-                '''
-                return self
-
-            def __next__(self):
-                '''Return the next item from the iterator. '''
-                self.index += 1
-                if self.index < len(self.vocabulary.counter):
-                    return self.index,self.vocabulary.counter[self.index]
-                else:
-                    raise StopIteration
-
-        return Items(self)
-
-    def load(self,name):
-        '''
-        Initialize vocabulary from stored data
-        '''
-        with np.load(name,allow_pickle=True) as data:
-            self.indices = data['indices'].item()
-            self.counter = data['counter'].item()
-        print (f'Loaded {name}')
-
-
-    def save(self,name,docnames=[]):
-        '''
-        Save vocabulary in an external file
-        '''
-        np.savez(name,indices=self.indices,counter=self.counter,docnames=docnames)
-
-    def create_index(self):
-        '''
-        Create companion to Vocabulary: used to find word given index
-        '''
-        class Index2Word:
-            def __init__(self,vocabulary):
-                self.words = [word for word,_ in sorted([(word,position) for word,position in vocabulary.indices.items()],key=lambda tup: tup[1])]
-
-            def __getitem__(self, key):
-                '''
-                Find word given index
-
-                Parameters:
-                    key    Index number of word from Vocabulary
-
-                Returns:
-                    word corresponding to index
-                '''
-                return self.words[key]
-
-        return Index2Word(self)
+from vocabulary import Vocabulary
 
 class Tower:
     '''
@@ -186,8 +66,8 @@ class ExampleBuilder:
             vocabulary
             alpha      Exponent used in  equation (6.32) of Jurafsky & Martin
         '''
-        Z = sum(count**alpha for _,count in vocabulary.items())
-        return {item : count**alpha / Z for item,count in vocabulary.items()}
+        Z = sum(count**alpha for _,count in vocabulary.generate_counts())
+        return {item : count**alpha / Z for item,count in vocabulary.generate_counts()}
 
     def __init__(self, width=2, k=2):
         self.width = width
@@ -607,6 +487,7 @@ class StochasticGradientDescent(Optimizer):
 
 if __name__=='__main__':
     class TestVocabulary(TestCase):
+
         def test_parse(self):
             vocabulary = Vocabulary()
             assert_array_equal(np.array([0,1,2,3,4,5,0,6,7,8,9,0,2,10]),
@@ -619,7 +500,7 @@ if __name__=='__main__':
     class TestTower(TestCase):
         def uniform(self):
             return self.sample
-
+ 
         def test_tower(self):
             vocabulary = Vocabulary()
             vocabulary.parse(['the', 'quick', 'brown','fox', 'jumps', 'over', 'the', 'lazy', 'dog',
@@ -644,14 +525,20 @@ if __name__=='__main__':
 
 
     class TestSkipGram(TestCase):
+        #@skip('FIXME')
         def test_normalize(self):
             '''
             Verify that probabilities of vocabulary items satisfy equations (6.32,6.33) of Jurafsky & Martin
             '''
-            probabilities = {'a':0.99, 'b':0.01}
-            normalized_vocabulary = ExampleBuilder.normalize(probabilities)
-            self.assertAlmostEqual(0.97,normalized_vocabulary['a'],places=2)
-            self.assertAlmostEqual(0.03,normalized_vocabulary['b'],places=2)
+            vocabulary = Vocabulary()
+            for _ in range(99):
+                vocabulary.tokenize('a')
+            vocabulary.tokenize('b')
+            self.assertEqual(99,vocabulary.get_count(0)) 
+            self.assertEqual(1,vocabulary.get_count(1))   
+            normalized_vocabulary = ExampleBuilder.normalize(vocabulary)
+            self.assertAlmostEqual(0.97,normalized_vocabulary[0],places=2)
+            self.assertAlmostEqual(0.03,normalized_vocabulary[1],places=2)
 
         def test_generate_examples(self):
             '''

@@ -16,6 +16,7 @@
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from unittest import main, TestCase, skip
+import numpy as np
 
 class Vocabulary:
     '''
@@ -25,6 +26,12 @@ class Vocabulary:
         self.symbols = []
         self.token = {}
         self.counts = []
+        
+    def __len__(self):
+        '''
+        Get number of words in vocabulary
+        '''
+        return len(self.symbols)    
         
     def tokenize(self,word):
         '''
@@ -60,8 +67,29 @@ class Vocabulary:
             token      The word whose count we want
         '''
         return self.counts[token]
+    
+    def generate_counts(self):
+        for token,count in enumerate(self.counts):
+            yield token,count
 
  
+    def parse(self,text,verbose=False):
+        '''
+        Parse a text into a list of indices of tokens
+        '''
+        def is_word(word):
+            if word.isalpha(): return True
+            if len(word) > 2 and "'" in word:  # not the apostrophe from keyboard: pasted from text
+                return True
+            return False
+
+        Result = np.zeros(len(text),dtype=np.int64)
+        i = 0
+        for word in text:
+            Result[i] = self.tokenize(word)
+            i += 1
+    
+        return Result
     
 class TestVocabulary(TestCase):
     def setUp(self):
