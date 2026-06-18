@@ -27,6 +27,7 @@ from sys import float_info
 from time import time
 import numpy as np
 from ngram import Ngram
+from vocabulary import Vocabulary
 
 class SentenceFactory:
     '''
