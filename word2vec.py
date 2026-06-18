@@ -401,7 +401,7 @@ def plot_weights(model,output):
     fig.savefig(f'{output}-weights')
 
 
-def plot_losses(Epochs, Losses, output):
+def plot_losses(Epochs, Losses, output,corpus,embedding,alpha,optimizer):
     '''
     Show the evolution of Loss with time
     
@@ -409,6 +409,10 @@ def plot_losses(Epochs, Losses, output):
         Epochs
         Losses
         output
+        corpus
+        embedding
+        alpha
+        optimizer
     '''
     fig = figure(figsize=(10, 10))
     ax = fig.add_subplot(1, 1, 1)
@@ -416,7 +420,7 @@ def plot_losses(Epochs, Losses, output):
     ax.set_xlabel('Epoch'),
     ax.set_ylabel('Loss')
 
-    ax.set_title(f'{args.corpus} -- Embedding dimensions={args.embedding}, momentum={args.alpha},optimizer={args.optimizer}')
+    ax.set_title(f'{corpus} -- Embedding dimensions={embedding}, momentum={alpha},optimizer={optimizer}')
     fig.savefig(output)
 
 
@@ -480,7 +484,7 @@ def train_model(args):
                            optimizer_name=args.optimizer,
                            n=args.minibatch)
 
-    plot_losses(Epochs, Losses, args.output)
+    plot_losses(Epochs, Losses, args.output,args.corpus,args.embedding,args.alpha,args.optimizer)
     plot_weights(model,args.output)
     minimum_loss = float_info.max
     if Losses[-1] < minimum_loss:
