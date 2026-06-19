@@ -483,165 +483,164 @@ class StochasticGradientDescent(Optimizer):
         '''
         return self.rng.integers(self.n_groups,size=(self.m))
 
+class TestVocabulary(TestCase):
+
+    def test_parse(self):
+        vocabulary = Vocabulary()
+        assert_array_equal(np.array([0,1,2,3,4,5,0,6,7,8,9,0,2,10]),
+                         vocabulary.parse(['the', 'quick', 'brown','fox', 'jumps', 'over', 'the', 'lazy', 'dog',
+                          'that', 'guards', 'the', 'brown', 'cow']))
+        self.assertEqual(3,vocabulary.get_count(0))   # Number of 'the's
+        self.assertEqual(2,vocabulary.get_count(2))   # Number of 'brown's
+        self.assertEqual(1,vocabulary.get_count(3))   # Number of 'fox's
+
+class TestTower(TestCase):
+    def uniform(self):
+        return self.sample
+
+    def test_tower(self):
+        vocabulary = Vocabulary()
+        vocabulary.parse(['the', 'quick', 'brown','fox', 'jumps', 'over', 'the', 'lazy', 'dog',
+                          'that', 'guards', 'the', 'brown', 'cow'])
+
+        tower = Tower(ExampleBuilder.normalize(vocabulary,alpha=1),self)
+
+        self.sample = 0
+        self.assertEqual(0,tower.get_sample())
+        self.sample = 0.214
+        self.assertEqual(0,tower.get_sample())
+        self.sample = 0.215
+        self.assertEqual(1,tower.get_sample())
+        self.sample = 0.214+ 0.071
+        self.assertEqual(1,tower.get_sample())
+        self.sample = 0.215+ 0.071
+        self.assertEqual(2,tower.get_sample())
+
+        self.sample = 1
+        self.assertEqual(11,tower.get_sample())
+
+
+
+class TestSkipGram(TestCase):
+
+    def test_normalize(self):
+        '''
+        Verify that probabilities of vocabulary items satisfy equations (6.32,6.33) of Jurafsky & Martin
+        '''
+        vocabulary = Vocabulary()
+        for _ in range(99):
+            vocabulary.tokenize('a')
+        vocabulary.tokenize('b')
+        self.assertEqual(99,vocabulary.get_count(0)) 
+        self.assertEqual(1,vocabulary.get_count(1))   
+        normalized_vocabulary = ExampleBuilder.normalize(vocabulary)
+        self.assertAlmostEqual(0.97,normalized_vocabulary[0],places=2)
+        self.assertAlmostEqual(0.03,normalized_vocabulary[1],places=2)
+
+    def test_generate_examples(self):
+        '''
+        Verify that Positive examples are veing constructed correctly
+        '''
+
+        vocabulary = Vocabulary()
+        text = ['the', 'quick', 'brown','fox', 'jumps', 'over', 'the', 'lazy', 'dog',
+                          'that', 'guards', 'the', 'brown', 'cow']
+        indices = vocabulary.parse(text)
+        assert_array_equal(np.array([0,1,2,3,4,5,0,6,7,8,9,0,2,10]),indices)
+        word2vec = ExampleBuilder()
+        tower = Tower(ExampleBuilder.normalize(vocabulary))
+        examples = [(word,context,y) for (word,context,y) in word2vec.generate_examples([indices],tower)]
+        self.assertEqual(3*(4*(len(indices)-4) + 4 + 6),len(examples))
+        self.assertEqual((0,1,1),examples[0])
+        self.assertEqual((0,2,1),examples[3])
+        self.assertEqual((1,0,1),examples[6])
+        self.assertEqual((1,2,1),examples[9])
+        self.assertEqual((1,3,1),examples[12])
+        self.assertEqual((2,0,1),examples[15])
+        self.assertEqual((2,1,1),examples[18])
+        self.assertEqual((2,3,1),examples[21])
+        self.assertEqual((2,4,1),examples[24])
+        self.assertEqual((10,2,1),examples[147])
+        self.assertEqual((10,0,1),examples[144])
+
+class TestLoss(TestCase):
+    '''Test for LossCalculator'''
+    def setUp(self):
+        self.oldargs = np.seterr(divide='raise', over='raise')
+
+    def tearDown(self):
+        np.seterr(**self.oldargs)
+
+    def test_sigmoid(self):
+        self.assertEqual(0.5,LossCalculator.sigmoid(0))
+        self.assertEqual(0,LossCalculator.sigmoid(-np.inf))
+        self.assertAlmostEqual(0,LossCalculator.sigmoid(-100))
+        self.assertEqual(1,LossCalculator.sigmoid(np.inf))
+        self.assertAlmostEqual(1,LossCalculator.sigmoid(100))
+
+    def test_log_sigmoid(self):
+        self.assertEqual(-0.6931471805599453,LossCalculator.log_sigmoid(0))
+        self.assertEqual(0,LossCalculator.log_sigmoid(1000000))
+        self.assertEqual(-1000000,LossCalculator.log_sigmoid(-1000000))
+
+    def test_save_load(self):
+        '''
+        Verify that loss is calculated consistency following load and save (investigation of issue #32)
+        '''
+
+        with TemporaryDirectory() as tmpdirname:
+            Data = np.array([[0,1,1],
+                             [0,1015,-1],
+                             [0,1471,-1],
+                             [0,959,-1],
+                             [0,1573,-1],
+                             [0,346,-1],
+                             [0,2,1],
+                             [0,4307,-1],
+                             [0,883,-1],
+                             [0,5087,-1],
+                             [0,434,-1],
+                             [0,63,-1],
+                             [1,0,1],
+                             [1,439,-1],
+                             [1,444,-1],
+                             [1,149,-1],
+                             [1,5117,-1],
+                             [1,2018,-1]])
+            word2Vec1 = Word2Vec()
+            word2Vec1.build(5118)
+            calculator1 = LossCalculator(word2Vec1,Data)
+            loss1 = calculator1.get(6,3)
+            word2Vec1.save(join(tmpdirname,'test_save_load'),report=lambda x:None)
+
+            word2Vec2 = Word2Vec()
+            word2Vec2.load(join(tmpdirname,'test_save_load.npz'),report=lambda x:None)
+            calculator2 = LossCalculator(word2Vec2,Data)
+            loss2 = calculator2.get(6,3)
+
+            self.assertEqual(loss1,loss2)
+
+
+class TestWord2Vec(TestCase):
+    def test_save_load(self):
+        '''
+        Verify that weights can be loaded and saved correctly (investigation of issue #32)
+        '''
+        log = []
+        def report(x):
+            log.append(x)
+
+        with TemporaryDirectory() as tmpdirname:
+            word2Vec1 = Word2Vec()
+            word2Vec1.build(2,2)
+            word2Vec1.save(join(tmpdirname,'test_save_load'),report=report)
+            self.assertTrue(log[-1].startswith('Saved weights'))
+            word2Vec2 = Word2Vec()
+            word2Vec2.load(join(tmpdirname,'test_save_load.npz'),report=report)
+            self.assertTrue(log[-1].startswith('Loaded'))
+            assert_array_equal(word2Vec1.w,word2Vec2.w)
+            assert_array_equal(word2Vec1.c,word2Vec2.c)
 
 
 if __name__=='__main__':
-    class TestVocabulary(TestCase):
-
-        def test_parse(self):
-            vocabulary = Vocabulary()
-            assert_array_equal(np.array([0,1,2,3,4,5,0,6,7,8,9,0,2,10]),
-                             vocabulary.parse(['the', 'quick', 'brown','fox', 'jumps', 'over', 'the', 'lazy', 'dog',
-                              'that', 'guards', 'the', 'brown', 'cow']))
-            self.assertEqual(3,vocabulary.get_count(0))   # Number of 'the's
-            self.assertEqual(2,vocabulary.get_count(2))   # Number of 'brown's
-            self.assertEqual(1,vocabulary.get_count(3))   # Number of 'fox's
-
-    class TestTower(TestCase):
-        def uniform(self):
-            return self.sample
- 
-        def test_tower(self):
-            vocabulary = Vocabulary()
-            vocabulary.parse(['the', 'quick', 'brown','fox', 'jumps', 'over', 'the', 'lazy', 'dog',
-                              'that', 'guards', 'the', 'brown', 'cow'])
-
-            tower = Tower(ExampleBuilder.normalize(vocabulary,alpha=1),self)
-
-            self.sample = 0
-            self.assertEqual(0,tower.get_sample())
-            self.sample = 0.214
-            self.assertEqual(0,tower.get_sample())
-            self.sample = 0.215
-            self.assertEqual(1,tower.get_sample())
-            self.sample = 0.214+ 0.071
-            self.assertEqual(1,tower.get_sample())
-            self.sample = 0.215+ 0.071
-            self.assertEqual(2,tower.get_sample())
-
-            self.sample = 1
-            self.assertEqual(11,tower.get_sample())
-
-
-
-    class TestSkipGram(TestCase):
-        #@skip('FIXME')
-        def test_normalize(self):
-            '''
-            Verify that probabilities of vocabulary items satisfy equations (6.32,6.33) of Jurafsky & Martin
-            '''
-            vocabulary = Vocabulary()
-            for _ in range(99):
-                vocabulary.tokenize('a')
-            vocabulary.tokenize('b')
-            self.assertEqual(99,vocabulary.get_count(0)) 
-            self.assertEqual(1,vocabulary.get_count(1))   
-            normalized_vocabulary = ExampleBuilder.normalize(vocabulary)
-            self.assertAlmostEqual(0.97,normalized_vocabulary[0],places=2)
-            self.assertAlmostEqual(0.03,normalized_vocabulary[1],places=2)
-
-        def test_generate_examples(self):
-            '''
-            Verify that Positive examples are veing constructed correctly
-            '''
-
-            vocabulary = Vocabulary()
-            text = ['the', 'quick', 'brown','fox', 'jumps', 'over', 'the', 'lazy', 'dog',
-                              'that', 'guards', 'the', 'brown', 'cow']
-            indices = vocabulary.parse(text)
-            assert_array_equal(np.array([0,1,2,3,4,5,0,6,7,8,9,0,2,10]),indices)
-            word2vec = ExampleBuilder()
-            tower = Tower(ExampleBuilder.normalize(vocabulary))
-            examples = [(word,context,y) for (word,context,y) in word2vec.generate_examples([indices],tower)]
-            self.assertEqual(3*(4*(len(indices)-4) + 4 + 6),len(examples))
-            self.assertEqual((0,1,1),examples[0])
-            self.assertEqual((0,2,1),examples[3])
-            self.assertEqual((1,0,1),examples[6])
-            self.assertEqual((1,2,1),examples[9])
-            self.assertEqual((1,3,1),examples[12])
-            self.assertEqual((2,0,1),examples[15])
-            self.assertEqual((2,1,1),examples[18])
-            self.assertEqual((2,3,1),examples[21])
-            self.assertEqual((2,4,1),examples[24])
-            self.assertEqual((10,2,1),examples[147])
-            self.assertEqual((10,0,1),examples[144])
-
-    class TestLoss(TestCase):
-        '''Test for LossCalculator'''
-        def setUp(self):
-            self.oldargs = np.seterr(divide='raise', over='raise')
-
-        def tearDown(self):
-            np.seterr(**self.oldargs)
-
-        def test_sigmoid(self):
-            self.assertEqual(0.5,LossCalculator.sigmoid(0))
-            self.assertEqual(0,LossCalculator.sigmoid(-np.inf))
-            self.assertAlmostEqual(0,LossCalculator.sigmoid(-100))
-            self.assertEqual(1,LossCalculator.sigmoid(np.inf))
-            self.assertAlmostEqual(1,LossCalculator.sigmoid(100))
-
-        def test_log_sigmoid(self):
-            self.assertEqual(-0.6931471805599453,LossCalculator.log_sigmoid(0))
-            self.assertEqual(0,LossCalculator.log_sigmoid(1000000))
-            self.assertEqual(-1000000,LossCalculator.log_sigmoid(-1000000))
-
-        def test_save_load(self):
-            '''
-            Verify that loss is calculated consistency following load and save (investigation of issue #32)
-            '''
-
-            with TemporaryDirectory() as tmpdirname:
-                Data = np.array([[0,1,1],
-                                 [0,1015,-1],
-                                 [0,1471,-1],
-                                 [0,959,-1],
-                                 [0,1573,-1],
-                                 [0,346,-1],
-                                 [0,2,1],
-                                 [0,4307,-1],
-                                 [0,883,-1],
-                                 [0,5087,-1],
-                                 [0,434,-1],
-                                 [0,63,-1],
-                                 [1,0,1],
-                                 [1,439,-1],
-                                 [1,444,-1],
-                                 [1,149,-1],
-                                 [1,5117,-1],
-                                 [1,2018,-1]])
-                word2Vec1 = Word2Vec()
-                word2Vec1.build(5118)
-                calculator1 = LossCalculator(word2Vec1,Data)
-                loss1 = calculator1.get(6,3)
-                word2Vec1.save(join(tmpdirname,'test_save_load'),report=lambda x:None)
-
-                word2Vec2 = Word2Vec()
-                word2Vec2.load(join(tmpdirname,'test_save_load.npz'),report=lambda x:None)
-                calculator2 = LossCalculator(word2Vec2,Data)
-                loss2 = calculator2.get(6,3)
-
-                self.assertEqual(loss1,loss2)
-
-
-    class TestWord2Vec(TestCase):
-        def test_save_load(self):
-            '''
-            Verify that weights can be loaded and saved correctly (investigation of issue #32)
-            '''
-            log = []
-            def report(x):
-                log.append(x)
-
-            with TemporaryDirectory() as tmpdirname:
-                word2Vec1 = Word2Vec()
-                word2Vec1.build(2,2)
-                word2Vec1.save(join(tmpdirname,'test_save_load'),report=report)
-                self.assertTrue(log[-1].startswith('Saved weights'))
-                word2Vec2 = Word2Vec()
-                word2Vec2.load(join(tmpdirname,'test_save_load.npz'),report=report)
-                self.assertTrue(log[-1].startswith('Loaded'))
-                assert_array_equal(word2Vec1.w,word2Vec2.w)
-                assert_array_equal(word2Vec1.c,word2Vec2.c)
-
     main()
