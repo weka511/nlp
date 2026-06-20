@@ -32,7 +32,17 @@ class Vocabulary:
         Get number of words in vocabulary
         '''
         return len(self.symbols)    
+    
+    def __getitem__(self,token):
+        '''
         
+        Look up the word that corresponds to a token
+        
+        Parameters:
+            token      An index into symbol table
+        '''         
+        return self.get_word(token)
+            
     def tokenize(self,word):
         '''
         Convert a word to a token; if we haven't seen it before, create a new token
@@ -67,6 +77,12 @@ class Vocabulary:
             token      The word whose count we want
         '''
         return self.counts[token]
+    
+    '''
+    Retrieve counts for sll tokens
+    '''
+    def get_counts(self):
+        return np.array(self.counts)
     
     def generate_counts(self):
         for token,count in enumerate(self.counts):
