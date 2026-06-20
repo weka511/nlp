@@ -28,6 +28,17 @@ from vocabulary import Vocabulary
 from tokenizer import generate_sentences,generate_text,generate_tokens,Token
 
 class Examples:
+    '''
+    A collection of positive and negative training examplkes.
+    
+    Attributes:
+        k
+        vocabulary
+        positives
+        negatives
+        rng
+
+    '''
     def __init__(self,window=2,k=2,rng=np.random.default_rng()):
         self.window = window
         self.k = k
@@ -55,7 +66,7 @@ class Examples:
         '''
         with open(file,'wb') as out:
             dump(self, out, HIGHEST_PROTOCOL)
-            print (f'Saved ngrams to {file.resolve()}')    
+            print (f'Saved examples in {file.resolve()}')    
         
     def _create_positives(self,sentence_generator):
         positives = []
@@ -117,17 +128,20 @@ class Examples:
     
 def parse_args():
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('-w','--window', type=int,default=2)
-    parser.add_argument('-k','--k',type=int,default=2)
+    parser.add_argument('command',choices=['examples',
+                                           'train'])
     parser.add_argument('--seed',type=int,default=None)
-    parser.add_argument('--corpus', default=None, nargs='+', help='Name(s) of corpus file(s)')
-    parser.add_argument('--data', default='./data',help='Path to corpus; also used to store ngrams') 
-    parser.add_argument('-o', '--output',default=Path(__file__).stem,help='File name for storing ngrams')
-    return parser.parse_args()
     
-def main():
-    start  = time()
-    args = parse_args()
+    parser.add_argument('--data', default='./data',help='Path to corpus; also used to store ngrams') 
+    parser.add_argument('-o', '--output',default=None,required=True,help='File name for storing results')
+    args_examples = parser.add_argument_group('Examples','Used for command=examples')
+    args_examples.add_argument('--corpus', default=None, nargs='+', help='Name(s) of corpus file(s)')
+    args_examples.add_argument('-w','--window', type=int,default=2)
+    args_examples.add_argument('-k','--k',type=int,default=2)
+    
+    return parser.parse_args()
+
+def build_examples(args):
     examples = Examples(window=args.window,k=args.k,rng=np.random.default_rng(args.seed))
     examples.build(
         generate_sentences(
@@ -137,6 +151,19 @@ def main():
                 ))))
     
     examples.save((Path(args.data) / args.output).with_suffix('.pkl'))
+
+def train(args):
+    pass
+
+def main():
+    start  = time()
+    args = parse_args()
+
+    match args.command:
+        case 'examples':
+            build_examples(args) 
+        case 'train':
+            train(args)
     
     elapsed = time() - start
     minutes = int(elapsed/60)
