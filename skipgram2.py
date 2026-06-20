@@ -180,7 +180,6 @@ class SkipGram:
     
     def __init__(self,examples,dimensionality=128,logger=None,rng=np.random.default_rng(),minibatch=1):
         self.examples = examples
-        self.dimensionality = dimensionality
         n_words = len(examples.vocabulary)
         self.w = SkipGram.create_unit_vectors(n_words,dimensionality,rng)
         self.c = SkipGram.create_unit_vectors(n_words,dimensionality,rng)
