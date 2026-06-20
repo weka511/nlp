@@ -15,12 +15,13 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-'''Template for python script'''
+'''Skipgrams as described in Chapter 6 of Jurafsky & Martin'''
 
 from argparse import ArgumentParser
 from glob import glob
 from os.path import join
 from pathlib import Path
+from pickle import dump, HIGHEST_PROTOCOL, load
 from time import time
 import numpy as np
 from vocabulary import Vocabulary
@@ -45,6 +46,17 @@ class Examples:
         self.positives = self._create_positives(sentence_generator)
         self.negatives = self._create_negatives()
         
+    def save(self,file):
+        '''
+        Save Examples using pickle.
+        
+        Parameters:
+            file     Name of file where tables will be saved
+        '''
+        with open(file,'wb') as out:
+            dump(self, out, HIGHEST_PROTOCOL)
+            print (f'Saved ngrams to {file.resolve()}')    
+        
     def _create_positives(self,sentence_generator):
         positives = []
         for sentence in sentence_generator:
@@ -57,6 +69,9 @@ class Examples:
         for w,c in self._generate_positive(tokens):
             positives.append([w,c])
         
+    '''
+    Create positive examples
+    '''
     def _generate_positive(self,tokens):
         for i in range(len(tokens)):
             for j in range(-self.window,self.window + 1):
@@ -64,7 +79,10 @@ class Examples:
                 if i + j < 0: continue
                 if i + j >= len(tokens): continue
                 yield tokens[i], tokens[i+j]
-    
+                
+    '''
+    Create negative examples
+    '''
     def _create_negatives(self):
         indices = np.argsort(self.positives[:,0])
         positives = self.positives[indices,:]
@@ -74,10 +92,9 @@ class Examples:
         Product = np.full((m*self.k,2),-1)
  
         for i in range(len(ws)):
-            w = ws[i]
             pos_min = self.window*breaks[i]
             pos_max = self.window*breaks[i+1]
-            Product[pos_min:pos_max,0] = w
+            Product[pos_min:pos_max,0] = ws[i]
             Product[pos_min:pos_max,1] = self.rng.choice(len(self.vocabulary),
                                                          p=self._get_p(np.unique(positives[breaks[i]:breaks[i+1],1])),
                                                          size=pos_max - pos_min)
@@ -104,7 +121,8 @@ def parse_args():
     parser.add_argument('-k','--k',type=int,default=2)
     parser.add_argument('--seed',type=int,default=None)
     parser.add_argument('--corpus', default=None, nargs='+', help='Name(s) of corpus file(s)')
-    parser.add_argument('--data', default='./data',help='Path to corpus; also used to store ngrams')    
+    parser.add_argument('--data', default='./data',help='Path to corpus; also used to store ngrams') 
+    parser.add_argument('-o', '--output',default=Path(__file__).stem,help='File name for storing ngrams')
     return parser.parse_args()
     
 def main():
@@ -117,6 +135,8 @@ def main():
                 generate_text(
                     file_names=[globbed for name in args.corpus for globbed in glob(join(args.data, name))]
                 ))))
+    
+    examples.save((Path(args.data) / args.output).with_suffix('.pkl'))
     
     elapsed = time() - start
     minutes = int(elapsed/60)
