@@ -8,6 +8,7 @@ File | Description
 ------------------|------------------------------------------------------------
 ngram.py|Exercise 3.8 from Jurafsky and Martin: build ngram table from corpus
 ngram_generate.py|Exercise 3.10 from Jurafsky and Martin: use ngrams to generate random sequences
+nlp.wpr|Wing IDE Project file
 skipgram2.py|This program has been written to test my understanding of [word2vec](https://arxiv.org/abs/1301.3781/Word2Vec).
 template.py|Template for new code with command line interface
 tfidf.py|Implementation of td-idf algorithm
@@ -31,7 +32,6 @@ template-test.py|Template for new code using python unittest
 transformer.py|An attempt to understand Transformers, based on [Arun Mohan's demo](https://www.kaggle.com/code/arunmohan003/transformer-from-scratch-using-pytorch/notebook)
 word2vec.py |This program has been written to test my understanding of [word2vec](https://arxiv.org/abs/1301.3781/Word2Vec). The code was originally based on [Mateusz Bednarski's article--Implementing word2vec in PyTorch](https://towardsdatascience.com/implementing-word2vec-in-pytorch-skip-gram-model-e6bae040d2fb)
 word2vec2.py|Test harness for skipgram.py. It builds examples, trains weights, and some test code.
-nlp.wpr|Wing IDE Project file
 
 ## Data folder
 
