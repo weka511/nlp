@@ -72,20 +72,21 @@ class Examples:
         m,_ = positives.shape
         ws,breaks = np.unique(positives[:,0],return_index=True)
         breaks = np.hstack([breaks,[m]])
-        #for i in range(10000):
-            #w = positives[i,0]
-            #c = positives[i,1]
-            #print (i,w,self.vocabulary.get_word(w),c,self.vocabulary.get_word(c))         
-        print (ws)
-        print (breaks)
         Product = np.full((m*self.k,2),-1)
  
         for i in range(len(ws)):
             w = ws[i]
-            pos_min = breaks[i]
-            pos_max = breaks[i+1]
+            pos_min = self.window*breaks[i]
+            pos_max = self.window*breaks[i+1]
             Product[pos_min:pos_max,0] = w
-            print (Product[pos_max-1:pos_max+1,:])
+            cs_forbidden = np.unique(positives[breaks[i]:breaks[i+1],1])
+            p = self.vocabulary.get_counts()
+            p[cs_forbidden] = 0
+            p /= p.sum()
+            c = self.rng.choice(len(self.vocabulary),p=p,size=pos_max-pos_min)
+            Product[pos_min:pos_max,1] = c
+            for i in range(pos_min,pos_max):
+                print (self.vocabulary[Product[i,0]],self.vocabulary[Product[i,1]])
         return Product
  
         #z=0
