@@ -24,6 +24,7 @@ from pathlib import Path
 from pickle import dump, HIGHEST_PROTOCOL, load
 from time import time
 import numpy as np
+from scipy.special import expit
 from vocabulary import Vocabulary
 from tokenizer import generate_sentences,generate_text,generate_tokens,Token
 from shared.utils import Logger
@@ -40,6 +41,20 @@ class Examples:
         rng
 
     '''
+    
+    @staticmethod
+    def create(file_name,logger):
+        '''
+        A factory method to instantiate a set of Examples from a saved file
+        
+        Parameters:
+            file_name    Name of file where examples have been stored
+        '''
+        with open(file_name, 'rb') as inp:
+            product = load(inp) 
+            logger.log(f'Loaded examples from {file_name.resolve()}')
+            return product
+        
     def __init__(self,window=2,k=2,rng=np.random.default_rng(),alpha=0.75):
         self.window = window
         self.k = k
@@ -98,9 +113,9 @@ class Examples:
     '''
     def _create_negatives(self):
         indices = np.argsort(self.positives[:,0])
-        positives = self.positives[indices,:]
-        m,_ = positives.shape
-        ws,breaks = np.unique(positives[:,0],return_index=True)
+        self.positives = self.positives[indices,:]
+        m,_ = self.positives.shape
+        ws,breaks = np.unique(self.positives[:,0],return_index=True)
         breaks = np.hstack([breaks,[m]])
         Product = np.full((m*self.k,2),-1)
         counts = self.vocabulary.get_counts()**self.alpha
@@ -110,7 +125,7 @@ class Examples:
             Product[pos_min:pos_max,0] = ws[i]
             Product[pos_min:pos_max,1] = self.rng.choice(len(self.vocabulary),
                                                          p=self._get_p(
-                                                             np.unique(positives[breaks[i]:breaks[i+1],1]),counts),
+                                                             np.unique(self.positives[breaks[i]:breaks[i+1],1]),counts),
                                                          size=pos_max - pos_min)
         return Product
  
@@ -136,11 +151,51 @@ class Examples:
             s       The string to be tested
         '''
         return s.replace(Token.Apostrophe,'').replace(Token.Apostrophe2,'').isalpha()    
+
+class SkipGram:
     
+    @staticmethod
+    def create_probabilities(m,n,rng):
+        Product = rng.uniform(size=(m,n))
+        return Product/Product.sum(axis=1,keepdims=True)
+    
+    def __init__(self,examples,n=128,logger=None,rng=np.random.default_rng()):
+        self.examples = examples
+        self.n = n
+        self.examples = examples
+        n_words = len(examples.vocabulary)
+        self.w = SkipGram.create_probabilities(n_words,n,rng)
+        self.c = SkipGram.create_probabilities(n_words,n,rng)
+        self.rng = rng
+        
+    def step(self,eta=0.01):
+        n,_ = self.examples.positives.shape
+        i = self.rng.integers(n)
+        self.get_loss()
+    
+    def get_loss(self):
+        '''
+        Compute loss following equation (6.34)
+        '''
+        n,_ = self.examples.positives.shape
+        loss = 0.0
+        for i in range(n):
+            w_index = self.examples.positives[i,0]
+            c_index = self.examples.positives[i,1]
+            w = self.w[w_index,:]
+            c= self.c[c_index,:]
+            loss -= np.log(expit(np.dot(w,c)))
+            for j in range(self.examples.k):
+                assert w_index == self.examples.negatives[i*self.examples.k+j,0]
+                c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
+                c_neg= self.c[c_neg_index,:]
+                loss -= np.log(expit(-np.dot(w,c_neg)))
+        return loss
+
+        
 def parse_args():
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=['examples',
-                                           'train'])
+    parser.add_argument('command',choices=['examples','train'])
     parser.add_argument('--seed',type=int,default=None)
     parser.add_argument('--data', default='./data',help='Path to corpus; also used to store ngrams') 
     parser.add_argument('-o', '--output',default=None,required=True,help='File name for storing results')
@@ -152,11 +207,16 @@ def parse_args():
     examples_group.add_argument('-k','--k',type=int,default=2)
     examples_group.add_argument('--alpha',default=0.75,type=float)
     
+    training_group = parser.add_argument_group('Training','Used for train command')
+    training_group.add_argument('--examples',default=None)
+    training_group.add_argument('-n','--n',type=int,default=128)
+    examples_group.add_argument('--eta',default=0.01,type=float)
+    
     return parser.parse_args()
 
-def build_examples(args):
+def build_examples(args,rng=np.random.default_rng()):
     with Logger(Path(__file__).stem,path=args.logs) as logger:
-        examples = Examples(window=args.window,k=args.k,rng=np.random.default_rng(args.seed))
+        examples = Examples(window=args.window,k=args.k,rng=rng)
         examples.build(
             generate_sentences(
                 generate_tokens(
@@ -166,19 +226,23 @@ def build_examples(args):
         
         examples.save((Path(args.data) / args.output).with_suffix('.pkl'))
 
-def train(args):
+def train(args,rng=np.random.default_rng()):
     with Logger(Path(__file__).stem,path=args.logs) as logger:
-        pass
+        trainer = SkipGram(Examples.create((Path(args.data) / args.examples).with_suffix('.pkl'),logger),
+                           n=args.n,
+                           logger=logger,
+                           rng=rng)
+        trainer.step(eta=args.eta)
 
 def main():
     start  = time()
     args = parse_args()
-
+    rng = np.random.default_rng(args.seed)
     match args.command:
         case 'examples':
-            build_examples(args) 
+            build_examples(args,rng=rng) 
         case 'train':
-            train(args)
+            train(args,rng=rng)
     
     elapsed = time() - start
     minutes = int(elapsed/60)
