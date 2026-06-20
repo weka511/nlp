@@ -183,21 +183,24 @@ class SkipGram:
             c_pos = self.c[c_index,:]
             
             #  Equation (6.35)
-            dL_dc_pos = (expit(np.dot(w,c_pos)) - 1) * w  
+            sigma_w_c_pos = expit(np.dot(w,c_pos))
+            dL_dc_pos = (sigma_w_c_pos - 1) * w  
             
             # Equation (6.36)
             dL_dc_neg = []
+            sigma_w_c_neg = []
             for j in range(self.examples.k):
                 c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
-                c_neg = self.c[c_neg_index,:] 
-                dL_dc_neg.append(expit(np.dot(w,c_neg)) * w) 
+                c_neg = self.c[c_neg_index,:]
+                sigma_w_c_neg.append(expit(np.dot(w,c_neg)))
+                dL_dc_neg.append(sigma_w_c_neg[-1] * w) 
             
             # Equation (6.37)    
-            dL_dw = expit(np.dot(w,c_pos) - 1) * c_pos
+            dL_dw = (sigma_w_c_pos - 1) * c_pos
             for j in range(self.examples.k):
                 c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
                 c_neg=  self.c[c_neg_index,:] 
-                dL_dw += (expit(np.dot(w,c_neg)) * c_neg)
+                dL_dw += sigma_w_c_neg[j] * c_neg
                 
             self.c[c_index,:] -= eta * dL_dc_pos    # (6.38)
             self.w[w_index,:] -= eta * dL_dw        # (6.39)
