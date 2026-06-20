@@ -154,19 +154,36 @@ class Examples:
         return s.replace(Token.Apostrophe,'').replace(Token.Apostrophe2,'').isalpha()    
 
 class SkipGram:
+    '''
+    Skipgrams after Chaper 6
     
+    Attributes:
+        examples
+        dimensionality
+        w
+        c
+        rng
+        minibatch
+    '''
     @staticmethod
-    def create_probabilities(m,n,rng):
-        Product = rng.uniform(size=(m,n))
-        return Product/Product.sum(axis=1,keepdims=True)
+    def create_unit_vectors(m,dimensionality,rng):
+        '''
+        Create a set of normed unit vectors 
+        
+        Parameters:
+            m               Number of vectors
+            dimensionality  Dimensionality
+            rng             Random number generator
+        '''
+        Product = rng.uniform(size=(m,dimensionality))
+        return Product/np.linalg.norm(Product,axis=1,keepdims=True)
     
-    def __init__(self,examples,n=128,logger=None,rng=np.random.default_rng(),minibatch=1):
+    def __init__(self,examples,dimensionality=128,logger=None,rng=np.random.default_rng(),minibatch=1):
         self.examples = examples
-        self.n = n
-        self.examples = examples
+        self.dimensionality = dimensionality
         n_words = len(examples.vocabulary)
-        self.w = SkipGram.create_probabilities(n_words,n,rng)
-        self.c = SkipGram.create_probabilities(n_words,n,rng)
+        self.w = SkipGram.create_unit_vectors(n_words,dimensionality,rng)
+        self.c = SkipGram.create_unit_vectors(n_words,dimensionality,rng)
         self.rng = rng
         self.minibatch = minibatch
         
@@ -260,7 +277,7 @@ def parse_args():
     
     training_group = parser.add_argument_group('Training','Used for train command')
     training_group.add_argument('--examples',default=None)
-    training_group.add_argument('-n','--n',type=int,default=128)
+    training_group.add_argument('-d','--dimensionality',type=int,default=128)
     training_group.add_argument('--eta',default=0.01,type=float)
     training_group.add_argument('-m','--minibatch',type=int,default=2**12)
     training_group.add_argument('-N','--N',type=int,default=1000)
@@ -283,7 +300,7 @@ def build_examples(args,rng=np.random.default_rng()):
 def train(args,rng=np.random.default_rng()):
     with Logger(Path(__file__).stem,path=args.logs) as logger:
         trainer = SkipGram(Examples.create((Path(args.data) / args.examples).with_suffix('.pkl'),logger),
-                           n=args.n,
+                           dimensionality=args.dimensionality,
                            logger=logger,
                            rng=rng,
                            minibatch=args.minibatch)
