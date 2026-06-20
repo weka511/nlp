@@ -44,7 +44,6 @@ class Examples:
         '''
         self.positives = self._create_positives(sentence_generator)
         self.negatives = self._create_negatives()
-        z=0
         
     def _create_positives(self,sentence_generator):
         positives = []
@@ -79,42 +78,16 @@ class Examples:
             pos_min = self.window*breaks[i]
             pos_max = self.window*breaks[i+1]
             Product[pos_min:pos_max,0] = w
-            cs_forbidden = np.unique(positives[breaks[i]:breaks[i+1],1])
-            p = self.vocabulary.get_counts()
-            p[cs_forbidden] = 0
-            p /= p.sum()
-            c = self.rng.choice(len(self.vocabulary),p=p,size=pos_max-pos_min)
-            Product[pos_min:pos_max,1] = c
-            for i in range(pos_min,pos_max):
-                print (self.vocabulary[Product[i,0]],self.vocabulary[Product[i,1]])
+            Product[pos_min:pos_max,1] = self.rng.choice(len(self.vocabulary),
+                                                         p=self._get_p(np.unique(positives[breaks[i]:breaks[i+1],1])),
+                                                         size=pos_max - pos_min)
         return Product
  
-        #z=0
+    def _get_p(self,cs_forbidden):
+        p = self.vocabulary.get_counts()
+        p[cs_forbidden] = 0
+        return p / p.sum()    
     
-    def calculate_negatives(self):
-        P = self.normalize()
-        self.negatives = np.full((len(self.k*self.positives),2),-1,dtype=int)
-        pos = 0
-        for w,_ in self.positives:
-            c = self.rng.choice(len(self.vocabulary),size=self.k,replace=False,p=P)
-            self.negatives[pos:pos+self.k,0] = w
-            self.negatives[pos:pos+self.k,1] = c
-            pos += self.k
-        print (self.negatives)
-    
-    def normalize(self, alpha=0.75):
-        '''
-        Convert counts of vocabulary items to probabilities using equation (6.32) of Jurafsky & Martin
-
-        Parameters:
-            vocabulary
-            alpha      Exponent used in  equation (6.32) of Jurafsky & Martin
-        '''
-        P = np.zeros((len(self.vocabulary)))
-        for i,count in self.vocabulary.generate_counts():
-            P[i] = count**alpha
-        return P/P.sum()
-  
     
     def _is_word(self,s):
         '''
@@ -144,7 +117,6 @@ def main():
                 generate_text(
                     file_names=[globbed for name in args.corpus for globbed in glob(join(args.data, name))]
                 ))))
-    examples.calculate_negatives()
     
     elapsed = time() - start
     minutes = int(elapsed/60)
