@@ -31,32 +31,64 @@ class Examples:
         self.window = window
         self.k = k
         self.vocabulary = Vocabulary()
-        self.positives = []
+        self.positives = np.zeros((0,2))
+        self.negatives = np.zeros((0,2))
         self.rng = rng
         
     def build(self,sentence_generator):
         '''
-        Build ngrams using a generator for sentences
+        Build examples using a generator for sentences
         
         Parameters:
             sentence_generator    Used to iterate through sentences in corpus
         '''
-        for sentence in sentence_generator:
-            self._add_sentence(sentence)
+        self.positives = self._create_positives(sentence_generator)
+        self.negatives = self._create_negatives()
+        z=0
         
-    def _add_sentence(self,sentence):
+    def _create_positives(self,sentence_generator):
+        positives = []
+        for sentence in sentence_generator:
+            self._add_sentence(sentence,positives)
+        return np.array(positives)
+        
+    def _add_sentence(self,sentence,positives):
         tokens = [self.vocabulary.tokenize(word) for word in sentence if self._is_word(word)]
 
-        for w,c in self.generate_positive(tokens):
-            self.positives.append([w,c])
+        for w,c in self._generate_positive(tokens):
+            positives.append([w,c])
         
-    def generate_positive(self,tokens):
+    def _generate_positive(self,tokens):
         for i in range(len(tokens)):
             for j in range(-self.window,self.window + 1):
                 if j == 0: continue
                 if i + j < 0: continue
                 if i + j >= len(tokens): continue
                 yield tokens[i], tokens[i+j]
+    
+    def _create_negatives(self):
+        indices = np.argsort(self.positives[:,0])
+        positives = self.positives[indices,:]
+        m,_ = positives.shape
+        ws,breaks = np.unique(positives[:,0],return_index=True)
+        breaks = np.hstack([breaks,[m]])
+        #for i in range(10000):
+            #w = positives[i,0]
+            #c = positives[i,1]
+            #print (i,w,self.vocabulary.get_word(w),c,self.vocabulary.get_word(c))         
+        print (ws)
+        print (breaks)
+        Product = np.full((m*self.k,2),-1)
+ 
+        for i in range(len(ws)):
+            w = ws[i]
+            pos_min = breaks[i]
+            pos_max = breaks[i+1]
+            Product[pos_min:pos_max,0] = w
+            print (Product[pos_max-1:pos_max+1,:])
+        return Product
+ 
+        #z=0
     
     def calculate_negatives(self):
         P = self.normalize()
