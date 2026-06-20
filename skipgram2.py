@@ -22,6 +22,7 @@ from glob import glob
 from os.path import join
 from pathlib import Path
 from pickle import dump, HIGHEST_PROTOCOL, load
+from shutil import copyfile
 from time import time
 import numpy as np
 from scipy.special import expit
@@ -170,30 +171,39 @@ class SkipGram:
         self.minibatch = minibatch
         
     def step(self,eta=0.01):
+        '''
+        Compute partial derivatives and update w and c
+        Section 6.8.2
+        '''
         n,_ = self.examples.positives.shape
         for i in self.rng.integers(n,size=(self.minibatch)):
             w_index = self.examples.positives[i,0]
             c_index = self.examples.positives[i,1]
             w = self.w[w_index,:]
-            c= self.c[c_index,:]
-            L_c_pos = expit(np.dot(w,c)) * w     # (6.35)
-            L_c_neg = []
+            c_pos = self.c[c_index,:]
+            
+            #  Equation (6.35)
+            dL_dc_pos = (expit(np.dot(w,c_pos)) - 1) * w  
+            
+            # Equation (6.36)
+            dL_dc_neg = []
+            for j in range(self.examples.k):
+                c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
+                c_neg = self.c[c_neg_index,:] 
+                dL_dc_neg.append(expit(np.dot(w,c_neg)) * w) 
+            
+            # Equation (6.37)    
+            dL_dw = expit(np.dot(w,c_pos) - 1) * c_pos
             for j in range(self.examples.k):
                 c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
                 c_neg=  self.c[c_neg_index,:] 
-                L_c_neg.append(expit(np.dot(w,c_neg)) * w)  # (6.36)
+                dL_dw += (expit(np.dot(w,c_neg)) * c_neg)
                 
-            L_w = expit(np.dot(w,c) - 1) * c # (6.37)
+            self.c[c_index,:] -= eta * dL_dc_pos    # (6.38)
+            self.w[w_index,:] -= eta * dL_dw        # (6.39)
             for j in range(self.examples.k):
                 c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
-                c_neg=  self.c[c_neg_index,:] 
-                L_w += (expit(np.dot(w,c_neg)) * c_neg)
-                
-            self.c[c_index,:] -= eta * L_c_pos   
-            self.w[w_index,:] -= eta * L_w
-            for j in range(self.examples.k):
-                c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
-                self.c[c_neg_index,:]  -= eta*L_c_neg[j]            
+                self.c[c_neg_index,:]  -= eta*dL_dc_neg[j]    # (6.40)         
                            
         return self.get_loss()
         
@@ -208,14 +218,27 @@ class SkipGram:
             w_index = self.examples.positives[i,0]
             c_index = self.examples.positives[i,1]
             w = self.w[w_index,:]
-            c= self.c[c_index,:]
-            loss -= np.log(expit(np.dot(w,c)))
+            c_pos= self.c[c_index,:]
+            loss -= np.log(expit(np.dot(w,c_pos)))
             for j in range(self.examples.k):
                 assert w_index == self.examples.negatives[i*self.examples.k+j,0]
                 c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
                 c_neg= self.c[c_neg_index,:]
                 loss -= np.log(expit(-np.dot(w,c_neg)))
         return loss
+    
+    def save(self,file_path):
+        '''
+        Save Examples using pickle.
+        
+        Parameters:
+            file     Name of file where tables will be saved
+        '''
+        if file_path.is_file():
+            copyfile(file_path,file_path.with_suffix('.pkl~'))
+        with open(file_path,'wb') as out:
+            dump(self, out, HIGHEST_PROTOCOL)
+            print (f'Saved examples in {file_path.resolve()}')        
 
         
 def parse_args():
@@ -236,8 +259,9 @@ def parse_args():
     training_group.add_argument('--examples',default=None)
     training_group.add_argument('-n','--n',type=int,default=128)
     training_group.add_argument('--eta',default=0.01,type=float)
-    training_group.add_argument('-m','--minibatch',type=int,default=1)
-    
+    training_group.add_argument('-m','--minibatch',type=int,default=2**12)
+    training_group.add_argument('-N','--N',type=int,default=1000)
+    training_group.add_argument('--freq',type=int,default=10)
     
     return parser.parse_args()
 
@@ -260,8 +284,10 @@ def train(args,rng=np.random.default_rng()):
                            logger=logger,
                            rng=rng,
                            minibatch=args.minibatch)
-        for _ in range(10):
-            print (trainer.step(eta=args.eta))
+        for i in range(args.N):
+            logger.log (trainer.step(eta=args.eta))
+            if i % args.freq == 1:
+                trainer.save((Path(args.data) / args.output).with_suffix('.pkl'))
 
 def main():
     start  = time()
