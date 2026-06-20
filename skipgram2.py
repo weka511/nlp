@@ -159,7 +159,7 @@ class SkipGram:
         Product = rng.uniform(size=(m,n))
         return Product/Product.sum(axis=1,keepdims=True)
     
-    def __init__(self,examples,n=128,logger=None,rng=np.random.default_rng()):
+    def __init__(self,examples,n=128,logger=None,rng=np.random.default_rng(),minibatch=1):
         self.examples = examples
         self.n = n
         self.examples = examples
@@ -167,11 +167,36 @@ class SkipGram:
         self.w = SkipGram.create_probabilities(n_words,n,rng)
         self.c = SkipGram.create_probabilities(n_words,n,rng)
         self.rng = rng
+        self.minibatch = minibatch
         
     def step(self,eta=0.01):
         n,_ = self.examples.positives.shape
-        i = self.rng.integers(n)
-        self.get_loss()
+        for i in self.rng.integers(n,size=(self.minibatch)):
+            w_index = self.examples.positives[i,0]
+            c_index = self.examples.positives[i,1]
+            w = self.w[w_index,:]
+            c= self.c[c_index,:]
+            L_c_pos = expit(np.dot(w,c)) * w     # (6.35)
+            L_c_neg = []
+            for j in range(self.examples.k):
+                c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
+                c_neg=  self.c[c_neg_index,:] 
+                L_c_neg.append(expit(np.dot(w,c_neg)) * w)  # (6.36)
+                
+            L_w = expit(np.dot(w,c) - 1) * c # (6.37)
+            for j in range(self.examples.k):
+                c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
+                c_neg=  self.c[c_neg_index,:] 
+                L_w += (expit(np.dot(w,c_neg)) * c_neg)
+                
+            self.c[c_index,:] -= eta * L_c_pos   
+            self.w[w_index,:] -= eta * L_w
+            for j in range(self.examples.k):
+                c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
+                self.c[c_neg_index,:]  -= eta*L_c_neg[j]            
+                           
+        return self.get_loss()
+        
     
     def get_loss(self):
         '''
@@ -210,7 +235,9 @@ def parse_args():
     training_group = parser.add_argument_group('Training','Used for train command')
     training_group.add_argument('--examples',default=None)
     training_group.add_argument('-n','--n',type=int,default=128)
-    examples_group.add_argument('--eta',default=0.01,type=float)
+    training_group.add_argument('--eta',default=0.01,type=float)
+    training_group.add_argument('-m','--minibatch',type=int,default=1)
+    
     
     return parser.parse_args()
 
@@ -231,8 +258,10 @@ def train(args,rng=np.random.default_rng()):
         trainer = SkipGram(Examples.create((Path(args.data) / args.examples).with_suffix('.pkl'),logger),
                            n=args.n,
                            logger=logger,
-                           rng=rng)
-        trainer.step(eta=args.eta)
+                           rng=rng,
+                           minibatch=args.minibatch)
+        for _ in range(10):
+            print (trainer.step(eta=args.eta))
 
 def main():
     start  = time()
