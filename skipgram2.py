@@ -26,6 +26,7 @@ from time import time
 import numpy as np
 from vocabulary import Vocabulary
 from tokenizer import generate_sentences,generate_text,generate_tokens,Token
+from shared.utils import Logger
 
 class Examples:
     '''
@@ -39,13 +40,14 @@ class Examples:
         rng
 
     '''
-    def __init__(self,window=2,k=2,rng=np.random.default_rng()):
+    def __init__(self,window=2,k=2,rng=np.random.default_rng(),alpha=0.75):
         self.window = window
         self.k = k
         self.vocabulary = Vocabulary()
         self.positives = np.zeros((0,2))
         self.negatives = np.zeros((0,2))
         self.rng = rng
+        self.alpha = alpha
         
     def build(self,sentence_generator):
         '''
@@ -101,19 +103,28 @@ class Examples:
         ws,breaks = np.unique(positives[:,0],return_index=True)
         breaks = np.hstack([breaks,[m]])
         Product = np.full((m*self.k,2),-1)
- 
+        counts = self.vocabulary.get_counts()**self.alpha
         for i in range(len(ws)):
             pos_min = self.window*breaks[i]
             pos_max = self.window*breaks[i+1]
             Product[pos_min:pos_max,0] = ws[i]
             Product[pos_min:pos_max,1] = self.rng.choice(len(self.vocabulary),
-                                                         p=self._get_p(np.unique(positives[breaks[i]:breaks[i+1],1])),
+                                                         p=self._get_p(
+                                                             np.unique(positives[breaks[i]:breaks[i+1],1]),counts),
                                                          size=pos_max - pos_min)
         return Product
  
-    def _get_p(self,cs_forbidden):
-        p = self.vocabulary.get_counts()
-        p[cs_forbidden] = 0
+    def _get_p(self,forbidden,counts):
+        '''
+        Calculate probabilities using equation (6.32)
+        
+        Parameters:
+            forbidden
+            counts
+                    
+        '''
+        p = counts.copy()
+        p[forbidden] = 0
         return p / p.sum()    
     
     
@@ -131,29 +142,33 @@ def parse_args():
     parser.add_argument('command',choices=['examples',
                                            'train'])
     parser.add_argument('--seed',type=int,default=None)
-    
     parser.add_argument('--data', default='./data',help='Path to corpus; also used to store ngrams') 
     parser.add_argument('-o', '--output',default=None,required=True,help='File name for storing results')
-    args_examples = parser.add_argument_group('Examples','Used for command=examples')
-    args_examples.add_argument('--corpus', default=None, nargs='+', help='Name(s) of corpus file(s)')
-    args_examples.add_argument('-w','--window', type=int,default=2)
-    args_examples.add_argument('-k','--k',type=int,default=2)
+    parser.add_argument('--logs', default='./logs', help='Location for storing log files')
+    
+    examples_group = parser.add_argument_group('Examples','Used for command=examples')
+    examples_group.add_argument('--corpus', default=None, nargs='+', help='Name(s) of corpus file(s)')
+    examples_group.add_argument('-w','--window', type=int,default=2)
+    examples_group.add_argument('-k','--k',type=int,default=2)
+    examples_group.add_argument('--alpha',default=0.75,type=float)
     
     return parser.parse_args()
 
 def build_examples(args):
-    examples = Examples(window=args.window,k=args.k,rng=np.random.default_rng(args.seed))
-    examples.build(
-        generate_sentences(
-            generate_tokens(
-                generate_text(
-                    file_names=[globbed for name in args.corpus for globbed in glob(join(args.data, name))]
-                ))))
-    
-    examples.save((Path(args.data) / args.output).with_suffix('.pkl'))
+    with Logger(Path(__file__).stem,path=args.logs) as logger:
+        examples = Examples(window=args.window,k=args.k,rng=np.random.default_rng(args.seed))
+        examples.build(
+            generate_sentences(
+                generate_tokens(
+                    generate_text(
+                        file_names=[globbed for name in args.corpus for globbed in glob(join(args.data, name))]
+                    ))))
+        
+        examples.save((Path(args.data) / args.output).with_suffix('.pkl'))
 
 def train(args):
-    pass
+    with Logger(Path(__file__).stem,path=args.logs) as logger:
+        pass
 
 def main():
     start  = time()
