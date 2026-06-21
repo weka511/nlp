@@ -25,6 +25,8 @@ from pickle import dump, HIGHEST_PROTOCOL, load
 from shutil import copyfile
 from time import time
 import numpy as np
+from matplotlib.pyplot import figure,show
+from matplotlib import rc
 from scipy.special import expit
 from vocabulary import Vocabulary
 from tokenizer import generate_sentences,generate_text,generate_tokens,Token
@@ -159,9 +161,8 @@ class SkipGram:
     
     Attributes:
         examples
-        dimensionality
-        w
-        c
+        word_vectors
+        context_vectors
         rng
         minibatch
     '''
@@ -181,8 +182,8 @@ class SkipGram:
     def __init__(self,examples,dimensionality=128,logger=None,rng=np.random.default_rng(),minibatch=1):
         self.examples = examples
         n_words = len(examples.vocabulary)
-        self.w = SkipGram.create_unit_vectors(n_words,dimensionality,rng)
-        self.c = SkipGram.create_unit_vectors(n_words,dimensionality,rng)
+        self.word_vectors = SkipGram.create_unit_vectors(n_words,dimensionality,rng)
+        self.context_vectors = SkipGram.create_unit_vectors(n_words,dimensionality,rng)
         self.rng = rng
         self.minibatch = minibatch
         
@@ -195,8 +196,8 @@ class SkipGram:
         for i in self.rng.integers(n,size=(self.minibatch)):
             w_index = self.examples.positives[i,0]
             c_index = self.examples.positives[i,1]
-            w = self.w[w_index,:]
-            c_pos = self.c[c_index,:]
+            w = self.word_vectors[w_index,:]
+            c_pos = self.context_vectors[c_index,:]
             
             #  Equation (6.35)
             sigma_w_c_pos = expit(np.dot(w,c_pos))
@@ -207,7 +208,7 @@ class SkipGram:
             sigma_w_c_neg = []
             for j in range(self.examples.k):
                 c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
-                c_neg = self.c[c_neg_index,:]
+                c_neg = self.context_vectors[c_neg_index,:]
                 sigma_w_c_neg.append(expit(np.dot(w,c_neg)))
                 dL_dc_neg.append(sigma_w_c_neg[-1] * w) 
             
@@ -215,14 +216,14 @@ class SkipGram:
             dL_dw = (sigma_w_c_pos - 1) * c_pos
             for j in range(self.examples.k):
                 c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
-                c_neg=  self.c[c_neg_index,:] 
+                c_neg=  self.context_vectors[c_neg_index,:] 
                 dL_dw += sigma_w_c_neg[j] * c_neg
                 
-            self.c[c_index,:] -= eta * dL_dc_pos    # (6.38)
-            self.w[w_index,:] -= eta * dL_dw        # (6.39)
+            self.context_vectors[c_index,:] -= eta * dL_dc_pos    # (6.38)
+            self.word_vectors[w_index,:] -= eta * dL_dw        # (6.39)
             for j in range(self.examples.k):
                 c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
-                self.c[c_neg_index,:]  -= eta*dL_dc_neg[j]    # (6.40)         
+                self.context_vectors[c_neg_index,:]  -= eta*dL_dc_neg[j]    # (6.40)         
                            
         return self.get_loss()
         
@@ -236,13 +237,13 @@ class SkipGram:
         for i in range(n):
             w_index = self.examples.positives[i,0]
             c_index = self.examples.positives[i,1]
-            w = self.w[w_index,:]
-            c_pos= self.c[c_index,:]
+            w = self.word_vectors[w_index,:]
+            c_pos= self.context_vectors[c_index,:]
             loss -= np.log(expit(np.dot(w,c_pos)))
             for j in range(self.examples.k):
                 assert w_index == self.examples.negatives[i*self.examples.k+j,0]
                 c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
-                c_neg= self.c[c_neg_index,:]
+                c_neg= self.context_vectors[c_neg_index,:]
                 loss -= np.log(expit(-np.dot(w,c_neg)))
         return loss
     
@@ -281,6 +282,8 @@ def parse_args():
     training_group.add_argument('-m','--minibatch',type=int,default=2**12)
     training_group.add_argument('-N','--N',type=int,default=1000)
     training_group.add_argument('--freq',type=int,default=10)
+    parser.add_argument('--show', default=False,action='store_true',help='Controls whether plots are shown')
+    parser.add_argument('--figs', default='./figs',help='Path used to store plots')    
     
     return parser.parse_args()
 
@@ -303,12 +306,29 @@ def train(args,rng=np.random.default_rng()):
                            logger=logger,
                            rng=rng,
                            minibatch=args.minibatch)
+        losses = []
         for i in range(args.N):
-            logger.log (trainer.step(eta=args.eta))
+            losses.append(trainer.step(eta=args.eta))
+            logger.log (f'Step {i}, loss={losses[-1]}')
             if i % args.freq == 1:
                 trainer.save((Path(args.data) / args.output).with_suffix('.pkl'))
+                
+        fig = figure(figsize=(10,10))
+        ax = fig.add_subplot(1,1,1)
+        ax.plot(losses)
+        ax.set_title('Training')
+        y0,y1=ax.get_ylim()
+        ax.set_ylim(0,y1)
+        ax.set_xlabel('Step')
+        ax.set_ylabel('Loss')
+        
+        fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))
 
 def main():
+    rc('font', **{'family': 'serif',
+                  'serif': ['Palatino'],
+                  'size': 8})
+    rc('text', usetex=True)    
     start  = time()
     args = parse_args()
     rng = np.random.default_rng(args.seed)
@@ -322,6 +342,9 @@ def main():
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
     print (f'Elapsed Time {minutes} m {seconds:.2f} s')
+    
+    if args.show:
+        show()
     
 if __name__=='__main__':
     main()
