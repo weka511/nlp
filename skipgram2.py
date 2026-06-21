@@ -354,7 +354,9 @@ def train(args,rng=np.random.default_rng()):
         fig = figure(figsize=(10,10))
         ax = fig.add_subplot(1,1,1)
         ax.plot(losses)
-        ax.set_title('Training')
+        ax.set_title(f'Training: dimensionality={args.dimensionality}, minibatch = {args.minibatch}, '
+                     r'$\eta=$'
+                     f'{args.eta}')
         y0,y1=ax.get_ylim()
         ax.set_ylim(0,y1)
         ax.set_xlabel('Step')
