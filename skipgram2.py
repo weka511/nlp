@@ -224,28 +224,8 @@ class SkipGram:
             for j in range(self.examples.k):
                 c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
                 self.context_vectors[c_neg_index,:]  -= eta*dL_dc_neg[j]    # (6.40)         
-                           
-        return self.get_loss()
-        
-    
-    def get_loss(self):
-        '''
-        Compute loss following equation (6.34)
-        '''
-        n,_ = self.examples.positives.shape
-        loss = 0.0
-        for i in range(n):
-            w_index = self.examples.positives[i,0]
-            c_index = self.examples.positives[i,1]
-            w = self.word_vectors[w_index,:]
-            c_pos= self.context_vectors[c_index,:]
-            loss -= np.log(expit(np.dot(w,c_pos)))
-            for j in range(self.examples.k):
-                assert w_index == self.examples.negatives[i*self.examples.k+j,0]
-                c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
-                c_neg= self.context_vectors[c_neg_index,:]
-                loss -= np.log(expit(-np.dot(w,c_neg)))
-        return loss
+        loss_calculator = LossCalculator(self.examples,self)                   
+        return loss_calculator.get_loss()
     
     def save(self,file_path):
         '''
@@ -260,7 +240,36 @@ class SkipGram:
             dump(self, out, HIGHEST_PROTOCOL)
             print (f'Saved examples in {file_path.resolve()}')        
 
+class LossCalculator:
+    '''
+    Compute loss following equation (6.34)
+    '''
+    def __init__(self,examples,skipgram):
+        self.positives = examples.positives
+        self.negatives = examples.negatives
+        self.k = examples.k
+        self.word_vectors = skipgram.word_vectors
+        self.context_vectors = skipgram.context_vectors
+        self.n,_ = self.positives.shape
         
+    def get_loss(self):
+        '''
+        Compute loss following equation (6.34)
+        '''
+        loss = 0.0
+        for i in range(self.n):
+            w_index = self.positives[i,0]
+            c_index = self.positives[i,1]
+            w = self.word_vectors[w_index,:]
+            c_pos = self.context_vectors[c_index,:]
+            loss -= np.log(expit(np.dot(w,c_pos)))
+            for j in range(self.k):
+                assert w_index == self.negatives[i*self.k+j,0]
+                c_neg_index = self.negatives[i*self.k+j,1]
+                c_neg= self.context_vectors[c_neg_index,:]
+                loss -= np.log(expit(-np.dot(w,c_neg)))
+        return loss
+    
 def parse_args():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('command',choices=['examples','train'])
