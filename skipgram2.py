@@ -30,7 +30,7 @@ from matplotlib import rc
 from scipy.special import expit
 from vocabulary import Vocabulary
 from tokenizer import generate_sentences,generate_text,generate_tokens,Token
-from shared.utils import Logger
+from shared.utils import Logger, user_has_requested_stop
 
 class Examples:
     '''
@@ -350,6 +350,7 @@ def train(args,rng=np.random.default_rng()):
             logger.log (f'Step {i}, loss={losses[-1]}')
             if i % args.freq == 1:
                 trainer.save((Path(args.data) / args.output).with_suffix('.pkl'))
+                if user_has_requested_stop(): break
                 
         fig = figure(figsize=(10,10))
         ax = fig.add_subplot(1,1,1)
