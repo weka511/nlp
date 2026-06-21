@@ -43,6 +43,7 @@ class Examples:
         positives
         negatives
         rng
+        window
 
     '''
     
@@ -317,38 +318,11 @@ class LossCalculator:
     
     def reset(self):
         '''
-        Once we have claulcted loss, need to reset the list of changes
+        Once we have calculated loss, need to reset the list of changes
         '''
         self.ToCalculate = []   
     
-def parse_args(choices):
-    parser = ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=choices)
-    parser.add_argument('--seed',type=int,default=None)
-    parser.add_argument('--data', default='./data',help='Path to corpus.') 
-    parser.add_argument('-o', '--output',default=None,required=True,help='File name for storing results')
-    parser.add_argument('--logs', default='./logs', help='Location for storing log files')
-    parser.add_argument('--show', default=False,action='store_true',help='Controls whether plots are shown')
-    parser.add_argument('--figs', default='./figs',help='Path used to store plots')        
-    
-    examples_group = parser.add_argument_group('Examples','Used for command=examples')
-    examples_group.add_argument('--corpus', default=None, nargs='+', help='Name(s) of corpus file(s)')
-    examples_group.add_argument('-w','--window', type=int,default=2)
-    examples_group.add_argument('-k','--k',type=int,default=2)
-    examples_group.add_argument('--alpha',default=0.75,type=float)
-    
-    training_group = parser.add_argument_group('Training','Used for train command')
-    training_group.add_argument('--examples',default=None)
-    training_group.add_argument('-d','--dimensionality',type=int,default=128)
-    training_group.add_argument('--eta',default=0.01,type=float)
-    training_group.add_argument('-m','--minibatch',type=int,default=2**12)
-    training_group.add_argument('-N','--N',type=int,default=1000)
-    training_group.add_argument('--freq',type=int,default=10)
-    
-    analysis_group = parser.add_argument_group('Analysis','')
-    analysis_group.add_argument('--skipgram',default=None)
-    
-    return parser.parse_args()
+
 
 class Command(ABC):
     '''
@@ -467,7 +441,67 @@ class BuildDistances(Command):
         logger.log('Calculated products')
         skipgram.save((Path(args.data) / args.output).with_suffix('.pkl'),report=lambda s:logger.log(s))
  
+class Explore(Command):
+    '''
+    Build table of scalar products between weight vectors
+    '''
+    def __init__(self):
+        super().__init__('explore')
+        
+    '''
+    Build table of scalar products between weight vectors
+    '''        
+        
+    def _execute(self,args,rng = np.random.default_rng(),logger=None):
+        skipgram = SkipGram.create((Path(args.data) / args.skipgram).with_suffix('.pkl'),
+                                   report=lambda s: logger.log(s))
+        P = skipgram.P
+        
+        vocabulary = skipgram.examples.vocabulary
+        if args.word == None:
+            for token in rng.integers((len(vocabulary)),size=args.nwords):
+                word = vocabulary.get_word(token)
+                indices = np.argsort(P[token,:])[::-1]
+                for i in range(args.nclosest):
+                    logger.log(f'{token} {word}: {indices[i]} {vocabulary.get_word(indices[i])} {P[token,indices[i]]}')
+        else:
+            token = vocabulary.token[args.word]
+            indices = np.argsort(P[token,:])[::-1]
+            for i in range(args.nclosest):
+                logger.log(f'{token} {args.word}: {indices[i]} {vocabulary.get_word(indices[i])} {P[token,indices[i]]}')            
 
+def parse_args(choices):
+    parser = ArgumentParser(description=__doc__)
+    parser.add_argument('command',choices=choices)
+    parser.add_argument('--seed',type=int,default=None)
+    parser.add_argument('--data', default='./data',help='Path to corpus.') 
+    parser.add_argument('-o', '--output',default=None,required=True,help='File name for storing results')
+    parser.add_argument('--logs', default='./logs', help='Location for storing log files')
+    parser.add_argument('--show', default=False,action='store_true',help='Controls whether plots are shown')
+    parser.add_argument('--figs', default='./figs',help='Path used to store plots')        
+    
+    examples_group = parser.add_argument_group('Examples',description='Used for command=examples')
+    examples_group.add_argument('--corpus', default=None, nargs='+', help='Name(s) of corpus file(s)')
+    examples_group.add_argument('-w','--window', type=int,default=2)
+    examples_group.add_argument('-k','--k',type=int,default=2)
+    examples_group.add_argument('--alpha',default=0.75,type=float)
+    
+    training_group = parser.add_argument_group('Training',description='Used for command==train')
+    training_group.add_argument('--examples',default=None)
+    training_group.add_argument('-d','--dimensionality',type=int,default=128)
+    training_group.add_argument('--eta',default=0.01,type=float)
+    training_group.add_argument('-m','--minibatch',type=int,default=2**12)
+    training_group.add_argument('-N','--N',type=int,default=1000)
+    training_group.add_argument('--freq',type=int,default=10)
+    
+    analysis_group = parser.add_argument_group(title='Analysis',description='Used for build and explore')
+    analysis_group.add_argument('--skipgram',default=None)
+    analysis_group.add_argument('--nwords',type=int,default=12)
+    analysis_group.add_argument('--nclosest',type=int,default=12)
+    analysis_group.add_argument('--word',default=None)
+    
+    return parser.parse_args()
+        
 def main():
     rc('font', **{'family': 'serif',
                   'serif': ['Palatino'],
@@ -477,7 +511,8 @@ def main():
     Command.append([
         CreateExamples(),
         TrainSkipgrams(),
-        BuildDistances()
+        BuildDistances(),
+        Explore()
     ])
     args = parse_args(Command.get_choices())
     Command.get_command(args.command).execute(args)
