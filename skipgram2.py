@@ -224,8 +224,6 @@ class SkipGram:
             for j in range(self.examples.k):
                 c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
                 self.context_vectors[c_neg_index,:]  -= eta*dL_dc_neg[j]    # (6.40)         
-        loss_calculator = LossCalculator(self.examples,self)                   
-        return loss_calculator.get_loss()
     
     def save(self,file_path):
         '''
@@ -316,8 +314,10 @@ def train(args,rng=np.random.default_rng()):
                            rng=rng,
                            minibatch=args.minibatch)
         losses = []
+        loss_calculator = LossCalculator(trainer.examples,trainer) 
         for i in range(args.N):
-            losses.append(trainer.step(eta=args.eta))
+            trainer.step(eta=args.eta)
+            losses.append(loss_calculator.get_loss())
             logger.log (f'Step {i}, loss={losses[-1]}')
             if i % args.freq == 1:
                 trainer.save((Path(args.data) / args.output).with_suffix('.pkl'))
