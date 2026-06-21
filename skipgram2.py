@@ -350,13 +350,12 @@ def parse_args(choices):
     
     return parser.parse_args()
 
-#def build_examples(args,rng=np.random.default_rng()):
-  
-
-#def train(args,rng=np.random.default_rng()):
- 
-
 class Command(ABC):
+    '''
+    This class is te parant for all the taks performed by this program.
+    It provides a list of ecceptable commands (used by parse_args(),
+    and its subclasses are each esponsible for one task.
+    '''
     choices = {}
     @staticmethod
     def append(commands):
@@ -370,95 +369,102 @@ class Command(ABC):
     @staticmethod
     def get_command(key):
         return Command.choices[key]
-    
-    #@staticmethod
-    #def execute(key):
-        #Command.choices[key].execute()
         
     def __init__(self,key):
         self.key = key
     
     def execute(self,args):
-        self._execute(args,rng = np.random.default_rng(args.seed))
+        '''
+        Set up parameters needed by Command, then execute it
+        '''
+        with Logger(Path(__file__).stem,path=args.logs) as logger:
+            self._execute(args,rng = np.random.default_rng(args.seed),logger=logger)
         
     @abstractmethod
-    def _execute(self,args,rng = np.random.default_rng()):
+    def _execute(self,args,rng = np.random.default_rng(),logger=None):
         '''
+        Perform command
         '''
     
 class CreateExamples(Command):
     '''
+    Build examples for training skipgrams after 6.8.2 of Jurafsky & Martin
     '''
     def __init__(self):
         super().__init__('examples')
         
-    def _execute(self,args,rng = np.random.default_rng()):
+    def _execute(self,args,rng = np.random.default_rng(),logger=None):
         '''
+        Parse text into token, then build examples
         ''' 
-        with Logger(Path(__file__).stem,path=args.logs) as logger:
-            examples = Examples(window=args.window,k=args.k,rng=rng)
-            examples.build(
-                generate_sentences(
-                    generate_tokens(
-                        generate_text(
-                            file_names=[globbed for name in args.corpus for globbed in glob(join(args.data, name))]
-                        ))))
-            
-            examples.save((Path(args.data) / args.output).with_suffix('.pkl'))        
+        examples = Examples(window=args.window,k=args.k,rng=rng)
+        examples.build(
+            generate_sentences(
+                generate_tokens(
+                    generate_text(
+                        file_names=[globbed for name in args.corpus for globbed in glob(join(args.data, name))]
+                    ))))
+        
+        examples.save((Path(args.data) / args.output).with_suffix('.pkl'))        
 
 class TrainSkipgrams(Command):
     '''
+    Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
     '''
     def __init__(self):
         super().__init__('train')
         
-    def _execute(self,args,rng = np.random.default_rng()):
+    def _execute(self,args,rng = np.random.default_rng(),logger=None):
         '''
+        Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
         '''
-        with Logger(Path(__file__).stem,path=args.logs) as logger:
-            trainer = SkipGram(Examples.create((Path(args.data) / args.examples).with_suffix('.pkl'),logger),
-                               dimensionality=args.dimensionality,
-                               logger=logger,
-                               rng=rng,
-                               minibatch=args.minibatch)
-            losses = []
-            loss_calculator = LossCalculator(trainer.examples,trainer) 
-            for i in range(args.N):
-                trainer.step(loss_calculator,eta=args.eta)
-                losses.append(loss_calculator.get_loss())
-                loss_calculator.reset()
-                logger.log (f'Step {i}, loss={losses[-1]}')
-                if i % args.freq == 1:
-                    trainer.save((Path(args.data) / args.output).with_suffix('.pkl'),report=lambda s:logger.log(s))
-                    if user_has_requested_stop(): break
-                    
-            fig = figure(figsize=(10,10))
-            ax = fig.add_subplot(1,1,1)
-            ax.plot(losses)
-            ax.set_title(f'Training: dimensionality={args.dimensionality}, minibatch = {args.minibatch}, '
-                         r'$\eta=$'
-                         f'{args.eta}')
-            y0,y1=ax.get_ylim()
-            ax.set_ylim(0,y1)
-            ax.set_xlabel('Step')
-            ax.set_ylabel('Loss')
-            
-            fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))        
+        trainer = SkipGram(Examples.create((Path(args.data) / args.examples).with_suffix('.pkl'),logger),
+                           dimensionality=args.dimensionality,
+                           logger=logger,
+                           rng=rng,
+                           minibatch=args.minibatch)
+        losses = []
+        loss_calculator = LossCalculator(trainer.examples,trainer) 
+        for i in range(args.N):
+            trainer.step(loss_calculator,eta=args.eta)
+            losses.append(loss_calculator.get_loss())
+            loss_calculator.reset()
+            logger.log (f'Step {i}, loss={losses[-1]}')
+            if i % args.freq == 1:
+                trainer.save((Path(args.data) / args.output).with_suffix('.pkl'),report=lambda s:logger.log(s))
+                if user_has_requested_stop(): break
+                
+        fig = figure(figsize=(10,10))
+        ax = fig.add_subplot(1,1,1)
+        ax.plot(losses)
+        ax.set_title(f'Training: dimensionality={args.dimensionality}, minibatch = {args.minibatch}, '
+                     r'$\eta=$'
+                     f'{args.eta}')
+        y0,y1=ax.get_ylim()
+        ax.set_ylim(0,y1)
+        ax.set_xlabel('Step')
+        ax.set_ylabel('Loss')
+        
+        fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))        
         
 class BuildDistances(Command):
     '''
+    Build table of scalar products between weight vectors
     '''
     def __init__(self):
         super().__init__('build')
         
-    def _execute(self,args,rng = np.random.default_rng()):
-        with Logger(Path(__file__).stem,path=args.logs) as logger:
-            skipgram = SkipGram.create((Path(args.data) / args.skipgram).with_suffix('.pkl'),
-                                       report=lambda s: logger.log(s))
-            logger.log('Calculating products')
-            skipgram.calculate_products()
-            logger.log('Calculated products')
-            skipgram.save((Path(args.data) / args.output).with_suffix('.pkl'),report=lambda s:logger.log(s))
+    '''
+    Build table of scalar products between weight vectors
+    '''        
+        
+    def _execute(self,args,rng = np.random.default_rng(),logger=None):
+        skipgram = SkipGram.create((Path(args.data) / args.skipgram).with_suffix('.pkl'),
+                                   report=lambda s: logger.log(s))
+        logger.log('Calculating products')
+        skipgram.calculate_products()
+        logger.log('Calculated products')
+        skipgram.save((Path(args.data) / args.output).with_suffix('.pkl'),report=lambda s:logger.log(s))
  
 
 def main():
@@ -473,16 +479,8 @@ def main():
         BuildDistances()
     ])
     args = parse_args(Command.get_choices())
-    #rng = np.random.default_rng(args.seed)
     Command.get_command(args.command).execute(args)
-    #match args.command:
-        #case 'examples':
-            #build_examples(args,rng=rng) 
-        #case 'train':
-            #train(args,rng=rng)
-        #case 'analyze':
-            #analyze(args,rng=rng)
-    
+
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
