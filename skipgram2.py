@@ -187,7 +187,7 @@ class SkipGram:
         self.rng = rng
         self.minibatch = minibatch
         
-    def step(self,eta=0.01):
+    def step(self,loss_calculator,eta=0.01):
         '''
         Compute partial derivatives and update w and c
         Section 6.8.2
@@ -223,7 +223,9 @@ class SkipGram:
             self.word_vectors[w_index,:] -= eta * dL_dw        # (6.39)
             for j in range(self.examples.k):
                 c_neg_index = self.examples.negatives[i*self.examples.k+j,1]
-                self.context_vectors[c_neg_index,:]  -= eta*dL_dc_neg[j]    # (6.40)         
+                self.context_vectors[c_neg_index,:]  -= eta*dL_dc_neg[j]    # (6.40) 
+                
+            loss_calculator.append(i)
     
     def save(self,file_path):
         '''
@@ -240,7 +242,18 @@ class SkipGram:
 
 class LossCalculator:
     '''
-    Compute loss following equation (6.34)
+    Compute loss following equation (6.34). We will cache the
+    losses for each word, so we need merely recalculate the
+    losses thast have changed.
+    
+    Attributes:
+        positives
+        negatives
+        k
+        word_vectors
+        context_vectors
+        Losses
+        ToCalculate
     '''
     def __init__(self,examples,skipgram):
         self.positives = examples.positives
@@ -248,33 +261,50 @@ class LossCalculator:
         self.k = examples.k
         self.word_vectors = skipgram.word_vectors
         self.context_vectors = skipgram.context_vectors
-        self.n,_ = self.positives.shape
+        n,_ = self.positives.shape
+        self.Losses = np.zeros((n))
+        self.ToCalculate = list(range(n))
+        
+    def append(self,i):
+        '''
+        Indicate that one word has changed
+        '''
+        self.ToCalculate.append(i)
         
     def get_loss(self):
         '''
-        Compute loss following equation (6.34)
+        Compute loss following equation (6.34). After the first
+        call we need only recalculate for words that have changed.
         '''
-        loss = 0.0
-        for i in range(self.n):
+        for i in self.ToCalculate:
             w_index = self.positives[i,0]
             c_index = self.positives[i,1]
             w = self.word_vectors[w_index,:]
             c_pos = self.context_vectors[c_index,:]
-            loss -= np.log(expit(np.dot(w,c_pos)))
+            self.Losses[i] = - np.log(expit(np.dot(w,c_pos)))
             for j in range(self.k):
                 assert w_index == self.negatives[i*self.k+j,0]
                 c_neg_index = self.negatives[i*self.k+j,1]
                 c_neg= self.context_vectors[c_neg_index,:]
-                loss -= np.log(expit(-np.dot(w,c_neg)))
-        return loss
+                self.Losses[i]  -= np.log(expit(-np.dot(w,c_neg)))
+                     
+        return self.Losses.sum()
+    
+    def reset(self):
+        '''
+        Once we have claulcted loss, need to reset the list of changes
+        '''
+        self.ToCalculate = []   
     
 def parse_args():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('command',choices=['examples','train'])
     parser.add_argument('--seed',type=int,default=None)
-    parser.add_argument('--data', default='./data',help='Path to corpus; also used to store ngrams') 
+    parser.add_argument('--data', default='./data',help='Path to corpus.') 
     parser.add_argument('-o', '--output',default=None,required=True,help='File name for storing results')
     parser.add_argument('--logs', default='./logs', help='Location for storing log files')
+    parser.add_argument('--show', default=False,action='store_true',help='Controls whether plots are shown')
+    parser.add_argument('--figs', default='./figs',help='Path used to store plots')        
     
     examples_group = parser.add_argument_group('Examples','Used for command=examples')
     examples_group.add_argument('--corpus', default=None, nargs='+', help='Name(s) of corpus file(s)')
@@ -289,8 +319,6 @@ def parse_args():
     training_group.add_argument('-m','--minibatch',type=int,default=2**12)
     training_group.add_argument('-N','--N',type=int,default=1000)
     training_group.add_argument('--freq',type=int,default=10)
-    parser.add_argument('--show', default=False,action='store_true',help='Controls whether plots are shown')
-    parser.add_argument('--figs', default='./figs',help='Path used to store plots')    
     
     return parser.parse_args()
 
@@ -316,8 +344,9 @@ def train(args,rng=np.random.default_rng()):
         losses = []
         loss_calculator = LossCalculator(trainer.examples,trainer) 
         for i in range(args.N):
-            trainer.step(eta=args.eta)
+            trainer.step(loss_calculator,eta=args.eta)
             losses.append(loss_calculator.get_loss())
+            loss_calculator.reset()
             logger.log (f'Step {i}, loss={losses[-1]}')
             if i % args.freq == 1:
                 trainer.save((Path(args.data) / args.output).with_suffix('.pkl'))
