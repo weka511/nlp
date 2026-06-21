@@ -179,6 +179,19 @@ class SkipGram:
         Product = rng.uniform(size=(m,dimensionality))
         return Product/np.linalg.norm(Product,axis=1,keepdims=True)
     
+    @staticmethod
+    def create(file_name,report=print):
+        '''
+        A factory method to instantiate a Skipgram from a saved file
+        
+        Parameters:
+            file_name    Name of file where ngrams have been stored
+        '''
+        with open(file_name, 'rb') as inp:
+            product = load(inp) 
+            report (f'Loaded skipgrams from {file_name.resolve()}')
+            return product    
+    
     def __init__(self,examples,dimensionality=128,logger=None,rng=np.random.default_rng(),minibatch=1):
         self.examples = examples
         n_words = len(examples.vocabulary)
@@ -240,11 +253,22 @@ class SkipGram:
             dump(self, out, HIGHEST_PROTOCOL)
             report (f'Saved examples in {file_path.resolve()}')        
 
+    def calculate_products(self):
+        '''
+        Calculate dot products between word vectors
+        '''
+        m,n = self.word_vectors.shape
+        self.P = np.zeros((m,m))
+        for i in range(m):
+            for j in range(i+1):
+                self.P[i,j] = np.dot(self.word_vectors[i,:],self.word_vectors[j,:])
+                self.P[j,i] = self.P[i,j]
+    
 class LossCalculator:
     '''
     Compute loss following equation (6.34). We will cache the
     losses for each word, so we need merely recalculate the
-    losses thast have changed.
+    losses that have changed.
     
     Attributes:
         positives
@@ -298,7 +322,7 @@ class LossCalculator:
     
 def parse_args():
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=['examples','train'])
+    parser.add_argument('command',choices=['examples','train','analyze'])
     parser.add_argument('--seed',type=int,default=None)
     parser.add_argument('--data', default='./data',help='Path to corpus.') 
     parser.add_argument('-o', '--output',default=None,required=True,help='File name for storing results')
@@ -319,6 +343,9 @@ def parse_args():
     training_group.add_argument('-m','--minibatch',type=int,default=2**12)
     training_group.add_argument('-N','--N',type=int,default=1000)
     training_group.add_argument('--freq',type=int,default=10)
+    
+    analysis_group = parser.add_argument_group('Analysis','')
+    analysis_group.add_argument('--skipgram',default=None)
     
     return parser.parse_args()
 
@@ -365,6 +392,16 @@ def train(args,rng=np.random.default_rng()):
         
         fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))
 
+
+def analyze(args,rng=np.random.default_rng()):
+    with Logger(Path(__file__).stem,path=args.logs) as logger:
+        skipgram = SkipGram.create((Path(args.data) / args.skipgram).with_suffix('.pkl'),
+                                   report=lambda s: logger.log(s))
+        logger.log('Calculating products')
+        skipgram.calculate_products()
+        logger.log('Calculated products')
+        skipgram.save((Path(args.data) / args.output).with_suffix('.pkl'),report=lambda s:logger.log(s))
+
 def main():
     rc('font', **{'family': 'serif',
                   'serif': ['Palatino'],
@@ -378,6 +415,8 @@ def main():
             build_examples(args,rng=rng) 
         case 'train':
             train(args,rng=rng)
+        case 'analyze':
+            analyze(args,rng=rng)
     
     elapsed = time() - start
     minutes = int(elapsed/60)
