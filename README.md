@@ -16,7 +16,7 @@ tfidf-harness.py|Test harness for td-idf algorithm
 tokenizer.py|Prepare text for processing
 vocabulary.py|Establish mapping between words and tokens
 
-## Old Code
+## Old Code (in folder _old_)
 
 File | Description
 ------------------|------------------------------------------------------------
