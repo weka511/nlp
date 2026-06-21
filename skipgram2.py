@@ -227,18 +227,18 @@ class SkipGram:
                 
             loss_calculator.append(i)
     
-    def save(self,file_path):
+    def save(self,file_path,report=print):
         '''
         Save Examples using pickle.
         
         Parameters:
-            file     Name of file where tables will be saved
+            file_path     Name of file where tables will be saved
         '''
         if file_path.is_file():
             copyfile(file_path,file_path.with_suffix('.pkl~'))
         with open(file_path,'wb') as out:
             dump(self, out, HIGHEST_PROTOCOL)
-            print (f'Saved examples in {file_path.resolve()}')        
+            report (f'Saved examples in {file_path.resolve()}')        
 
 class LossCalculator:
     '''
@@ -349,7 +349,7 @@ def train(args,rng=np.random.default_rng()):
             loss_calculator.reset()
             logger.log (f'Step {i}, loss={losses[-1]}')
             if i % args.freq == 1:
-                trainer.save((Path(args.data) / args.output).with_suffix('.pkl'))
+                trainer.save((Path(args.data) / args.output).with_suffix('.pkl'),report=lambda s:logger.log(s))
                 if user_has_requested_stop(): break
                 
         fig = figure(figsize=(10,10))
