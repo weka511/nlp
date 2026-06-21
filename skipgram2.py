@@ -357,6 +357,7 @@ class Command(ABC):
     and its subclasses are each esponsible for one task.
     '''
     choices = {}
+    
     @staticmethod
     def append(commands):
         for command in commands:
