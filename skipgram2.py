@@ -109,7 +109,10 @@ class Examples:
         Create array of positive examples
         
         Parameters:
-            sentence_generator
+            sentence_generator   Used to extract tokens
+            
+        Returns:
+            Matrix of negative examples
         '''
         positives = []
         for sentence in sentence_generator:
@@ -146,7 +149,11 @@ class Examples:
                         pass
                 
     '''
-    Create negative examples
+    Create negative examples. For each positive example, (w,c), create k pairs (w,c'),
+    where c' is never used in any positve example for w.
+    
+    Returns:
+         Matrix of negative examples
     '''
     def _create_negatives(self):
         indices = np.argsort(self.positives[:,0])
