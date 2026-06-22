@@ -79,7 +79,7 @@ class Examples:
         self.positives = self._create_positives(sentence_generator)
         self.negatives = self._create_negatives()
         
-    def save(self,file):
+    def save(self,file,report=print):
         '''
         Save Examples using pickle.
         
@@ -88,7 +88,7 @@ class Examples:
         '''
         with open(file,'wb') as out:
             dump(self, out, HIGHEST_PROTOCOL)
-            print (f'Saved examples in {file.resolve()}')    
+            report (f'Saved examples in {file.resolve()}')    
         
     def _create_positives(self,sentence_generator):
         positives = []
@@ -377,10 +377,11 @@ class CreateExamples(Command):
             generate_sentences(
                 generate_tokens(
                     generate_text(
-                        file_names=[globbed for name in args.corpus for globbed in glob(join(args.data, name))]
+                        file_names=[globbed for name in args.input for globbed in glob(join(args.data, name))],
+                        logger=logger
                     ))))
         
-        examples.save((Path(args.data) / args.output).with_suffix('.pkl'))        
+        examples.save((Path(args.data) / args.output).with_suffix('.pkl'),report=lambda s:logger.log(s))        
 
 class TrainSkipgrams(Command):
     '''
@@ -393,14 +394,14 @@ class TrainSkipgrams(Command):
         '''
         Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
         '''
-        trainer = SkipGram(Examples.create((Path(args.data) / args.examples).with_suffix('.pkl'),logger),
+        trainer = SkipGram(Examples.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),logger),
                            dimensionality=args.dimensionality,
                            logger=logger,
                            rng=rng,
                            minibatch=args.minibatch)
         losses = []
         loss_calculator = LossCalculator(trainer.examples,trainer) 
-        for i in range(args.N):
+        for i in range(args.Niterations):
             trainer.step(loss_calculator,eta=args.eta)
             losses.append(loss_calculator.get_loss())
             loss_calculator.reset()
@@ -434,7 +435,7 @@ class BuildDistances(Command):
     '''        
         
     def _execute(self,args,rng = np.random.default_rng(),logger=None):
-        skipgram = SkipGram.create((Path(args.data) / args.skipgram).with_suffix('.pkl'),
+        skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
                                    report=lambda s: logger.log(s))
         logger.log('Calculating products')
         skipgram.calculate_products()
@@ -453,7 +454,7 @@ class Explore(Command):
     '''        
         
     def _execute(self,args,rng = np.random.default_rng(),logger=None):
-        skipgram = SkipGram.create((Path(args.data) / args.skipgram).with_suffix('.pkl'),
+        skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
                                    report=lambda s: logger.log(s))
         P = skipgram.P
         
@@ -473,32 +474,30 @@ class Explore(Command):
 def parse_args(choices):
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('command',choices=choices)
-    parser.add_argument('--seed',type=int,default=None)
-    parser.add_argument('--data', default='./data',help='Path to corpus.') 
+    parser.add_argument('input',nargs='+',help='List of input files')
+    parser.add_argument('--seed',type=int,default=None,help='Deed for random number generation')
+    parser.add_argument('--data', default='./data',help='Path to data files') 
     parser.add_argument('-o', '--output',default=None,required=True,help='File name for storing results')
     parser.add_argument('--logs', default='./logs', help='Location for storing log files')
     parser.add_argument('--show', default=False,action='store_true',help='Controls whether plots are shown')
     parser.add_argument('--figs', default='./figs',help='Path used to store plots')        
     
     examples_group = parser.add_argument_group('Examples',description='Used for command=examples')
-    examples_group.add_argument('--corpus', default=None, nargs='+', help='Name(s) of corpus file(s)')
-    examples_group.add_argument('-w','--window', type=int,default=2)
-    examples_group.add_argument('-k','--k',type=int,default=2)
-    examples_group.add_argument('--alpha',default=0.75,type=float)
+    examples_group.add_argument('-w','--window', type=int,default=2,help='Width of window for context')
+    examples_group.add_argument('-k','--k',type=int,default=2,help='Number of negative context words for each positive')
+    examples_group.add_argument('--alpha',default=0.75,type=float,help='The exponent from equation (6.32)')
     
     training_group = parser.add_argument_group('Training',description='Used for command==train')
-    training_group.add_argument('--examples',default=None)
-    training_group.add_argument('-d','--dimensionality',type=int,default=128)
-    training_group.add_argument('--eta',default=0.01,type=float)
-    training_group.add_argument('-m','--minibatch',type=int,default=2**12)
-    training_group.add_argument('-N','--N',type=int,default=1000)
-    training_group.add_argument('--freq',type=int,default=10)
+    training_group.add_argument('-d','--dimensionality',type=int,default=128,help='Length of word vectors')
+    training_group.add_argument('--eta',default=0.01,type=float,help='Training speed')
+    training_group.add_argument('-m','--minibatch',type=int,default=2**12,help='Number of samples in a minibatch')
+    training_group.add_argument('-N','--Niterations',type=int,default=1000,help='Number of iterations')
+    training_group.add_argument('--freq',type=int,default=100,help='Inerval between printing train ing steps')
     
     analysis_group = parser.add_argument_group(title='Analysis',description='Used for build and explore')
-    analysis_group.add_argument('--skipgram',default=None)
-    analysis_group.add_argument('--nwords',type=int,default=12)
-    analysis_group.add_argument('--nclosest',type=int,default=12)
-    analysis_group.add_argument('--word',default=None)
+    analysis_group.add_argument('--word',default=None,help='Used to explore a single word')
+    analysis_group.add_argument('--nwords',type=int,default=12,help='Number of worssa to explore')
+    analysis_group.add_argument('--nclosest',type=int,default=32,help='Number of closest words to explore')
     
     return parser.parse_args()
         

@@ -25,7 +25,7 @@ class Token:
     Period = '.'
     Apostrophe2 = '’'  #FIXME - Issue #45
     
-def generate_text(file_names : [str] = []):
+def generate_text(file_names : [str] = [],logger=None):
     '''
     Generator for reading text from a corpus. It allows us to read the file, one line at a time.
 
@@ -36,6 +36,7 @@ def generate_text(file_names : [str] = []):
     
     for file_name in file_names:
         with open(file_name, encoding='utf-8') as text_file:
+            logger.log(f'Processing {file_name}')
             for line in text_file:
                 yield line.strip()
 
