@@ -15,7 +15,11 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-'''Skipgrams as described in Chapter 6 of Jurafsky & Martin'''
+'''
+    Skipgrams as described in Chapter 6 of Jurafsky & Martin.
+    This program generates examples, train skipgrams, and
+    allows the user to explore word vectors.
+'''
 
 from abc import ABC,abstractmethod
 from argparse import ArgumentParser
@@ -76,15 +80,18 @@ class Examples:
         self.rng = rng
         self.alpha = alpha
         
-    def build(self,sentence_generator):
+    def build(self,sentence_generator,logger=None):
         '''
         Build examples using a generator for sentences
         
         Parameters:
             sentence_generator    Used to iterate through sentences in corpus
         '''
+        logger.log(f'Building examples: window={self.window}, k={self.k}')
         self.positives = self._create_positives(sentence_generator)
+        logger.log('Built positive examples')
         self.negatives = self._create_negatives()
+        logger.log('Completed building examples')
         
     def save(self,file,report=print):
         '''
@@ -123,18 +130,20 @@ class Examples:
             positives.append([w,c])
         
     '''
-    Create positive examples
+    Create positive examples. Each token gines rise to a set of pairs: the second
+    token of each pair is close to the first, within a distance controlled by self.window.
     
     Parameters:
-        tokens
+        tokens    List of tokens for positive examples
     '''
     def _generate_positive(self,tokens):
         for i in range(len(tokens)):
             for j in range(-self.window,self.window + 1):
-                if j == 0: continue
-                if i + j < 0: continue
-                if i + j >= len(tokens): continue
-                yield tokens[i], tokens[i+j]
+                if j != 0:    # Pair of tokens must not be identical
+                    try:
+                        yield tokens[i], tokens[i+j]
+                    except IndexError:               # Don't go beyond boundary of tokens
+                        pass
                 
     '''
     Create negative examples
@@ -143,30 +152,32 @@ class Examples:
         indices = np.argsort(self.positives[:,0])
         self.positives = self.positives[indices,:]
         m,_ = self.positives.shape
-        ws,breaks = np.unique(self.positives[:,0],return_index=True)
-        breaks = np.hstack([breaks,[m]])
+        word_tokens,breaks = np.unique(self.positives[:,0],return_index=True)
+        breaks = np.hstack([breaks,[m+1]])
         Product = np.full((m*self.k,2),-1)
-        counts = self.vocabulary.get_counts()**self.alpha
-        for i in range(len(ws)):
-            pos_min = self.window*breaks[i]
-            pos_max = self.window*breaks[i+1]
-            Product[pos_min:pos_max,0] = ws[i]
-            Product[pos_min:pos_max,1] = self.rng.choice(len(self.vocabulary),
-                                                         p=self._get_p(
-                                                             np.unique(self.positives[breaks[i]:breaks[i+1],1]),counts),
-                                                         size=pos_max - pos_min)
+        for i in range(len(word_tokens)):
+            neg_min = self.k*breaks[i]                  # Position of first negative example for ith token
+            neg_max = min(self.k*breaks[i+1],m*self.k)  # Just beyond last negative example for ith token
+            n_negative = neg_max - neg_min              # Number of examples to be generated this step
+            Product[neg_min:neg_max,0] = word_tokens[i] # Word for negatve examples must match postive
+            
+            probabilities = self._get_p(forbidden=np.unique(self.positives[breaks[i]:breaks[i+1],1]),
+                                        counts=self.vocabulary.get_counts())  
+            negative_contexts = self.rng.choice(len(self.vocabulary),p=probabilities,size=n_negative)
+            Product[neg_min:neg_max,1] = negative_contexts
         return Product
  
-    def _get_p(self,forbidden,counts):
+    def _get_p(self,forbidden=[],counts=[]):
         '''
-        Calculate probabilities using equation (6.32)
+        Use equation (6.32) to calculate probabilities of each token appearing in negative context
         
         Parameters:
-            forbidden
-            counts
+            forbidden    Tokens that appear as context in positive examples, 
+                         so we cannot use them for negatives
+            counts       Number of appearance of each token in vocabulary     
                     
         '''
-        p = counts.copy()
+        p = counts**self.alpha
         p[forbidden] = 0
         return p / p.sum()    
     
@@ -265,18 +276,20 @@ class SkipGram:
                 
             loss_calculator.append(i)
     
-    def save(self,file_path,report=print):
+    def save(self,file_path,report=print,description='word vectors'):
         '''
         Save Examples using pickle.
         
         Parameters:
             file_path     Name of file where tables will be saved
+            report        Used to log result of save
+            description   Name reported to user
         '''
         if file_path.is_file():
             copyfile(file_path,file_path.with_suffix('.pkl~'))
         with open(file_path,'wb') as out:
             dump(self, out, HIGHEST_PROTOCOL)
-            report (f'Saved examples in {file_path.resolve()}')        
+            report (f'Saved {description} in {file_path.resolve()}')        
 
     def calculate_products(self,normalize):
         '''
@@ -407,7 +420,8 @@ class CreateExamples(Command):
                     generate_text(
                         file_names=[globbed for name in args.input for globbed in glob(join(args.data, name))],
                         logger=logger
-                    ))))
+                    ))),
+            logger=logger)
         
         examples.save((Path(args.data) / args.output).with_suffix('.pkl'),report=lambda s:logger.log(s))        
 
@@ -468,7 +482,8 @@ class BuildDistances(Command):
         logger.log('Calculating products')
         skipgram.calculate_products(args.normalize)
         logger.log('Calculated products')
-        skipgram.save((Path(args.data) / args.output).with_suffix('.pkl'),report=lambda s:logger.log(s))
+        skipgram.save((Path(args.data) / args.output).with_suffix('.pkl'),
+                      report=lambda s:logger.log(s),description='word vectors and distances')
  
 class Explore1(Command):
     '''
