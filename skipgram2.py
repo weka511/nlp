@@ -405,8 +405,8 @@ class TrainSkipgrams(Command):
             trainer.step(loss_calculator,eta=args.eta)
             losses.append(loss_calculator.get_loss())
             loss_calculator.reset()
-            logger.log (f'Step {i}, loss={losses[-1]}')
             if i % args.freq == 1:
+                logger.log (f'Step {i}, loss={losses[-1]}')
                 trainer.save((Path(args.data) / args.output).with_suffix('.pkl'),report=lambda s:logger.log(s))
                 if user_has_requested_stop(): break
                 
@@ -472,6 +472,17 @@ class Explore(Command):
                 logger.log(f'{token} {args.word}: {indices[i]} {vocabulary.get_word(indices[i])} {P[token,indices[i]]}')            
 
 def parse_args(choices):
+    window = 2
+    k = 2
+    alpha = 0.75
+    dimensionality = 128
+    eta = 0.01
+    minibatch = 2**12
+    Niterations = 10000
+    freq = 50
+    nwords = 12
+    nclosest = 32
+    
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('command',choices=choices)
     parser.add_argument('input',nargs='+',help='List of input files')
@@ -483,21 +494,21 @@ def parse_args(choices):
     parser.add_argument('--figs', default='./figs',help='Path used to store plots')        
     
     examples_group = parser.add_argument_group('Examples',description='Used for command=examples')
-    examples_group.add_argument('-w','--window', type=int,default=2,help='Width of window for context')
-    examples_group.add_argument('-k','--k',type=int,default=2,help='Number of negative context words for each positive')
-    examples_group.add_argument('--alpha',default=0.75,type=float,help='The exponent from equation (6.32)')
+    examples_group.add_argument('-w','--window', type=int,default=window,help=f'Width of window for context [{window}]')
+    examples_group.add_argument('-k','--k',type=int,default=k,help=f'Number of negative context words for each positive [{k}]')
+    examples_group.add_argument('--alpha',default=alpha,type=float,help=f'The exponent from equation (6.32) [{alpha}]')
     
     training_group = parser.add_argument_group('Training',description='Used for command==train')
-    training_group.add_argument('-d','--dimensionality',type=int,default=128,help='Length of word vectors')
-    training_group.add_argument('--eta',default=0.01,type=float,help='Training speed')
-    training_group.add_argument('-m','--minibatch',type=int,default=2**12,help='Number of samples in a minibatch')
-    training_group.add_argument('-N','--Niterations',type=int,default=1000,help='Number of iterations')
-    training_group.add_argument('--freq',type=int,default=100,help='Inerval between printing train ing steps')
+    training_group.add_argument('-d','--dimensionality',type=int,default=dimensionality,help=f'Length of word vectors [{dimensionality}]')
+    training_group.add_argument('--eta',default=eta,type=float,help=f'Training speed [{eta}]')
+    training_group.add_argument('-m','--minibatch',type=int,default=minibatch,help=f'Number of samples in a minibatch [{minibatch}]')
+    training_group.add_argument('-N','--Niterations',type=int,default=Niterations,help=f'Number of iterations [{Niterations}]')
+    training_group.add_argument('--freq',type=int,default=freq,help=f'Interval between printing training steps [{freq}]')
     
     analysis_group = parser.add_argument_group(title='Analysis',description='Used for build and explore')
     analysis_group.add_argument('--word',default=None,help='Used to explore a single word')
-    analysis_group.add_argument('--nwords',type=int,default=12,help='Number of worssa to explore')
-    analysis_group.add_argument('--nclosest',type=int,default=32,help='Number of closest words to explore')
+    analysis_group.add_argument('--nwords',type=int,default=nwords,help=f'Number of words to explore [{nwords}]')
+    analysis_group.add_argument('--nclosest',type=int,default=nclosest,help=f'Number of closest words to explore [{nclosest}]')
     
     return parser.parse_args()
         
