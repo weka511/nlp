@@ -472,6 +472,9 @@ class Explore(Command):
                 logger.log(f'{token} {args.word}: {indices[i]} {vocabulary.get_word(indices[i])} {P[token,indices[i]]}')            
 
 def parse_args(choices):
+    
+    # Establish defaults
+    
     window = 2
     k = 2
     alpha = 0.75
@@ -482,33 +485,36 @@ def parse_args(choices):
     freq = 50
     nwords = 12
     nclosest = 32
+    data = './data'
+    logs = './logs'
+    figs = './figs'
     
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('command',choices=choices)
     parser.add_argument('input',nargs='+',help='List of input files')
-    parser.add_argument('--seed',type=int,default=None,help='Deed for random number generation')
-    parser.add_argument('--data', default='./data',help='Path to data files') 
+    parser.add_argument('--seed',type=int,default=None,help='Seed for random number generation')
+    parser.add_argument('--data', default=data,help=f'Path to data files [{data}]') 
     parser.add_argument('-o', '--output',default=None,required=True,help='File name for storing results')
-    parser.add_argument('--logs', default='./logs', help='Location for storing log files')
+    parser.add_argument('--logs', default=logs, help=f'Location for storing log files [{logs}]')
     parser.add_argument('--show', default=False,action='store_true',help='Controls whether plots are shown')
-    parser.add_argument('--figs', default='./figs',help='Path used to store plots')        
+    parser.add_argument('--figs', default=figs,help=f'Path used to store plots [{figs}]')        
     
-    examples_group = parser.add_argument_group('Examples',description='Used for command=examples')
+    examples_group = parser.add_argument_group('Examples',description='Used for examples')
     examples_group.add_argument('-w','--window', type=int,default=window,help=f'Width of window for context [{window}]')
     examples_group.add_argument('-k','--k',type=int,default=k,help=f'Number of negative context words for each positive [{k}]')
     examples_group.add_argument('--alpha',default=alpha,type=float,help=f'The exponent from equation (6.32) [{alpha}]')
     
-    training_group = parser.add_argument_group('Training',description='Used for command==train')
+    training_group = parser.add_argument_group('Training',description='Used for train')
     training_group.add_argument('-d','--dimensionality',type=int,default=dimensionality,help=f'Length of word vectors [{dimensionality}]')
     training_group.add_argument('--eta',default=eta,type=float,help=f'Training speed [{eta}]')
     training_group.add_argument('-m','--minibatch',type=int,default=minibatch,help=f'Number of samples in a minibatch [{minibatch}]')
     training_group.add_argument('-N','--Niterations',type=int,default=Niterations,help=f'Number of iterations [{Niterations}]')
     training_group.add_argument('--freq',type=int,default=freq,help=f'Interval between printing training steps [{freq}]')
     
-    analysis_group = parser.add_argument_group(title='Analysis',description='Used for build and explore')
-    analysis_group.add_argument('--word',default=None,help='Used to explore a single word')
-    analysis_group.add_argument('--nwords',type=int,default=nwords,help=f'Number of words to explore [{nwords}]')
-    analysis_group.add_argument('--nclosest',type=int,default=nclosest,help=f'Number of closest words to explore [{nclosest}]')
+    explore_group = parser.add_argument_group(title='Analysis',description='Used for explore')
+    explore_group.add_argument('--word',default=None,help='Used to explore a single word')
+    explore_group.add_argument('--nwords',type=int,default=nwords,help=f'Number of words to explore [{nwords}]')
+    explore_group.add_argument('--nclosest',type=int,default=nclosest,help=f'Number of closest words to explore [{nclosest}]')
     
     return parser.parse_args()
         
