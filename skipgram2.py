@@ -306,7 +306,7 @@ class SkipGram:
             normalize   Normalize verctors when calculating product
         '''
         m,n = self.word_vectors.shape
-        norms = np.linalg.norm(self.word_vectors,axis=1) if normalize else 1.0     
+        norms = np.linalg.norm(self.word_vectors,axis=1) if normalize else np.ones((m))    
         self.P = np.zeros((m,m))
         for i in range(m):
             for j in range(i+1):
