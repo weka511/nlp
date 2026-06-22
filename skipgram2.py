@@ -541,7 +541,7 @@ class Explore2(Command):
         m,n = P.shape
         for i in range(m):
             for j in range(n):
-                if i != j and P[i,j] > args.threshold:
+                if i != j and P[i,j] > args.min:
                     logger.log(f'{vocabulary.get_word(i)} {vocabulary.get_word(j)} {P[i,j]}')
  
 
