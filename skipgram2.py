@@ -35,16 +35,15 @@ from shared.utils import Logger, user_has_requested_stop
 
 class Examples:
     '''
-    A collection of positive and negative training examplkes.
+    A collection of positive and negative training examples.
     
     Attributes:
-        k
-        vocabulary
-        positives
-        negatives
-        rng
-        window
-
+        k             Number of negative context words for each positive
+        vocabulary    Relates words to tokens
+        positives     Positive examples: pairs w and c, which form inices in vocabulary
+        negatives     Negative examples: pairs w and c, which form inices in vocabulary
+        rng           Random number generator
+        window        Width of window for context
     '''
     
     @staticmethod
@@ -54,6 +53,7 @@ class Examples:
         
         Parameters:
             file_name    Name of file where examples have been stored
+            logger
         '''
         with open(file_name, 'rb') as inp:
             product = load(inp) 
@@ -61,6 +61,13 @@ class Examples:
             return product
         
     def __init__(self,window=2,k=2,rng=np.random.default_rng(),alpha=0.75):
+        '''
+        Parameters:
+            window    Width of window for context
+            k         Number of negative context words for each positive
+            rng       Random number generator
+            alpha     The exponent from equation (6.32) 
+        '''
         self.window = window
         self.k = k
         self.vocabulary = Vocabulary()
@@ -91,12 +98,25 @@ class Examples:
             report (f'Saved examples in {file.resolve()}')    
         
     def _create_positives(self,sentence_generator):
+        '''
+        Create array of positive examples
+        
+        Parameters:
+            sentence_generator
+        '''
         positives = []
         for sentence in sentence_generator:
             self._add_sentence(sentence,positives)
         return np.array(positives)
         
     def _add_sentence(self,sentence,positives):
+        '''
+        Add one sentance to positives
+        
+        Parameters:
+            sentence
+            positives
+        '''
         tokens = [self.vocabulary.tokenize(word) for word in sentence if self._is_word(word)]
 
         for w,c in self._generate_positive(tokens):
@@ -104,6 +124,9 @@ class Examples:
         
     '''
     Create positive examples
+    
+    Parameters:
+        tokens
     '''
     def _generate_positive(self,tokens):
         for i in range(len(tokens)):
