@@ -166,19 +166,19 @@ class SkipGram:
         word_vectors
         context_vectors
         rng
-        minibatch
+        batch
     '''
     @staticmethod
-    def create_unit_vectors(m,dimensionality,rng):
+    def create_unit_vectors(m,ndim,rng):
         '''
         Create a set of normed unit vectors 
         
         Parameters:
             m               Number of vectors
-            dimensionality  Dimensionality
+            ndim  Dimensionality
             rng             Random number generator
         '''
-        Product = rng.uniform(size=(m,dimensionality))
+        Product = rng.uniform(size=(m,ndim))
         return Product/np.linalg.norm(Product,axis=1,keepdims=True)
     
     @staticmethod
@@ -194,13 +194,13 @@ class SkipGram:
             report (f'Loaded skipgrams from {file_name.resolve()}')
             return product    
     
-    def __init__(self,examples,dimensionality=128,logger=None,rng=np.random.default_rng(),minibatch=1):
+    def __init__(self,examples,ndim=128,logger=None,rng=np.random.default_rng(),batch=1):
         self.examples = examples
         n_words = len(examples.vocabulary)
-        self.word_vectors = SkipGram.create_unit_vectors(n_words,dimensionality,rng)
-        self.context_vectors = SkipGram.create_unit_vectors(n_words,dimensionality,rng)
+        self.word_vectors = SkipGram.create_unit_vectors(n_words,ndim,rng)
+        self.context_vectors = SkipGram.create_unit_vectors(n_words,ndim,rng)
         self.rng = rng
-        self.minibatch = minibatch
+        self.batch = batch
         
     def step(self,loss_calculator,eta=0.01):
         '''
@@ -208,7 +208,7 @@ class SkipGram:
         Section 6.8.2
         '''
         n,_ = self.examples.positives.shape
-        for i in self.rng.integers(n,size=(self.minibatch)):
+        for i in self.rng.integers(n,size=(self.batch)):
             w_index = self.examples.positives[i,0]
             c_index = self.examples.positives[i,1]
             w = self.word_vectors[w_index,:]
@@ -255,17 +255,22 @@ class SkipGram:
             dump(self, out, HIGHEST_PROTOCOL)
             report (f'Saved examples in {file_path.resolve()}')        
 
-    def calculate_products(self):
+    def calculate_products(self,normalize):
         '''
         Calculate dot products between word vectors
+        
+        Parameters:
+            normalize   Normalize verctors when calculating product
         '''
         m,n = self.word_vectors.shape
+        norms = np.linalg.norm(self.word_vectors,axis=1) if normalize else 1.0     
         self.P = np.zeros((m,m))
         for i in range(m):
             for j in range(i+1):
-                self.P[i,j] = np.dot(self.word_vectors[i,:],self.word_vectors[j,:])
+                self.P[i,j] = np.dot(self.word_vectors[i,:],self.word_vectors[j,:]) / (norms[i]*norms[j])                
                 self.P[j,i] = self.P[i,j]
-    
+
+         
 class LossCalculator:
     '''
     Compute loss following equation (6.34). We will cache the
@@ -395,13 +400,13 @@ class TrainSkipgrams(Command):
         Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
         '''
         trainer = SkipGram(Examples.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),logger),
-                           dimensionality=args.dimensionality,
+                           ndim=args.ndim,
                            logger=logger,
                            rng=rng,
-                           minibatch=args.minibatch)
+                           batch=args.batch)
         losses = []
         loss_calculator = LossCalculator(trainer.examples,trainer) 
-        for i in range(args.Niterations):
+        for i in range(args.Niter):
             trainer.step(loss_calculator,eta=args.eta)
             losses.append(loss_calculator.get_loss())
             loss_calculator.reset()
@@ -413,7 +418,7 @@ class TrainSkipgrams(Command):
         fig = figure(figsize=(10,10))
         ax = fig.add_subplot(1,1,1)
         ax.plot(losses)
-        ax.set_title(f'Training: dimensionality={args.dimensionality}, minibatch = {args.minibatch}, '
+        ax.set_title(f'Training: ndim={args.ndim}, batch = {args.batch}, '
                      r'$\eta=$'
                      f'{args.eta}')
         y0,y1=ax.get_ylim()
@@ -438,27 +443,27 @@ class BuildDistances(Command):
         skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
                                    report=lambda s: logger.log(s))
         logger.log('Calculating products')
-        skipgram.calculate_products()
+        skipgram.calculate_products(args.normalize)
         logger.log('Calculated products')
         skipgram.save((Path(args.data) / args.output).with_suffix('.pkl'),report=lambda s:logger.log(s))
  
-class Explore(Command):
+class Explore1(Command):
     '''
-    Build table of scalar products between weight vectors
+    Select entries from table of scalar products
     '''
     def __init__(self):
-        super().__init__('explore')
+        super().__init__('explore1')
         
     '''
-    Build table of scalar products between weight vectors
+    Select entries from table of scalar products
     '''        
         
     def _execute(self,args,rng = np.random.default_rng(),logger=None):
         skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
                                    report=lambda s: logger.log(s))
         P = skipgram.P
-        
         vocabulary = skipgram.examples.vocabulary
+ 
         if args.word == None:
             for token in rng.integers((len(vocabulary)),size=args.nwords):
                 word = vocabulary.get_word(token)
@@ -471,6 +476,30 @@ class Explore(Command):
             for i in range(args.nclosest):
                 logger.log(f'{token} {args.word}: {indices[i]} {vocabulary.get_word(indices[i])} {P[token,indices[i]]}')            
 
+
+class Explore2(Command):
+    '''
+    Select entries from table of scalar products
+    '''
+    def __init__(self):
+        super().__init__('explore2')
+        
+    '''
+    Select entries from table of scalar products
+    '''        
+        
+    def _execute(self,args,rng = np.random.default_rng(),logger=None):
+        skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
+                                   report=lambda s: logger.log(s))
+        P = skipgram.P
+        vocabulary = skipgram.examples.vocabulary
+        m,n = P.shape
+        for i in range(m):
+            for j in range(n):
+                if i != j and P[i,j] > args.threshold:
+                    logger.log(f'{vocabulary.get_word(i)} {vocabulary.get_word(j)} {P[i,j]}')
+ 
+
 def parse_args(choices):
     
     # Establish defaults
@@ -478,19 +507,20 @@ def parse_args(choices):
     window = 2
     k = 2
     alpha = 0.75
-    dimensionality = 128
+    ndim = 128
     eta = 0.01
-    minibatch = 2**12
-    Niterations = 10000
+    batch = 2**12
+    Niter = 10000
     freq = 50
     nwords = 12
     nclosest = 32
     data = './data'
     logs = './logs'
     figs = './figs'
+    threshold = 0.65
     
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=choices)
+    parser.add_argument('command',choices=choices,help='Selects the function that is to be executed')
     parser.add_argument('input',nargs='+',help='List of input files')
     parser.add_argument('--seed',type=int,default=None,help='Seed for random number generation')
     parser.add_argument('--data', default=data,help=f'Path to data files [{data}]') 
@@ -505,16 +535,24 @@ def parse_args(choices):
     examples_group.add_argument('--alpha',default=alpha,type=float,help=f'The exponent from equation (6.32) [{alpha}]')
     
     training_group = parser.add_argument_group('Training',description='Used for train')
-    training_group.add_argument('-d','--dimensionality',type=int,default=dimensionality,help=f'Length of word vectors [{dimensionality}]')
+    training_group.add_argument('-d','--ndim',type=int,default=ndim,help=f'Length of word vectors [{ndim}]')
     training_group.add_argument('--eta',default=eta,type=float,help=f'Training speed [{eta}]')
-    training_group.add_argument('-m','--minibatch',type=int,default=minibatch,help=f'Number of samples in a minibatch [{minibatch}]')
-    training_group.add_argument('-N','--Niterations',type=int,default=Niterations,help=f'Number of iterations [{Niterations}]')
+    training_group.add_argument('-m','--batch',type=int,default=batch,help=f'Number of samples in a batch [{batch}]')
+    training_group.add_argument('-N','--Niter',type=int,default=Niter,help=f'Number of iterations [{Niter}]')
     training_group.add_argument('--freq',type=int,default=freq,help=f'Interval between printing training steps [{freq}]')
     
-    explore_group = parser.add_argument_group(title='Analysis',description='Used for explore')
+    build_group = parser.add_argument_group(title='Build',description='Used for building distances')
+    build_group.add_argument('--normalize', default=False,action='store_true',
+                             help='Normalize vectors before calculating products')
+    
+    explore_group = parser.add_argument_group(title='Explore1',description='Used for explore1')
     explore_group.add_argument('--word',default=None,help='Used to explore a single word')
     explore_group.add_argument('--nwords',type=int,default=nwords,help=f'Number of words to explore [{nwords}]')
-    explore_group.add_argument('--nclosest',type=int,default=nclosest,help=f'Number of closest words to explore [{nclosest}]')
+    explore_group.add_argument('--nclosest',
+                               type=int,default=nclosest,help=f'Number of closest words to explore [{nclosest}]')
+    explore_group2 = parser.add_argument_group(title='Explore2',description='Used for explore2')
+    explore_group2.add_argument('--min',type=float,default=threshold,
+                               help=f'Display pairs if product exceeds this value [{threshold}]')
     
     return parser.parse_args()
         
@@ -528,7 +566,8 @@ def main():
         CreateExamples(),
         TrainSkipgrams(),
         BuildDistances(),
-        Explore()
+        Explore1(),
+        Explore2(),
     ])
     args = parse_args(Command.get_choices())
     Command.get_command(args.command).execute(args)
