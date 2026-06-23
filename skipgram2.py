@@ -474,7 +474,7 @@ class AbstractTrainer(Command):
                 if user_has_requested_stop(): break
         return losses
     
-    def _plot_loses(self,args,losses):
+    def _plot_losses(self,args,losses):
         '''
         Display evolution of loss
         
