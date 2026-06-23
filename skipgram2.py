@@ -432,22 +432,28 @@ class CreateExamples(Command):
         
         examples.save((Path(args.data) / args.output).with_suffix('.pkl'),report=lambda s:logger.log(s))        
 
-class TrainSkipgrams(Command):
+class AbstractTrainer(Command):
     '''
     Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
     '''
-    def __init__(self):
-        super().__init__('train')
+    def __init__(self,key):
+        super().__init__(key)
+        
+    @abstractmethod    
+    def _create(self,args,rng = np.random.default_rng(),logger=None):
+        ...
+
+        #return SkipGram(Examples.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),logger),
+                        #ndim=args.ndim,
+                        #logger=logger,
+                        #rng=rng,
+                        #batch=args.batch)
         
     def _execute(self,args,rng = np.random.default_rng(),logger=None):
         '''
         Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
         '''
-        trainer = SkipGram(Examples.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),logger),
-                           ndim=args.ndim,
-                           logger=logger,
-                           rng=rng,
-                           batch=args.batch)
+        trainer = self._create(args,rng,logger)
         losses = []
         loss_calculator = LossCalculator(trainer.examples,trainer) 
         for i in range(args.Niter):
@@ -471,7 +477,34 @@ class TrainSkipgrams(Command):
         ax.set_ylabel('Loss')
         
         fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))        
+
+class TrainSkipgrams(AbstractTrainer):
+    '''
+    Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
+    '''
+    def __init__(self):
+        super().__init__('train')
         
+    def _create(self,args,rng = np.random.default_rng(),logger=None):
+
+        return SkipGram(Examples.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),logger),
+                        ndim=args.ndim,
+                        logger=logger,
+                        rng=rng,
+                        batch=args.batch)
+    
+class RestartSkipgrams(AbstractTrainer):
+    '''
+    Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
+    '''
+    def __init__(self):
+        super().__init__('restart')
+        
+    def _create(self,args,rng = np.random.default_rng(),logger=None):
+        logger.log(f'Restarting Training')
+        return SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
+                                   report=lambda s: logger.log(s))
+ 
 class BuildDistances(Command):
     '''
     Build table of scalar products between weight vectors
@@ -610,6 +643,7 @@ def main():
     Command.append([
         CreateExamples(),
         TrainSkipgrams(),
+        RestartSkipgrams(),
         BuildDistances(),
         Explore1(),
         Explore2(),
