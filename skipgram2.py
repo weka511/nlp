@@ -374,7 +374,7 @@ class LossCalculator:
 
 class Command(ABC):
     '''
-    This class is te parant for all the taks performed by this program.
+    This class is the parent for all the tasks performed by this program.
     It provides a list of ecceptable commands (used by parse_args(),
     and its subclasses are each esponsible for one task.
     '''
@@ -434,37 +434,54 @@ class CreateExamples(Command):
 
 class AbstractTrainer(Command):
     '''
-    Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
+    Used by TrainSkipgrams and RestartSkipgrams to adjust 
+    weights of  skipgrams after 6.8.2 of Jurafsky & Martin.
     '''
     def __init__(self,key):
         super().__init__(key)
         
-    @abstractmethod    
-    def _create(self,args,rng = np.random.default_rng(),logger=None):
-        ...
-
-        #return SkipGram(Examples.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),logger),
-                        #ndim=args.ndim,
-                        #logger=logger,
-                        #rng=rng,
-                        #batch=args.batch)
-        
     def _execute(self,args,rng = np.random.default_rng(),logger=None):
         '''
-        Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
+        Adjust weights of  skipgrams and plot losses
         '''
-        trainer = self._create(args,rng,logger)
+        self._plot_losses(args,self._train(self._create(args,rng,logger),args,logger=logger))     
+        
+    @abstractmethod    
+    def _create(self,args,rng = np.random.default_rng(),logger=None):
+        '''
+        Implemented by descendents to either instantiate a new Skipgram
+        or recall one that has been created previously.
+        
+        Arguments:
+            args
+            rng
+            logger
+        '''
+        
+    def _train(self,skipgram,args,logger=None):
+        '''
+        Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
+        '''        
         losses = []
-        loss_calculator = LossCalculator(trainer.examples,trainer) 
+        loss_calculator = LossCalculator(skipgram.examples,skipgram) 
         for i in range(args.Niter):
-            trainer.step(loss_calculator,eta=args.eta)
+            skipgram.step(loss_calculator,eta=args.eta)
             losses.append(loss_calculator.get_loss())
             loss_calculator.reset()
             if i % args.freq == 1:
                 logger.log (f'Step {i}, loss={losses[-1]}')
-                trainer.save((Path(args.data) / args.output).with_suffix('.pkl'),report=lambda s:logger.log(s))
+                skipgram.save((Path(args.data) / args.output).with_suffix('.pkl'),report=lambda s:logger.log(s))
                 if user_has_requested_stop(): break
-                
+        return losses
+    
+    def _plot_loses(self,args,losses):
+        '''
+        Display evolution of loss
+        
+        Parameters:
+            args
+            losses
+        '''
         fig = figure(figsize=(10,10))
         ax = fig.add_subplot(1,1,1)
         ax.plot(losses)
@@ -486,7 +503,9 @@ class TrainSkipgrams(AbstractTrainer):
         super().__init__('train')
         
     def _create(self,args,rng = np.random.default_rng(),logger=None):
-
+        '''
+        Create new skipgram for training
+        '''
         return SkipGram(Examples.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),logger),
                         ndim=args.ndim,
                         logger=logger,
@@ -501,6 +520,9 @@ class RestartSkipgrams(AbstractTrainer):
         super().__init__('restart')
         
     def _create(self,args,rng = np.random.default_rng(),logger=None):
+        '''
+        Instantiate skipgram from file
+        '''
         logger.log(f'Restarting Training')
         return SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
                                    report=lambda s: logger.log(s))
