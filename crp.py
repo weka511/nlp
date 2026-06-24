@@ -16,7 +16,6 @@
 #  along with this program.   If not, see <https://www.gnu.org/licenses/>.
 
 from abc import ABC,abstractmethod
-from sys import float_info
 from unittest import TestCase, main,skip
 import numpy as np
 
@@ -25,13 +24,17 @@ class Table:
     The Chinese Restaurant Process allocates elements to a Table.
     
     Attributes:
-        links
-        seq
+        links  A list of links [...(from,to), ....]
+        seq    A  unique id for this Table
     '''
     seq = -1
     tables = []
 
     def __init__(self):
+        '''
+        Initialize links to an empty list, allocate a sequnce number to theis table,
+        and strore newly created table in a list of table.
+        '''
         self.links = {}
         Table.seq += 1
         self.seq = Table.seq
@@ -44,13 +47,25 @@ class Table:
         return self.seq == table.seq
     
     def __len__(self):
+        '''
+        The length of the table is the number of links
+        '''
         return len(self.links)
 
     def __str__(self):
+        '''
+        Format all the links in the table for display
+        '''
         s = ','.join([f'{a}->{b}' for a,b in self.links.items()])
         return f'Table {self.seq}: {s}'
     
     def __getitem__(self,key):
+        '''
+        Get the node that the key node links to
+        
+        Parameters:
+            key
+        '''
         return self.links[key]
 
     def link(self, start, end):
@@ -108,13 +123,29 @@ class NoDecay(DecayFunction):
 class ChineseRestaurantProcess:
     '''
     This class represents a distance dependent Chinese Restaurant Process. 
+    
+    Attributes:
+        m
+        n
+        distances
+        rng
+        alpha
+        links
+        tables
+        logger
     '''
     
     UNASSIGNED = -1
 
-    def __init__(self, distances,
-                 f=NoDecay(), rng=np.random.default_rng(),
-                 alpha=2.0, logger=None):
+    def __init__(self, distances,f=NoDecay(),rng=np.random.default_rng(),alpha=2.0, logger=None):
+        '''
+        Parameters:
+            distances
+            f
+            rng
+            alpha
+            logger
+        '''
         self.rng = rng
         self.m, self.n = distances.shape
         self.distances = f(distances)
@@ -154,14 +185,15 @@ class ChineseRestaurantProcess:
         
     def _get_p_init(self, seq):
         '''
-        Calculate probabilities for initialization
+        Calculate probabilities for initial assignments
         
         Parameters:
             seq    Index of element that is being added     
         '''
-        p = 1 / (self.distances[seq, :] + float_info.min)
-        p[seq] = self.alpha
-        p = p[:seq + 1]
+        p = np.empty((seq+1))
+        for i in range((seq+1)):
+            p[i] = 1 / self.distances[seq,i] if i != seq else self.alpha
+
         return p / p.sum()    
     
 class TestTable(TestCase):
@@ -170,4 +202,3 @@ class TestTable(TestCase):
         
 if __name__ == '__main__':
     main()
-    
