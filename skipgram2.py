@@ -620,6 +620,10 @@ class Cluster(Command):
                                              logger=logger)
         clusterer.build()
         vocabulary = skipgram.examples.vocabulary
+        for table in clusterer.generate_tables():
+            logger.log(table.seq)
+            for start,end in table.generate_links():
+                logger.log (f'{vocabulary[start]}->{vocabulary[end]}')
     
     @staticmethod   
     def _products_to_distances(P):

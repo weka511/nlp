@@ -57,7 +57,7 @@ class Table:
         Format all the links in the table for display
         '''
         s = ','.join([f'{a}->{b}' for a,b in self.links.items()])
-        return f'Table {self.seq}: {s}'
+        return f'Table {self.seq} [{len(self)}]: {s}'
     
     def __getitem__(self,key):
         '''
@@ -73,8 +73,8 @@ class Table:
         Link two elements together
         
         Parameters:
-            start
-            end
+            start      Link will be from this node
+            end        Link to this node
         '''
         self.links[start] = end
         
@@ -96,9 +96,9 @@ class Table:
         '''
         return [(start,end) for start,end in self.links.items() if start != split and start != end]
 
-    def print_links(self):
+    def generate_links(self):
         for start, end in self.links.items():
-            print(f'....{start}->{end}')
+            yield start,end
 
 
 class DecayFunction(ABC):
@@ -126,7 +126,6 @@ class ChineseRestaurantProcess:
     
     Attributes:
         m
-        n
         distances
         rng
         alpha
@@ -147,9 +146,9 @@ class ChineseRestaurantProcess:
             logger
         '''
         self.rng = rng
-        self.m, self.n = distances.shape
+        self.m, n = distances.shape
+        assert self.m == n
         self.distances = f(distances)
-        assert self.m == self.n
         self.rng = rng
         self.alpha = alpha
         self.links = np.full((self.m), ChineseRestaurantProcess.UNASSIGNED, dtype=int)
@@ -166,9 +165,10 @@ class ChineseRestaurantProcess:
             link_to = int(self.rng.choice(indices[:i + 1], p=self._get_p_init(i)))
             self._link(current,link_to,
                       table = Table() if current == link_to else self.tables[link_to])
-   
+            
+    def generate_tables(self):
         for table in Table.tables:
-            self.logger.log(table)
+            yield table
             
     def _link(self,start,end, table=None):
         '''
@@ -185,7 +185,7 @@ class ChineseRestaurantProcess:
         
     def _get_p_init(self, seq):
         '''
-        Calculate probabilities for initial assignments
+        Calculate probabilities for initial assignments after Blei & Frazier equation (2)
         
         Parameters:
             seq    Index of element that is being added     
