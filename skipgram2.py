@@ -33,6 +33,7 @@ import numpy as np
 from matplotlib.pyplot import figure,show
 from matplotlib import rc
 from scipy.special import expit
+from crp import ChineseRestaurantProcess
 from vocabulary import Vocabulary
 from tokenizer import generate_sentences,generate_text,generate_tokens,Token
 from shared.utils import Logger, user_has_requested_stop
@@ -600,6 +601,36 @@ class Explore2(Command):
                     logger.log(f'{vocabulary.get_word(i)} {vocabulary.get_word(j)} {P[i,j]}')
  
 
+class Cluster(Command):
+    '''
+    Cluster word vectors using ChineseRestaurantProcess
+    '''
+    def __init__(self):
+        super().__init__('cluster')
+        
+    '''
+    Select entries from table of scalar products
+    '''        
+        
+    def _execute(self,args,rng = np.random.default_rng(),logger=None):
+        skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
+                                   report=lambda s: logger.log(s))
+        clusterer = ChineseRestaurantProcess(Cluster._products_to_distances(skipgram.P),
+                                             rng=rng,
+                                             logger=logger)
+        clusterer.build()
+        vocabulary = skipgram.examples.vocabulary
+    
+    @staticmethod   
+    def _products_to_distances(P):
+        '''
+        Convert scalar product of unit vectors to a distance. I have encountered a small problem
+        with square roots no negative values, hence the offset
+        '''
+        d_squared = (1 - P)/2
+        offset = min(d_squared.min(),0)
+        return np.sqrt(d_squared-offset)
+    
 def parse_args(choices):
     
     # Establish defaults
@@ -669,6 +700,7 @@ def main():
         BuildDistances(),
         Explore1(),
         Explore2(),
+        Cluster()
     ])
     args = parse_args(Command.get_choices())
     Command.get_command(args.command).execute(args)

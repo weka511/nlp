@@ -16,6 +16,7 @@
 #  along with this program.   If not, see <https://www.gnu.org/licenses/>.
 
 from abc import ABC,abstractmethod
+from sys import float_info
 from unittest import TestCase, main,skip
 import numpy as np
 
@@ -111,18 +112,57 @@ class ChineseRestaurantProcess:
     
     UNASSIGNED = -1
 
-    def __init__(self, mutual_information,
+    def __init__(self, distances,
                  f=NoDecay(), rng=np.random.default_rng(),
                  alpha=2.0, logger=None):
-        #self.fd = f(1 / mutual_information)
         self.rng = rng
-        self.m, self.n = mutual_information.shape
+        self.m, self.n = distances.shape
+        self.distances = f(distances)
         assert self.m == self.n
         self.rng = rng
         self.alpha = alpha
         self.links = np.full((self.m), ChineseRestaurantProcess.UNASSIGNED, dtype=int)
         self.tables = np.empty((self.m), dtype=Table)
-        self.logger = logger    
+        self.logger = logger
+        
+    def build(self):
+        '''
+        Allocate each element to a table
+        '''
+        indices = self.rng.permutation(self.m)
+        for i in range(self.m):
+            current = int(indices[i])
+            link_to = int(self.rng.choice(indices[:i + 1], p=self._get_p_init(i)))
+            self._link(current,link_to,
+                      table = Table() if current == link_to else self.tables[link_to])
+   
+        for table in Table.tables:
+            self.logger.log(table)
+            
+    def _link(self,start,end, table=None):
+        '''
+        Link two nodes, and also record that the first node is in the table
+        
+        Parameters:
+            start    This node is to be linked to other node
+            end      This is the node to link to
+            table    The link lives in this table
+        '''
+        table.link(start, end)
+        self.tables[start] = table
+        assert self.tables[end] == table
+        
+    def _get_p_init(self, seq):
+        '''
+        Calculate probabilities for initialization
+        
+        Parameters:
+            seq    Index of element that is being added     
+        '''
+        p = 1 / (self.distances[seq, :] + float_info.min)
+        p[seq] = self.alpha
+        p = p[:seq + 1]
+        return p / p.sum()    
     
 class TestTable(TestCase):
     def test1(self):
