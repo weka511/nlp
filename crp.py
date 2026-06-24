@@ -61,14 +61,14 @@ class Table:
     
     def __getitem__(self,key):
         '''
-        Get the node that the key node links to
+        Get the node that supplied node links to
         
         Parameters:
-            key
+            key        Stat of link
         '''
         return self.links[key]
 
-    def link(self, start, end):
+    def __setitem__(self, start, end):
         '''
         Link two elements together
         
@@ -97,6 +97,9 @@ class Table:
         return [(start,end) for start,end in self.links.items() if start != split and start != end]
 
     def generate_links(self):
+        '''
+        Used to iterate through all nodes at Table
+        '''
         for start, end in self.links.items():
             yield start,end
 
@@ -162,13 +165,31 @@ class ChineseRestaurantProcess:
         indices = self.rng.permutation(self.m)
         for i in range(self.m):
             current = int(indices[i])
-            link_to = int(self.rng.choice(indices[:i + 1], p=self._get_p_init(i)))
+            link_to = int(self.rng.choice(indices[:i + 1], p=self._get_p(i,initial=True)))
             self._link(current,link_to,
                       table = Table() if current == link_to else self.tables[link_to])
             
     def generate_tables(self):
+        '''
+        Used to iterate through all tables
+        '''
         for table in Table.tables:
             yield table
+            
+    def gibbs(self):
+        '''
+        Perform one gibbs step - WIP
+        '''
+        for current in range(self.m):
+            current_table = self.tables[current]
+            link_to = int(self.rng.choice(self.m, p=self._get_p(current))) 
+            if current == link_to:  continue # Linking to same node, so do nothing
+            
+            target_table = self.tables[link_to]
+            if current_table == target_table:  # Link to different node in same table
+                current_table[current] = link_to
+            else:    # Link to a node in another Table 
+                pass # TODO
             
     def _link(self,start,end, table=None):
         '''
@@ -179,21 +200,19 @@ class ChineseRestaurantProcess:
             end      This is the node to link to
             table    The link lives in this table
         '''
-        table.link(start, end)
+        table[start] = end
         self.tables[start] = table
         assert self.tables[end] == table
         
-    def _get_p_init(self, seq):
+   
+    def _get_p(self, current, initial=False):
         '''
-        Calculate probabilities for initial assignments after Blei & Frazier equation (2)
-        
-        Parameters:
-            seq    Index of element that is being added     
+        Calculate probabilities for assignments after Blei & Frazier equation (2)
         '''
-        p = np.empty((seq+1))
-        for i in range((seq+1)):
-            p[i] = 1 / self.distances[seq,i] if i != seq else self.alpha
-
+        n = current + 1 if initial else self.m
+        p = np.empty((n))
+        for i in range(n):
+            p[i] = 1 / self.distances[current,i] if i != current else self.alpha
         return p / p.sum()    
     
 class TestTable(TestCase):
