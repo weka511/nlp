@@ -220,13 +220,16 @@ class ChineseRestaurantProcess:
         '''
         indices = self.rng.permutation(self.m)
         for i in range(self.m):
-            current = int(indices[i])
+            current_node = int(indices[i])
             link_to = int(self.rng.choice(indices[:i + 1], p=self._get_p(i, initial=True)))
-            table = Table() if current == link_to else self.tables[link_to]
-            self._link(current, link_to, table)
-        print(self.m, sum(len(table) for table in self.tables))
-        assert self.m == sum(len(table) for table in self.tables)
-        z = 0
+            table = None
+            if current_node == link_to:
+                table = Table()
+            else:
+                table = self.tables[link_to]
+            self._link(current_node, link_to, table)
+        
+        assert self.m == sum(len(table) for table in Table.tables)
 
     def generate_tables(self):
         '''
