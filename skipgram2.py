@@ -619,11 +619,14 @@ class Cluster(Command):
                                              rng=rng,
                                              logger=logger)
         clusterer.build()
-        vocabulary = skipgram.examples.vocabulary
-        for table in clusterer.generate_tables():
-            logger.log(table.seq)
-            for start,end in table.generate_links():
-                logger.log (f'{vocabulary[start]}->{vocabulary[end]}')
+        for i in range(args.Niter):
+            clusterer.gibbs()
+        
+        #vocabulary = skipgram.examples.vocabulary
+        #for table in clusterer.generate_tables():
+            #logger.log(table.seq)
+            #for start,end in table.generate_links():
+                #logger.log (f'{vocabulary[start]}->{vocabulary[end]}')
     
     @staticmethod   
     def _products_to_distances(P):
@@ -662,7 +665,8 @@ def parse_args(choices):
     parser.add_argument('-o', '--output',default=None,required=True,help='File name for storing results')
     parser.add_argument('--logs', default=logs, help=f'Location for storing log files [{logs}]')
     parser.add_argument('--show', default=False,action='store_true',help='Controls whether plots are shown')
-    parser.add_argument('--figs', default=figs,help=f'Path used to store plots [{figs}]')        
+    parser.add_argument('--figs', default=figs,help=f'Path used to store plots [{figs}]')   
+    parser.add_argument('-N','--Niter',type=int,default=Niter,help=f'Number of iterations [{Niter}]')
     
     examples_group = parser.add_argument_group('Examples',description='Used for examples')
     examples_group.add_argument('-w','--window', type=int,default=window,help=f'Width of window for context [{window}]')
@@ -673,7 +677,6 @@ def parse_args(choices):
     training_group.add_argument('-d','--ndim',type=int,default=ndim,help=f'Length of word vectors [{ndim}]')
     training_group.add_argument('--eta',default=eta,type=float,help=f'Training speed [{eta}]')
     training_group.add_argument('-m','--batch',type=int,default=batch,help=f'Number of samples in a batch [{batch}]')
-    training_group.add_argument('-N','--Niter',type=int,default=Niter,help=f'Number of iterations [{Niter}]')
     training_group.add_argument('--freq',type=int,default=freq,help=f'Interval between printing training steps [{freq}]')
     
     build_group = parser.add_argument_group(title='Build',description='Used for building distances')

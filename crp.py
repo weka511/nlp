@@ -11,14 +11,21 @@
 #  but WITHOUT ANY WARRANTY; without even the implied warranty of
 #  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #  GNU General Public License for more details.
-
+ 
 #  You should have received a copy of the GNU General Public License
 #  along with this program.   If not, see <https://www.gnu.org/licenses/>.
+
+'''
+    This module clusters data using a Distance Dependent Chinese Restaurant Process,
+    David M. Blei, Peter I. Frazier; 
+    Journal of Machine Learning Research 12(74):2461−2488, 2011,
+    https://www.jmlr.org/papers/v12/blei11a.html
+'''
 
 from abc import ABC, abstractmethod
 from unittest import TestCase, main, skip
 import numpy as np
-
+from shared.utils import Logger
 
 class Table:
     '''
@@ -63,8 +70,8 @@ class Table:
         '''
         Format all the links in the table for display
         '''
-        s = ','.join([f'{a}->{b}' for a, b in self.links.items()])
-        return f'Table {self.seq} [{len(self)}]: {s}'
+        links = ','.join([f'{a}->{b}' for a, b in self.links.items()])
+        return f'Table {self.seq} [{len(self)}]: {links}'
 
     def __getitem__(self, key):
         '''
@@ -88,8 +95,13 @@ class Table:
         if (len(self) == 0) == (start == end):
             self.links[start] = end
         else:
-            raise  ValueError('Node must link to itself in an otherwise emepty table, or to a distinct node')
+            raise  ValueError('Node must link to itself in an otherwise empty table, or to a distinct node')
 
+    def break_link(self,node):
+        del self.links[node]
+        
+    #def relink(self,node,end):
+        #self.links[node] = end
     
     def join(self, nodes, current_table):
         for node in nodes:
@@ -118,7 +130,15 @@ class Table:
         '''
         for start, end in self.links.items():
             yield start, end
-
+    
+    def split(self,nodes,current_table, target_table):
+        for node in nodes:
+            break
+        #print(current_table, target_table)
+        #print(nodes)
+        #z=0
+        #pass
+    
     @staticmethod
     def create_cc(g):
         '''
@@ -183,13 +203,13 @@ class ChineseRestaurantProcess:
     This class represents a distance dependent Chinese Restaurant Process. 
     
     Attributes:
-        m
-        distances
-        rng
-        alpha
-        links
-        tables
-        logger
+        m        Number of points to be classified (from one dimension of distance matrix)
+        fd       Array of distances between nodes, after applying decay function
+        rng      Random number generator
+        alpha    The scaling parametere from Blei and Fraxier, equation (2)
+        links    FIXME
+        tables   Lookup table to find which Table holds each node
+        logger   For logging messages
     '''
 
     UNASSIGNED = -1
@@ -197,20 +217,20 @@ class ChineseRestaurantProcess:
     def __init__(self, distances, f=NoDecay(), rng=np.random.default_rng(), alpha=2.0, logger=None):
         '''
         Parameters:
-            distances
-            f
-            rng
-            alpha
-            logger
+            distances  Array of distances between nodes, after applying decay function
+            f          Decay function for distances
+            rng        Random number generator
+            alpha      The scaling parametere from Blei and Fraxier, equation (2)
+            logger     For logging messages
         '''
         self.rng = rng
         self.m, n = distances.shape
         assert self.m == n
-        self.distances = f(distances)
+        self.fd = f(distances)
         self.rng = rng
         self.alpha = alpha
-        self.links = np.full((self.m), ChineseRestaurantProcess.UNASSIGNED, dtype=int)
-        self.tables = np.empty((self.m), dtype=Table)
+        #self.links = np.full((self.m), ChineseRestaurantProcess.UNASSIGNED, dtype=int)
+        self.tables = np.empty((self.m), dtype=Table)  # FIXME
         self.logger = logger
 
     def build(self):
@@ -220,14 +240,12 @@ class ChineseRestaurantProcess:
         '''
         indices = self.rng.permutation(self.m)
         for i in range(self.m):
-            current_node = int(indices[i])
+            this_node = int(indices[i])
             link_to = int(self.rng.choice(indices[:i + 1], p=self._get_p(i, initial=True)))
-            table = None
-            if current_node == link_to:
-                table = Table()
+            if this_node == link_to:
+                self._link(this_node,link_to,table=Table())
             else:
-                table = self.tables[link_to]
-            self._link(current_node, link_to, table)
+                self._link(this_node,link_to,table=self.tables[link_to])
         
         assert self.m == sum(len(table) for table in Table.tables)
 
@@ -242,43 +260,88 @@ class ChineseRestaurantProcess:
         '''
         Perform one gibbs step - WIP
         '''
-        for current in range(self.m):
-            current_table = self.tables[current]
-            link_to = int(self.rng.choice(self.m, p=self._get_p(current)))
-            if current == link_to:
-                continue # Linking to same node, so no change
+        for node_being_considered in range(self.m):
+            current_table = self.tables[node_being_considered]
+            link_to = int(self.rng.choice(self.m, p=self._get_p(node_being_considered)))
+            if node_being_considered == link_to: continue # Linking to same node, so no change
 
             target_table = self.tables[link_to]
             if current_table == target_table:  # Link to different node in same table
-                current_table[current] = link_to
+                self.relink(current_table,node_being_considered,target_table,link_to)
+ 
             else:    # Link to a node in another Table
-                edge_list = current_table.create_edge_list(omit=current)
-                cc = Table.create_cc(edge_list)
-                match len(cc):
-                    case 1:
-                        self.logger.log(f'Moving {cc[0]} to {target_table}')
-                        target_table.join(cc[0], current_table)
-                        for node in cc[0]:
-                            self.tables[node] = target_table
-                        current_table.clear()
-                        self.logger.log(target_table)
-                        self.logger.log(current_table)
-                    case 2:
-                        self.logger.log(f'{cc}')
-                        if current in cc[0]:
-                            target_table.join(cc[0], current_table)
-                            for node in cc[0]:
-                                self.tables[node] = target_table
-                            current_table.delete(cc[0])
-                        elif current in cc[1]:
-                            target_table.join(cc[1], current_table)
-                            for node in cc[1]:
-                                self.tables[node] = target_table
-                            current_table.delete(cc[1])
-                        else:
-                            self.logger.log('WTF')
-                    case _:
-                        self.logger.log(f'oops: len(cc)={len(cc)}')
+                self._link_to_separate_table(current_table,node_being_considered,target_table)
+                
+    def relink(self,current_table,node_being_considered,target_table,link_to):
+        '''
+        Link to different node in same table
+        '''
+        
+        # Find out whether breaking the olf link will split the table in two
+        
+        components = self.get_components_once_broken(current_table,node_being_considered)
+        
+        match (len(components)):
+            case 1:  # Table will not be split
+                self.logger.log('One component')
+                current_table.break_link(node_being_considered)
+                current_table[node_being_considered] = link_to
+                
+            case 2:  # Table might be splt
+                self.logger.log('Two components')
+                if node_being_considered in components[0] and link_to in components[0]:
+                    current_table.split(components[0],node_being_considered, link_to)
+                elif node_being_considered in components[1] and link_to in components[1]:
+                    current_table.split(components[1],node_being_considered, link_to)
+                else: # New link will restore things to a single table
+                    self.logger.log('New link will restore things to a single table')
+                    current_table.break_link(node_being_considered)
+                    current_table[node_being_considered] = link_to
+
+            case _:
+                self.logger.log('WTF',level=Logger.ERROR)    
+                
+    def get_components_once_broken(self,table,node):
+        '''
+        Find out whether deleting one link will split cluster into two parts
+        
+        Parameters:
+            table
+            node
+            
+        Returns:
+           The components of the graph on the assumption thsat the link from node has been deleted
+        '''
+        return Table.create_cc(table.create_edge_list(omit=node))
+        
+    def _link_to_separate_table(self,current_table,node_being_considered,target_table):
+        edge_list = current_table.create_edge_list(omit=node_being_considered)
+        cc = Table.create_cc(edge_list)
+        match len(cc):
+            case 1:
+                #self.logger.log(f'Moving {cc[0]} to {target_table}')
+                #target_table.join(cc[0], current_table)
+                #for node in cc[0]:
+                    #self.tables[node] = target_table
+                #current_table.clear()
+                self.logger.log(target_table)
+                self.logger.log(current_table)
+            case 2:
+                self.logger.log(f'{cc}')
+                #if node_being_considered in cc[0]:
+                    #target_table.join(cc[0], current_table)
+                    #for node in cc[0]:
+                        #self.tables[node] = target_table
+                    #current_table.delete(cc[0])
+                #elif node_being_considered in cc[1]:
+                    #target_table.join(cc[1], current_table)
+                    #for node in cc[1]:
+                        #self.tables[node] = target_table
+                    #current_table.delete(cc[1])
+                #else:
+                    #self.logger.log('WTF')
+            case _:
+                self.logger.log(f'oops: len(cc)={len(cc)}')
 
     def _link(self, start, end, table=None):
         '''
@@ -293,19 +356,19 @@ class ChineseRestaurantProcess:
         self.tables[start] = table
         assert self.tables[end] == table
 
-    def _get_p(self, current, initial=False):
+    def _get_p(self, node, initial=False):
         '''
         Calculate probabilities for assignments after Blei & Frazier equation (2)
         
         Parameters:
-            current    The node we are currently considering
+            node    The node we are currently considering
             initial    If we are ineitializing we want to produce 
                        a vector that is shorter than self.m
         '''
-        n = current + 1 if initial else self.m
+        n = node + 1 if initial else self.m
         p = np.empty((n))
         for i in range(n):
-            p[i] = 1 / self.distances[current, i] if i != current else self.alpha
+            p[i] = 1 / self.fd[node, i] if i != node else self.alpha
         return p / p.sum()
 
 
@@ -333,6 +396,7 @@ if __name__ == '__main__':
             self.assertEqual(4,len(t0))
             with self.assertRaises(ValueError):
                 t0[7] = 9
+    
             
         def test_cc(self):
             '''
@@ -358,5 +422,20 @@ if __name__ == '__main__':
             self.assertCountEqual([1, 2, 5, 9, 10], cc[0])
             self.assertCountEqual([3, 4, 7, 8, 11, 12], cc[1])
             self.assertCountEqual([6], cc[2])
-        
+
+    class TestTableUnlink(TestCase):
+    
+        def test_table_create(self):
+            t0 = Table()
+            t0[1] = 1
+            t0[2] = 1
+            t0[3] = 2
+            t0[4] = 3
+            t0[5] = 3
+            t0[6] = 5
+            t0[7] = 5
+            t0[8] = 7
+            t0.relink(5,4)
+            self.assertEqual (t0[5], 4)
+            
     main()
