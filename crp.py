@@ -98,8 +98,12 @@ class Table:
             raise  ValueError('Node must link to itself in an otherwise empty table, or to a distinct node')
 
     def break_link(self,node):
-        del self.links[node]
-        
+        try:
+            del self.links[node]
+        except KeyError:
+            for key,value in self.links.items():
+                print (key,value)
+                z=0
     #def relink(self,node,end):
         #self.links[node] = end
     
@@ -131,18 +135,56 @@ class Table:
         for start, end in self.links.items():
             yield start, end
     
-    def split(self,nodes,current_table, target_table):
+    def split(self,nodes):
+        '''
+        Split a bunch of nodes off into a separate table
+        
+        Parameters:
+            nodes      List of nodes to be removed
+        '''
+        new_table = Table()
         for node in nodes:
-            break
-        #print(current_table, target_table)
-        #print(nodes)
-        #z=0
-        #pass
+            destination = self[node]
+            new_table.links[node] = destination
+            self.break_link(node) 
+            
+        # TODO: need at least one cycle
+
+    def get_nodes(self):
+        nodes = set()
+        for start,end in self.links.items():
+            nodes.add(start)
+            nodes.add(end)
+        return list(nodes)
     
+    def verify_consistency(self,fix=False):
+        '''
+        Verify that evey node has an exit
+        '''
+        ins = set()
+        outs = set()
+        for start,end in self.links.items():
+            ins.add(end)
+            outs.add(start)
+        gap = ins - outs
+        if len(gap) == 0:
+            return True
+        elif len(gap) == 1:
+            print (gap)
+            singleton = gap.pop()
+            self.links[singleton] = singleton
+            print ('fixed')
+        else:
+            print (gap)
+            return False
+        
     @staticmethod
-    def create_cc(g):
+    def create_connected_components(g):
         '''
         Create a list of connected components for a graph
+        
+        parameters:
+            g       Graph in edge list format
         '''
         def create_vertices(g):
             product = set()
@@ -248,6 +290,9 @@ class ChineseRestaurantProcess:
                 self._link(this_node,link_to,table=self.tables[link_to])
         
         assert self.m == sum(len(table) for table in Table.tables)
+        
+        for table in Table.tables:
+            table.verify_consistency()
 
     def generate_tables(self):
         '''
@@ -260,88 +305,109 @@ class ChineseRestaurantProcess:
         '''
         Perform one gibbs step - WIP
         '''
-        for node_being_considered in range(self.m):
-            current_table = self.tables[node_being_considered]
-            link_to = int(self.rng.choice(self.m, p=self._get_p(node_being_considered)))
-            if node_being_considered == link_to: continue # Linking to same node, so no change
+        for node in range(self.m):
+            table = self.tables[node]
+            link_to = int(self.rng.choice(self.m, p=self._get_p(node)))
+            if node == link_to: continue # Linking to same node, so no change
 
             target_table = self.tables[link_to]
-            if current_table == target_table:  # Link to different node in same table
-                self.relink(current_table,node_being_considered,target_table,link_to)
- 
-            else:    # Link to a node in another Table
-                self._link_to_separate_table(current_table,node_being_considered,target_table)
+            if table == target_table:  # Link to different node in same table
+                self._move_link(node,table,link_to)
+                if not table.verify_consistency(fix=True):
+                    print (table)
+                    z=0
+                    
+            else:    # Link to a node in another Table  FIXME
+                pass#self._link_to_separate_table(table,node,target_table)
                 
-    def relink(self,current_table,node_being_considered,target_table,link_to):
+    def _get_p(self, node, initial=False):
+        '''
+        Calculate probabilities for assignments after Blei & Frazier equation (2)
+        
+        Parameters:
+            node    The node we are currently considering
+            initial    If we are ineitializing we want to produce 
+                       a vector that is shorter than self.m
+        '''
+        n = node + 1 if initial else self.m
+        p = np.empty((n))
+        for i in range(n):
+            p[i] = 1 / self.fd[node, i] if i != node else self.alpha
+        return p / p.sum()    
+                
+    def _move_link(self,node,table,link_to):
         '''
         Link to different node in same table
+        
+        Parameters:
+            node     The node whose link is to be changed
+            table    The table that the node belongs to
+            link_to  The node we will link to
         '''
         
-        # Find out whether breaking the olf link will split the table in two
+        # Find out whether breaking the old link will split the table in two
         
-        components = self.get_components_once_broken(current_table,node_being_considered)
+        components = self._get_components_once_link_broken(node,table)
         
         match (len(components)):
-            case 1:  # Table will not be split
-                self.logger.log('One component')
-                current_table.break_link(node_being_considered)
-                current_table[node_being_considered] = link_to
+            case 1:  # Table will not be split by breaking link
+                table.break_link(node)
+                table[node] = link_to
                 
-            case 2:  # Table might be splt
-                self.logger.log('Two components')
-                if node_being_considered in components[0] and link_to in components[0]:
-                    current_table.split(components[0],node_being_considered, link_to)
-                elif node_being_considered in components[1] and link_to in components[1]:
-                    current_table.split(components[1],node_being_considered, link_to)
-                else: # New link will restore things to a single table
-                    self.logger.log('New link will restore things to a single table')
-                    current_table.break_link(node_being_considered)
-                    current_table[node_being_considered] = link_to
+            case 2:  # Table might be split by breaking link
+                if node in components[0] and link_to in components[0]:
+                    table.split(components[1])            
+                elif node in components[1] and link_to in components[1]:
+                    table.split(components[0])                  
+                else: # New link will restore things to a single table, so no split after all
+                    pass
+                
+                table.break_link(node)
+                table[node] = link_to
 
             case _:
-                self.logger.log('WTF',level=Logger.ERROR)    
+                self.logger.log(f'Length of components is {len(components)}, should be 1 or 2',level=Logger.ERROR)    
                 
-    def get_components_once_broken(self,table,node):
+    def _get_components_once_link_broken(self,node,table):
         '''
         Find out whether deleting one link will split cluster into two parts
         
         Parameters:
-            table
-            node
-            
+            node     The node whose link we are about to break
+            table    The table in which the node lives
+  
         Returns:
            The components of the graph on the assumption thsat the link from node has been deleted
         '''
-        return Table.create_cc(table.create_edge_list(omit=node))
+        return Table.create_connected_components(table.create_edge_list(omit=node))
         
     def _link_to_separate_table(self,current_table,node_being_considered,target_table):
-        edge_list = current_table.create_edge_list(omit=node_being_considered)
-        cc = Table.create_cc(edge_list)
-        match len(cc):
+        components = self._get_components_once_link_broken(current_table,node_being_considered)
+        match len(components):
             case 1:
-                #self.logger.log(f'Moving {cc[0]} to {target_table}')
-                #target_table.join(cc[0], current_table)
-                #for node in cc[0]:
+                #self.logger.log(f'Moving {components[0]} to {target_table}')
+                #target_table.join(components[0], current_table)
+                #for node in components[0]:
                     #self.tables[node] = target_table
                 #current_table.clear()
                 self.logger.log(target_table)
                 self.logger.log(current_table)
             case 2:
-                self.logger.log(f'{cc}')
-                #if node_being_considered in cc[0]:
-                    #target_table.join(cc[0], current_table)
-                    #for node in cc[0]:
+                self.logger.log(f'{components}')
+                #if node_being_considered in components[0]:
+                    #target_table.join(components[0], current_table)
+                    #for node in components[0]:
                         #self.tables[node] = target_table
-                    #current_table.delete(cc[0])
-                #elif node_being_considered in cc[1]:
-                    #target_table.join(cc[1], current_table)
-                    #for node in cc[1]:
+                    #current_table.delete(components[0])
+                #elif node_being_considered in components[1]:
+                    #target_table.join(components[1], current_table)
+                    #for node in components[1]:
                         #self.tables[node] = target_table
-                    #current_table.delete(cc[1])
+                    #current_table.delete(components[1])
                 #else:
                     #self.logger.log('WTF')
             case _:
-                self.logger.log(f'oops: len(cc)={len(cc)}')
+                self.logger.log(f'oops: len(components)={len(components)}')
 
     def _link(self, start, end, table=None):
         '''
@@ -356,20 +422,7 @@ class ChineseRestaurantProcess:
         self.tables[start] = table
         assert self.tables[end] == table
 
-    def _get_p(self, node, initial=False):
-        '''
-        Calculate probabilities for assignments after Blei & Frazier equation (2)
-        
-        Parameters:
-            node    The node we are currently considering
-            initial    If we are ineitializing we want to produce 
-                       a vector that is shorter than self.m
-        '''
-        n = node + 1 if initial else self.m
-        p = np.empty((n))
-        for i in range(n):
-            p[i] = 1 / self.fd[node, i] if i != node else self.alpha
-        return p / p.sum()
+  
 
 
 if __name__ == '__main__':
@@ -400,9 +453,9 @@ if __name__ == '__main__':
             
         def test_cc(self):
             '''
-            This is the test case from https://rosalind.info/problems/cc/
+            This is the test case from https://rosalind.info/problems/components/
             '''
-            cc = Table.create_cc([
+            components = Table.create_connected_components([
                 (1, 2),
                 (1, 5),
                 (5, 9),
@@ -418,24 +471,44 @@ if __name__ == '__main__':
                 (8, 12),
                 (6, 6)
             ])
-            self.assertEqual(3, len(cc))
-            self.assertCountEqual([1, 2, 5, 9, 10], cc[0])
-            self.assertCountEqual([3, 4, 7, 8, 11, 12], cc[1])
-            self.assertCountEqual([6], cc[2])
+            self.assertEqual(3, len(components))
+            self.assertCountEqual([1, 2, 5, 9, 10], components[0])
+            self.assertCountEqual([3, 4, 7, 8, 11, 12], components[1])
+            self.assertCountEqual([6], components[2])
 
-    class TestTableUnlink(TestCase):
+        def test_verify_consistency1(self):
+            table = Table()
+            table[3] = 3
+            table[2] = 3
+            table[1] = 2
+            self.assertTrue(table.verify_consistency())
+            
+        def test_verify_consistency2(self):
+            table = Table()
+            table.links[2] = 3
+            table.links[1] = 2
+            self.assertFalse(table.verify_consistency())        
+            
+        def test_verify_consistency3(self):
+            table = Table()
+            table.links[3] = 1
+            table.links[2] = 3
+            table.links[1] = 2
+            self.assertTrue(table.verify_consistency())
+            
+    #class TestTableUnlink(TestCase):
     
-        def test_table_create(self):
-            t0 = Table()
-            t0[1] = 1
-            t0[2] = 1
-            t0[3] = 2
-            t0[4] = 3
-            t0[5] = 3
-            t0[6] = 5
-            t0[7] = 5
-            t0[8] = 7
-            t0.relink(5,4)
-            self.assertEqual (t0[5], 4)
+        #def test_table_create(self):
+            #t0 = Table()
+            #t0[1] = 1
+            #t0[2] = 1
+            #t0[3] = 2
+            #t0[4] = 3
+            #t0[5] = 3
+            #t0[6] = 5
+            #t0[7] = 5
+            #t0[8] = 7
+            #t0.relink(5,4)
+            #self.assertEqual (t0[5], 4)
             
     main()

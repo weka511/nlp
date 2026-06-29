@@ -621,12 +621,7 @@ class Cluster(Command):
         clusterer.build()
         for i in range(args.Niter):
             clusterer.gibbs()
-        
-        #vocabulary = skipgram.examples.vocabulary
-        #for table in clusterer.generate_tables():
-            #logger.log(table.seq)
-            #for start,end in table.generate_links():
-                #logger.log (f'{vocabulary[start]}->{vocabulary[end]}')
+
     
     @staticmethod   
     def _products_to_distances(P):
