@@ -183,10 +183,13 @@ class Table:
         '''
         Create a list of connected components for a graph
         
-        parameters:
+        Parameters:
             g       Graph in edge list format
         '''
         def create_vertices(g):
+            '''
+            Construct the set up all vertices in the graph
+            '''
             product = set()
             for a, b in g:
                 product.add(a)
@@ -194,6 +197,15 @@ class Table:
             return product
 
         def create_augmented(g):
+            '''
+            Create a new graph that has forward and backward links.
+            
+            Parameters:
+                g       Graph in edge list format
+                
+            Returns:
+               Newly constructed graph
+            '''
             product = {}
             for a, b in g:
                 if a not in product:
@@ -205,6 +217,18 @@ class Table:
             return product
 
         def dfs(vertex, g_augmented, visited):
+            '''
+            This is the heart of the algorithm. It performs Depth First Search 
+            to visit every node in a component once and only once.
+            
+            Parameters:
+                vertex         A node that has not been visted yet
+                g_augmented    Graph, augmented with forward and backward links
+                visited        List of nodes that have already been visited
+                
+            Returns:
+                Newly constucted component
+            '''
             component = set()
             visited.append(vertex)
             component.add(vertex)
