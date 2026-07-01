@@ -177,10 +177,8 @@ class Table:
         if len(gap) == 0:
             return True
         elif len(gap) == 1:
-            print(gap)
             singleton = gap.pop()
             self.links[singleton] = singleton
-            print('fixed')
         else:
             print(gap)
             return False
@@ -499,7 +497,6 @@ if __name__ == '__main__':
             return self.nodes[self.pos]
         
             
-
     class TestTable(TestCase):
 
         def test_table_create(self):
@@ -527,7 +524,6 @@ if __name__ == '__main__':
             self.assertEqual(4,table1[4])
             self.assertEqual(4,table1[5])
 
-        @skip('')
         def test_table_link(self):
             t0 = Table()
             self.assertEqual(0, len(t0))
@@ -569,7 +565,7 @@ if __name__ == '__main__':
             self.assertCountEqual([3, 4, 7, 8, 11, 12], components[1])
             self.assertCountEqual([6], components[2])
 
-        @skip('')
+
         def test_verify_consistency1(self):
             table = Table()
             table[3] = 3
@@ -577,14 +573,12 @@ if __name__ == '__main__':
             table[1] = 2
             self.assertTrue(table.verify_consistency())
 
-        @skip('')
         def test_verify_consistency2(self):
             table = Table()
             table.links[2] = 3
             table.links[1] = 2
             self.assertFalse(table.verify_consistency())
 
-        @skip('')
         def test_verify_consistency3(self):
             table = Table()
             table.links[3] = 1
