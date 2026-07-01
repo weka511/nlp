@@ -239,17 +239,63 @@ class NoDecay(DecayFunction):
     def __call__(self, distance):
         return distance
 
-
+class AbstractChooser(ABC):
+    '''
+    This class is the parent of classes that choose which node to link to.
+    It allows the real Chooser to be mocked for testing
+    '''    
+    @abstractmethod
+    def choose(self,n):
+        '''
+        Choose which node to link to
+        '''        
+        
+class Chooser(AbstractChooser):
+    '''
+    This class chooses which node to link to
+    '''
+    def __init__(self,fd, rng=np.random.default_rng(), alpha=2.0,m=None):
+        '''
+            fd         
+            rng        Random number generator
+            alpha      The scaling parametere from Blei and Frazier, equation (2)
+        '''
+        self.fd = fd
+        self.rng = rng
+        self.alpha = alpha
+        self.m = m
+ 
+    def get_indices(self,m):
+        return self.rng.permutation(m) 
+    
+    def choose(self,n, initial=False):
+        '''
+        Choose which node to link to
+        '''        
+        return self.rng.choice(n+1 if initial else self.m, p=self._get_p(n, initial=initial))
+    
+    def _get_p(self, node, initial=False):
+        '''
+        Calculate probabilities for assignments after Blei & Frazier equation (2)
+        
+        Parameters:
+            node    The node we are currently considering
+            initial If we are initializing we want to produce 
+                     a vector that is shorter than self.m
+        '''
+        n = node + 1 if initial else self.m
+        p = np.empty((n))
+        for i in range(n):
+            p[i] = 1 / self.fd[node, i] if i != node else self.alpha
+        return p / p.sum()     
+    
 class ChineseRestaurantProcess:
     '''
     This class represents a distance dependent Chinese Restaurant Process. 
     
     Attributes:
         m        Number of points to be classified (from one dimension of distance matrix)
-        fd       Array of distances between nodes, after applying decay function
         rng      Random number generator
-        alpha    The scaling parametere from Blei and Fraxier, equation (2)
-        links    FIXME
         tables   Lookup table to find which Table holds each node
         logger   For logging messages
     '''
@@ -262,28 +308,23 @@ class ChineseRestaurantProcess:
             distances  Array of distances between nodes, after applying decay function
             f          Decay function for distances
             rng        Random number generator
-            alpha      The scaling parametere from Blei and Fraxier, equation (2)
+            alpha      The scaling parametere from Blei and Frazier, equation (2)
             logger     For logging messages
         '''
         self.rng = rng
         self.m, n = distances.shape
         assert self.m == n
-        self.fd = f(distances)
-        self.rng = rng
-        self.alpha = alpha
-        #self.links = np.full((self.m), ChineseRestaurantProcess.UNASSIGNED, dtype=int)
         self.tables = np.empty((self.m), dtype=Table)  # FIXME
         self.logger = logger
+        self.chooser = Chooser(f(distances),rng=rng,alpha=alpha,m=self.m)
 
     def build(self):
         '''
         Allocate each node to a table. It randomizes the order of nodes, then adds
         one at a time. If the 
         '''
-        indices = self.rng.permutation(self.m)
-        for i in range(self.m):
-            this_node = int(indices[i])
-            link_to = int(self.rng.choice(indices[:i + 1], p=self._get_p(i, initial=True)))
+        for this_node in range(self.m):
+            link_to = self.chooser.choose(this_node,initial=True)
             if this_node == link_to:
                 self._link(this_node,link_to,table=Table())
             else:
@@ -307,7 +348,7 @@ class ChineseRestaurantProcess:
         '''
         for node in range(self.m):
             table = self.tables[node]
-            link_to = int(self.rng.choice(self.m, p=self._get_p(node)))
+            link_to = self.chooser.choose(node)
             if node == link_to: continue # Linking to same node, so no change
 
             target_table = self.tables[link_to]
