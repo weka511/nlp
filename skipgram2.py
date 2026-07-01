@@ -33,7 +33,7 @@ import numpy as np
 from matplotlib.pyplot import figure,show
 from matplotlib import rc
 from scipy.special import expit
-from crp import ChineseRestaurantProcess
+from crp import ChineseRestaurantProcess,DistanceDependentChooser
 from vocabulary import Vocabulary
 from tokenizer import generate_sentences,generate_text,generate_tokens,Token
 from shared.utils import Logger, user_has_requested_stop
@@ -610,14 +610,14 @@ class Cluster(Command):
         
     '''
     Select entries from table of scalar products
-    '''        
-        
+    '''            
     def _execute(self,args,rng = np.random.default_rng(),logger=None):
         skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
                                    report=lambda s: logger.log(s))
-        clusterer = ChineseRestaurantProcess(Cluster._products_to_distances(skipgram.P),
-                                             rng=rng,
-                                             logger=logger)
+        d = Cluster._products_to_distances(skipgram.P)
+        m,_ = d.shape
+        chooser = DistanceDependentChooser(d,rng=rng,alpha=args.alpha,m=m)        
+        clusterer = ChineseRestaurantProcess(m=m,chooser=chooser,logger=logger)
         clusterer.build()
         for i in range(args.Niter):
             clusterer.gibbs()

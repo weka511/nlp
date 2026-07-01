@@ -239,7 +239,7 @@ class NoDecay(DecayFunction):
     def __call__(self, distance):
         return distance
 
-class AbstractChooser(ABC):
+class Chooser(ABC):
     '''
     This class is the parent of classes that choose which node to link to.
     It allows the real Chooser to be mocked for testing
@@ -250,17 +250,23 @@ class AbstractChooser(ABC):
         Choose which node to link to
         '''        
         
-class Chooser(AbstractChooser):
+class DistanceDependentChooser(Chooser):
     '''
-    This class chooses which node to link to
+    This class forms part of a distance dependent Chinese Restaurant Process. It chooses which node to link to
+    
+    Attributes:
+        fd
+        rng
+        alpha
+        m
     '''
-    def __init__(self,fd, rng=np.random.default_rng(), alpha=2.0,m=None):
+    def __init__(self,d, f=NoDecay(),rng=np.random.default_rng(), alpha=2.0,m=None):
         '''
-            fd         
+            f          Decay function         
             rng        Random number generator
             alpha      The scaling parametere from Blei and Frazier, equation (2)
         '''
-        self.fd = fd
+        self.fd = f(d)
         self.rng = rng
         self.alpha = alpha
         self.m = m
@@ -291,32 +297,26 @@ class Chooser(AbstractChooser):
     
 class ChineseRestaurantProcess:
     '''
-    This class represents a distance dependent Chinese Restaurant Process. 
+    This class represents a Chinese Restaurant Process. 
     
     Attributes:
-        m        Number of points to be classified (from one dimension of distance matrix)
-        rng      Random number generator
         tables   Lookup table to find which Table holds each node
         logger   For logging messages
     '''
 
     UNASSIGNED = -1
 
-    def __init__(self, distances, f=NoDecay(), rng=np.random.default_rng(), alpha=2.0, logger=None):
+    def __init__(self,  chooser=None, logger=None,m=None):
         '''
         Parameters:
-            distances  Array of distances between nodes, after applying decay function
-            f          Decay function for distances
-            rng        Random number generator
-            alpha      The scaling parametere from Blei and Frazier, equation (2)
+            tables
+            m
             logger     For logging messages
         '''
-        self.rng = rng
-        self.m, n = distances.shape
-        assert self.m == n
+        self.m = m
         self.tables = np.empty((self.m), dtype=Table)  # FIXME
         self.logger = logger
-        self.chooser = Chooser(f(distances),rng=rng,alpha=alpha,m=self.m)
+        self.chooser = chooser
 
     def build(self):
         '''
@@ -361,20 +361,6 @@ class ChineseRestaurantProcess:
             else:    # Link to a node in another Table  FIXME
                 pass#self._link_to_separate_table(table,node,target_table)
                 
-    def _get_p(self, node, initial=False):
-        '''
-        Calculate probabilities for assignments after Blei & Frazier equation (2)
-        
-        Parameters:
-            node    The node we are currently considering
-            initial    If we are ineitializing we want to produce 
-                       a vector that is shorter than self.m
-        '''
-        n = node + 1 if initial else self.m
-        p = np.empty((n))
-        for i in range(n):
-            p[i] = 1 / self.fd[node, i] if i != node else self.alpha
-        return p / p.sum()    
                 
     def _move_link(self,node,table,link_to):
         '''
