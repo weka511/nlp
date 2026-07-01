@@ -38,18 +38,12 @@ class Table:
         links  A list of links [...(from,to), ....]
         seq    A  unique id for this Table
     '''
-    current_seq = -1   # Used to assign unique sequnce numbers
     tables = []        # List of all tables
 
     @staticmethod
     def reset():
-        Table.current_seq = -1 
         Table.tables = [] 
-        
-    @staticmethod
-    def create_seq():
-        Table.current_seq += 1
-        return Table.current_seq
+    
 
     def __init__(self):
         '''
@@ -57,7 +51,7 @@ class Table:
         and store newly created table in a list of table.
         '''
         self.links = {}
-        self.seq = Table.create_seq()
+        self.seq = len(Table.tables)
         Table.tables.append(self)
 
     def __eq__(self, table):
@@ -110,9 +104,7 @@ class Table:
         except KeyError:
             for key, value in self.links.items():
                 print(key, value)
-                z = 0
-    #def relink(self,node,end):
-        #self.links[node] = end
+ 
 
     def join(self, nodes, current_table):
         for node in nodes:
@@ -347,7 +339,7 @@ class ChineseRestaurantProcess:
             logger     For logging messages
         '''
         self.m = m
-        #self.tables = np.empty((self.m), dtype=Table)  # FIXME
+        self.tables = np.empty((self.m), dtype=Table)
         self.logger = logger
         self.chooser = chooser
 
@@ -361,11 +353,11 @@ class ChineseRestaurantProcess:
             if this_node == link_to:
                 self._link(this_node, link_to, table=Table())
             else:
-                self._link(this_node, link_to, table=Table.tables[link_to])
+                self._link(this_node, link_to, table=self.tables[link_to])
 
         #print (self.m)
         #print ([len(table) for table in Table.tables])
-        #assert self.m == sum(len(table) for table in Table.tables)
+        assert self.m == sum(len(table) for table in Table.tables)
 
         for table in Table.tables:
             table.verify_consistency()
@@ -481,13 +473,13 @@ class ChineseRestaurantProcess:
             table    The link lives in this table
         '''
         table[start] = end
-        while len(Table.tables) < start+1:
-            Table.tables.append(-1)
-        Table.tables[start] = table
+        self.tables[start] = table
 
 if __name__ == '__main__':
     class MockChooser(Chooser):
-        
+        '''
+        This class allows tests to build Tables
+        '''
         def __init__(self,nodes):
             self.nodes = nodes
             self.pos = -1
@@ -505,6 +497,7 @@ if __name__ == '__main__':
             t1 = Table()
             self.assertEqual(1, t1.seq)
             self.assertNotEqual(t0,t1)
+            self.assertEqual(2,len(Table.tables))
             
         def test_build1(self):
             '''
@@ -513,9 +506,8 @@ if __name__ == '__main__':
             chooser = MockChooser([0,0,1,2,4,4])
             crp = ChineseRestaurantProcess(chooser=chooser,m=6)
             crp.build()
-            self.assertEqual(1,Table.current_seq)
             table0 = Table.tables[0]
-            table1 = Table.tables[4]
+            table1 = Table.tables[1]
             self.assertNotEqual(table0,table1)
             self.assertEqual(0,table0[0])
             self.assertEqual(0,table0[1])
