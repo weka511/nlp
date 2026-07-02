@@ -127,12 +127,12 @@ class Table:
         self.links[node_to_connect] = node
         table_split.links.clear()
 
-    def break_link(self, node):
-        try:
-            del self.links[node]
-        except KeyError:
-            for key, value in self.links.items():
-                print(key, value)
+    #def break_link(self, node):
+        #try:
+            #del self.links[node]
+        #except KeyError:
+            #for key, value in self.links.items():
+                #print(key, value)
  
 
     #def join(self, nodes, current_table):
@@ -142,9 +142,9 @@ class Table:
     def clear(self):
         self.links = {}
 
-    def delete(self, nodes):
-        for node in nodes:
-            del self.links[node]
+    #def delete(self, nodes):
+        #for node in nodes:
+            #del self.links[node]
 
     def create_edge_list(self, omit=-1):
         '''
@@ -163,27 +163,27 @@ class Table:
         for start, end in self.links.items():
             yield start, end
 
-    def split(self, nodes):
-        '''
-        Split a bunch of nodes off into a separate table
+    #def split(self, nodes):
+        #'''
+        #Split a bunch of nodes off into a separate table
         
-        Parameters:
-            nodes      List of nodes to be removed
-        '''
-        new_table = Table()
-        for node in nodes:
-            destination = self[node]
-            new_table.links[node] = destination
-            self.break_link(node)
+        #Parameters:
+            #nodes      List of nodes to be removed
+        #'''
+        #new_table = Table()
+        #for node in nodes:
+            #destination = self[node]
+            #new_table.links[node] = destination
+            #self.break_link(node)
 
         # TODO: need at least one cycle
 
-    def get_nodes(self):
-        nodes = set()
-        for start, end in self.links.items():
-            nodes.add(start)
-            nodes.add(end)
-        return list(nodes)
+    #def get_nodes(self):
+        #nodes = set()
+        #for start, end in self.links.items():
+            #nodes.add(start)
+            #nodes.add(end)
+        #return list(nodes)
 
     def verify_consistency(self, fix=False):
         '''
@@ -420,79 +420,79 @@ class ChineseRestaurantProcess:
 
    
     
-    def _move_link(self, node, table, link_to):
-        '''
-        Link to different node in same table
+    #def _move_link(self, node, table, link_to):
+        #'''
+        #Link to different node in same table
         
-        Parameters:
-            node     The node whose link is to be changed
-            table    The table that the node belongs to
-            link_to  The node we will link to
-        '''
+        #Parameters:
+            #node     The node whose link is to be changed
+            #table    The table that the node belongs to
+            #link_to  The node we will link to
+        #'''
 
-        # Find out whether breaking the old link will split the table in two
+        ## Find out whether breaking the old link will split the table in two
 
-        components = self._get_components_once_link_broken(node, table)
+        #components = self._get_components_once_link_broken(node, table)
 
-        match (len(components)):
-            case 1:  # Table will not be split by breaking link
-                table.break_link(node)
-                table[node] = link_to
+        #match (len(components)):
+            #case 1:  # Table will not be split by breaking link
+                #table.break_link(node)
+                #table[node] = link_to
 
-            case 2:  # Table might be split by breaking link
-                if node in components[0] and link_to in components[0]:
-                    table.split(components[1])
-                elif node in components[1] and link_to in components[1]:
-                    table.split(components[0])
-                else: # New link will restore things to a single table, so no split after all
-                    pass
+            #case 2:  # Table might be split by breaking link
+                #if node in components[0] and link_to in components[0]:
+                    #table.split(components[1])
+                #elif node in components[1] and link_to in components[1]:
+                    #table.split(components[0])
+                #else: # New link will restore things to a single table, so no split after all
+                    #pass
 
-                table.break_link(node)
-                table[node] = link_to
+                #table.break_link(node)
+                #table[node] = link_to
 
-            case _:
-                self.logger.log(f'Length of components is {len(components)}, should be 1 or 2', level=Logger.ERROR)
+            #case _:
+                #self.logger.log(f'Length of components is {len(components)}, should be 1 or 2', level=Logger.ERROR)
 
-    def _get_components_once_link_broken(self, node, table):
-        '''
-        Find out whether deleting one link will split cluster into two parts
+    #def _get_components_once_link_broken(self, node, table):
+        #'''
+        #Find out whether deleting one link will split cluster into two parts
         
-        Parameters:
-            node     The node whose link we are about to break
-            table    The table in which the node lives
+        #Parameters:
+            #node     The node whose link we are about to break
+            #table    The table in which the node lives
   
-        Returns:
-           The components of the graph on the assumption thsat the link from node has been deleted
-        '''
-        return Table.create_connected_components(table.create_edge_list(omit=node))
+        #Returns:
+           #The components of the graph on the assumption thsat the link from node has been deleted
+        #'''
+        #return Table.create_connected_components(table.create_edge_list(omit=node))
 
-    def _link_to_separate_table(self, current_table, node_being_considered, target_table):
-        components = self._get_components_once_link_broken(current_table, node_being_considered)
-        match len(components):
-            case 1:
-                #self.logger.log(f'Moving {components[0]} to {target_table}')
-                #target_table.join(components[0], current_table)
-                #for node in components[0]:
-                    #self.tables[node] = target_table
-                #current_table.clear()
-                self.logger.log(target_table)
-                self.logger.log(current_table)
-            case 2:
-                self.logger.log(f'{components}')
-                #if node_being_considered in components[0]:
-                    #target_table.join(components[0], current_table)
-                    #for node in components[0]:
-                        #self.tables[node] = target_table
-                    #current_table.delete(components[0])
-                #elif node_being_considered in components[1]:
-                    #target_table.join(components[1], current_table)
-                    #for node in components[1]:
-                        #self.tables[node] = target_table
-                    #current_table.delete(components[1])
-                #else:
-                    #self.logger.log('WTF')
-            case _:
-                self.logger.log(f'oops: len(components)={len(components)}')
+    #def _link_to_separate_table(self, current_table, node_being_considered, target_table):
+        #components = self._get_components_once_link_broken(current_table, node_being_considered)
+        #match len(components):
+            #case 1:
+                ##self.logger.log(f'Moving {components[0]} to {target_table}')
+                ##target_table.join(components[0], current_table)
+                ##for node in components[0]:
+                    ##self.tables[node] = target_table
+                ##current_table.clear()
+                #self.logger.log(target_table)
+                #self.logger.log(current_table)
+            #case 2:
+                #self.logger.log(f'{components}')
+                ##if node_being_considered in components[0]:
+                    ##target_table.join(components[0], current_table)
+                    ##for node in components[0]:
+                        ##self.tables[node] = target_table
+                    ##current_table.delete(components[0])
+                ##elif node_being_considered in components[1]:
+                    ##target_table.join(components[1], current_table)
+                    ##for node in components[1]:
+                        ##self.tables[node] = target_table
+                    ##current_table.delete(components[1])
+                ##else:
+                    ##self.logger.log('WTF')
+            #case _:
+                #self.logger.log(f'oops: len(components)={len(components)}')
 
     def _link(self, start, end, table=None):
         '''
