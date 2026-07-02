@@ -26,8 +26,7 @@ from abc import ABC, abstractmethod
 from unittest import TestCase, main, skip
 import numpy as np
 from shared.utils import Logger
-
-
+        
 class Table:
     '''
     The Chinese Restaurant Process allocates elements to a Table. Each element is
@@ -97,6 +96,36 @@ class Table:
             self.links[start] = end
         else:
             raise ValueError('Node must link to itself in an otherwise empty table, or to a distinct node')
+        
+    def break_at(self,node):
+        components = Table.create_connected_components(self.create_edge_list(omit=node))
+        match len(components):
+            case 1:
+                pass
+            case 2:
+                if not node in components[1]:
+                    components = [components[1],components[0]]
+                table1 = Table()
+                table1[node] = node
+                to_delete = []
+                for a,b in self.links.items():
+                    if a in components[0] and b in components[0]: 
+                        pass # keep link
+                    elif a in components[1] and b in components[1]:
+                        table1[a] = b
+                        to_delete.append(a)
+                    else:
+                        to_delete.append(a)
+                for a in to_delete:
+                    del self.links[a]
+                return table1
+            case _:
+                raise RuntimeError(f'There are {len(cc)} connected components')
+            
+    def join(self,node,table_split,node_to_connect):
+        self.links |= table_split.links
+        self.links[node_to_connect] = node
+        table_split.links.clear()
 
     def break_link(self, node):
         try:
@@ -106,9 +135,9 @@ class Table:
                 print(key, value)
  
 
-    def join(self, nodes, current_table):
-        for node in nodes:
-            self[node] = current_table[node]
+    #def join(self, nodes, current_table):
+        #for node in nodes:
+            #self[node] = current_table[node]
 
     def clear(self):
         self.links = {}
@@ -389,6 +418,8 @@ class ChineseRestaurantProcess:
             else:    # Link to a node in another Table  FIXME
                 pass#self._link_to_separate_table(table,node,target_table)
 
+   
+    
     def _move_link(self, node, table, link_to):
         '''
         Link to different node in same table
@@ -488,6 +519,50 @@ if __name__ == '__main__':
             self.pos += 1
             return self.nodes[self.pos]
         
+    class TestFigure3(TestCase):
+        '''
+        Tests based on Figure 3 of Blei & Frazier
+        '''        
+        def setUp(self):
+            chooser = MockChooser([0,0,1,2,4,4])
+            self.crp = ChineseRestaurantProcess(chooser=chooser,m=6)
+            self.crp.build()            
+        
+        def test_build_tables(self):
+            '''
+            This test verifies that we can construct the graph in the first panel of Figure 3 of Blei & Frazier
+            '''
+            self.assertEqual(2,len(Table.tables))
+            table0 = Table.tables[0]
+            table1 = Table.tables[1]
+            self.assertNotEqual(table0,table1)
+            self.assertEqual(0,table0[0])
+            self.assertEqual(0,table0[1])
+            self.assertEqual(1,table0[2])
+            self.assertEqual(2,table0[3])
+            self.assertEqual(4,table1[4])
+            self.assertEqual(4,table1[5])
+            
+        def test_break_link(self):
+            '''
+            This test verifies that we can construct the graph in lines 2 and 3 Figure 3 of Blei & Frazier
+            '''            
+            table = Table.tables[0]
+            table_split = table.break_at(2)
+            self.assertEqual(3,len(Table.tables))
+            table_join_to = self.crp.tables[4]
+            table_join_to.join(4,table_split,2)
+            self.assertEqual(6,sum([len(t) for t in Table.tables]))
+            self.assertEqual(4,len(table_join_to))
+            self.assertEqual(0,Table.tables[0][0])
+            self.assertEqual(0,Table.tables[0][1])
+            self.assertEqual(4,Table.tables[1][4])
+            self.assertEqual(4,Table.tables[1][5])
+            self.assertEqual(4,Table.tables[1][2])
+            self.assertEqual(2,Table.tables[1][3])
+        
+        def tearDown(self):
+            Table.reset()
             
     class TestTable(TestCase):
 
@@ -499,23 +574,7 @@ if __name__ == '__main__':
             self.assertNotEqual(t0,t1)
             self.assertEqual(2,len(Table.tables))
             
-        def test_build1(self):
-            '''
-            This test verifies that we can construct the graph in the first panel of Figure 3 of Blei & Frazier
-            '''
-            chooser = MockChooser([0,0,1,2,4,4])
-            crp = ChineseRestaurantProcess(chooser=chooser,m=6)
-            crp.build()
-            table0 = Table.tables[0]
-            table1 = Table.tables[1]
-            self.assertNotEqual(table0,table1)
-            self.assertEqual(0,table0[0])
-            self.assertEqual(0,table0[1])
-            self.assertEqual(1,table0[2])
-            self.assertEqual(2,table0[3])
-            self.assertEqual(4,table1[4])
-            self.assertEqual(4,table1[5])
-
+   
         def test_table_link(self):
             t0 = Table()
             self.assertEqual(0, len(t0))
@@ -581,19 +640,5 @@ if __name__ == '__main__':
         def tearDown(self):
             Table.reset()
 
-    #class TestTableUnlink(TestCase):
-
-        #def test_table_create(self):
-            #t0 = Table()
-            #t0[1] = 1
-            #t0[2] = 1
-            #t0[3] = 2
-            #t0[4] = 3
-            #t0[5] = 3
-            #t0[6] = 5
-            #t0[7] = 5
-            #t0[8] = 7
-            #t0.relink(5,4)
-            #self.assertEqual (t0[5], 4)
 
     main()
