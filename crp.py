@@ -98,30 +98,56 @@ class Table:
         
         Parameters:
             node      The node whose link is to be broken
+            
+        Returns:
+           The table which contains `node': this may be a newly ceated table, or the original
         '''
+        def standardize(components):
+            '''
+                We will move `node` to the new table. Start by ensuring that
+                it is in the second group of components
+            '''
+            if not node in components[1]:  
+                return [components[1],components[0]]
+            else:
+                return components
+                
+        def move_nodes(components):
+            '''
+            Move the nodes, and make a list of those those whoe links
+            that will be deleted from the original table
+            '''
+            new_table = Table()
+            new_table[node] = node
+            to_delete = []
+            for a,b in self.links.items():
+                if a in components[0] and b in components[0]: 
+                    pass # keep link
+                elif a in components[1] and b in components[1]:
+                    new_table[a] = b
+                    to_delete.append(a)
+                else:
+                    to_delete.append(a)
+                    
+            return new_table,to_delete
+        
+        def remove_redundant_links(to_delete):
+            '''
+            Remove links for those nodes that were removed
+            '''
+            for a in to_delete:
+                del self.links[a]        
+        
         components = Table.create_connected_components(self.create_edge_list(omit=node))
         match len(components):
             case 1:                          # Break must be in a cycle
                 self.links[node] = node      # Simply make node point to itself   
                 return self
             
-            case 2:                               # Break leaves links in two
-                if not node in components[1]:
-                    components = [components[1],components[0]]
-                table1 = Table()
-                table1[node] = node
-                to_delete = []
-                for a,b in self.links.items():
-                    if a in components[0] and b in components[0]: 
-                        pass # keep link
-                    elif a in components[1] and b in components[1]:
-                        table1[a] = b
-                        to_delete.append(a)
-                    else:
-                        to_delete.append(a)
-                for a in to_delete:
-                    del self.links[a]
-                return table1
+            case 2:                               # Break will spilt links in two     
+                new_table,to_delete = move_nodes(standardize(components))
+                remove_redundant_links(to_delete)       
+                return new_table
             
             case _:
                 raise RuntimeError(f'There are {len(cc)} connected components')
@@ -273,7 +299,6 @@ class Chooser(ABC):
         '''
         Choose which node to link to
         '''
-
 
 class DistanceDependentChooser(Chooser):
     '''
