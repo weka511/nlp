@@ -38,16 +38,11 @@ class Table:
         seq    A  unique id for this Table
     '''
     tables = []        # List of all tables
-
-    @staticmethod
-    def reset():
-        Table.tables = [] 
-    
-
+   
     def __init__(self):
         '''
         Initialize links to an empty list, allocate a sequence number to the table,
-        and store newly created table in a list of table.
+        and store newly created table in a list of tables.
         '''
         self.links = {}
         self.seq = len(Table.tables)
@@ -98,11 +93,19 @@ class Table:
             raise ValueError('Node must link to itself in an otherwise empty table, or to a distinct node')
         
     def break_at(self,node):
+        '''
+        Break one link in a Table.
+        
+        Parameters:
+            node      The node whose link is to be broken
+        '''
         components = Table.create_connected_components(self.create_edge_list(omit=node))
         match len(components):
-            case 1:
-                pass
-            case 2:
+            case 1:                          # Break must be in a cycle
+                self.links[node] = node      # Simply make node point to itself   
+                return self
+            
+            case 2:                               # Break leaves links in two
                 if not node in components[1]:
                     components = [components[1],components[0]]
                 table1 = Table()
@@ -119,32 +122,17 @@ class Table:
                 for a in to_delete:
                     del self.links[a]
                 return table1
+            
             case _:
                 raise RuntimeError(f'There are {len(cc)} connected components')
             
     def join(self,node,table_split,node_to_connect):
+        '''
+        Join two groups of nodes
+        '''
         self.links |= table_split.links
         self.links[node_to_connect] = node
         table_split.links.clear()
-
-    #def break_link(self, node):
-        #try:
-            #del self.links[node]
-        #except KeyError:
-            #for key, value in self.links.items():
-                #print(key, value)
- 
-
-    #def join(self, nodes, current_table):
-        #for node in nodes:
-            #self[node] = current_table[node]
-
-    def clear(self):
-        self.links = {}
-
-    #def delete(self, nodes):
-        #for node in nodes:
-            #del self.links[node]
 
     def create_edge_list(self, omit=-1):
         '''
@@ -163,27 +151,6 @@ class Table:
         for start, end in self.links.items():
             yield start, end
 
-    #def split(self, nodes):
-        #'''
-        #Split a bunch of nodes off into a separate table
-        
-        #Parameters:
-            #nodes      List of nodes to be removed
-        #'''
-        #new_table = Table()
-        #for node in nodes:
-            #destination = self[node]
-            #new_table.links[node] = destination
-            #self.break_link(node)
-
-        # TODO: need at least one cycle
-
-    #def get_nodes(self):
-        #nodes = set()
-        #for start, end in self.links.items():
-            #nodes.add(start)
-            #nodes.add(end)
-        #return list(nodes)
 
     def verify_consistency(self, fix=False):
         '''
@@ -214,7 +181,13 @@ class Table:
         '''
         def create_vertices(g):
             '''
-            Construct the set up all vertices in the graph
+            Construct the set of all vertices in the graph
+            
+            Parameters:
+                g       Graph in edge list format
+                
+            Returns:
+                Set of vertices
             '''
             product = set()
             for a, b in g:
@@ -518,8 +491,18 @@ if __name__ == '__main__':
         def choose(self, n, initial=False):
             self.pos += 1
             return self.nodes[self.pos]
-        
-    class TestFigure3(TestCase):
+  
+    class TestTable(TestCase):
+        '''
+        Parent for test cases: ensure that all tests tearDown
+        '''
+        def tearDown(self):
+            '''
+            Purge list of all Tables to prevent test classes interacting
+            '''
+            Table.tables.clear()
+            
+    class TestFigure3(TestTable):
         '''
         Tests based on Figure 3 of Blei & Frazier
         '''        
@@ -545,10 +528,11 @@ if __name__ == '__main__':
             
         def test_break_link(self):
             '''
-            This test verifies that we can construct the graph in lines 2 and 3 Figure 3 of Blei & Frazier
+            This test verifies that we can construct the graph in lines 2 and 3 of Figure 3 of Blei & Frazier
             '''            
             table = Table.tables[0]
             table_split = table.break_at(2)
+            self.assertNotEqual(table_split,table)
             self.assertEqual(3,len(Table.tables))
             table_join_to = self.crp.tables[4]
             table_join_to.join(4,table_split,2)
@@ -561,19 +545,28 @@ if __name__ == '__main__':
             self.assertEqual(4,Table.tables[1][2])
             self.assertEqual(2,Table.tables[1][3])
         
-        def tearDown(self):
-            Table.reset()
-            
-    class TestTable(TestCase):
 
+    class TestCycle(TestTable):
+        
+        def test_break_cycle(self):
+            table = Table()
+            table.links = {1:0,2:1,3:2,4:3,0:4}
+            self.assertEqual(table,table.break_at(3))
+            self.assertEqual(0,table.links[1])
+            self.assertEqual(1,table.links[2])
+            self.assertEqual(3,table.links[3])
+            self.assertEqual(3,table.links[4])
+            self.assertEqual(4,table.links[0])
+                
+    
+    class TestSimple(TestTable):
         def test_table_create(self):
             t0 = Table()
             self.assertEqual(0, t0.seq)
             t1 = Table()
             self.assertEqual(1, t1.seq)
             self.assertNotEqual(t0,t1)
-            self.assertEqual(2,len(Table.tables))
-            
+            self.assertEqual(2,len(Table.tables))       
    
         def test_table_link(self):
             t0 = Table()
@@ -637,8 +630,4 @@ if __name__ == '__main__':
             table.links[1] = 2
             self.assertTrue(table.verify_consistency())
             
-        def tearDown(self):
-            Table.reset()
-
-
     main()
