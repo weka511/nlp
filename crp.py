@@ -140,6 +140,10 @@ class Table:
         
         components = Table.create_connected_components(self.create_edge_list(omit=node))
         match len(components):
+            case 0:
+                self.logger('There are no components')
+                return self
+            
             case 1:                          # Break must be in a cycle
                 self.links[node] = node      # Simply make node point to itself   
                 return self
@@ -150,11 +154,16 @@ class Table:
                 return new_table
             
             case _:
-                raise RuntimeError(f'There are {len(cc)} connected components')
+                raise RuntimeError(f'There are {len(components)} connected components')
             
     def join(self,node,table_split,node_to_connect):
         '''
         Join two groups of nodes
+        
+        Parameters:
+            node                 The node that we are going to connect to
+            table_split          Contains nodes that were split off
+            node_to_connect      The node that is being linked
         '''
         self.links |= table_split.links
         self.links[node_to_connect] = node
@@ -299,6 +308,11 @@ class Chooser(ABC):
         '''
         Choose which node to link to
         '''
+        
+    @abstractmethod
+    def get_m(self):
+        ...
+        
 
 class DistanceDependentChooser(Chooser):
     '''
@@ -322,6 +336,9 @@ class DistanceDependentChooser(Chooser):
         self.alpha = alpha
         self.m = m
 
+    def get_m(self):
+        return self.m
+    
     def get_indices(self, m):
         return self.rng.permutation(m)
 
@@ -358,14 +375,14 @@ class ChineseRestaurantProcess:
 
     UNASSIGNED = -1
 
-    def __init__(self, chooser=None, logger=None, m=None):
+    def __init__(self, chooser=None, logger=None):
         '''
         Parameters:
             tables
             m
             logger     For logging messages
         '''
-        self.m = m
+        self.m = chooser.get_m()
         self.tables = np.empty((self.m), dtype=Table)
         self.logger = logger
         self.chooser = chooser
@@ -381,9 +398,7 @@ class ChineseRestaurantProcess:
                 self._link(this_node, link_to, table=Table())
             else:
                 self._link(this_node, link_to, table=self.tables[link_to])
-
-        #print (self.m)
-        #print ([len(table) for table in Table.tables])
+                
         assert self.m == sum(len(table) for table in Table.tables)
 
         for table in Table.tables:
@@ -401,97 +416,19 @@ class ChineseRestaurantProcess:
         Perform one gibbs step - WIP
         '''
         for node in range(self.m):
-            table = Table.tables[node]
+            table = self.tables[node]
+            table_after_break = table.break_at(node)
             link_to = self.chooser.choose(node)
-            if node == link_to:
-                continue # Linking to same node, so no change
-
-            target_table = Target.tables[link_to]
-            if table == target_table:  # Link to different node in same table
-                self._move_link(node, table, link_to)
-                if not table.verify_consistency(fix=True):
-                    print(table)
-                    z = 0
-
-            else:    # Link to a node in another Table  FIXME
-                pass#self._link_to_separate_table(table,node,target_table)
-
+            table_to_link_to = self.tables[link_to]
+            if table == table_after_break:
+                if table == table_to_link_to:
+                    table.links[node] = link_to
+                else:
+                    table_to_link_to.join(link_to,table,node)
+            else:
+                table_to_link_to.join(link_to,table_after_break,node)
+            
    
-    
-    #def _move_link(self, node, table, link_to):
-        #'''
-        #Link to different node in same table
-        
-        #Parameters:
-            #node     The node whose link is to be changed
-            #table    The table that the node belongs to
-            #link_to  The node we will link to
-        #'''
-
-        ## Find out whether breaking the old link will split the table in two
-
-        #components = self._get_components_once_link_broken(node, table)
-
-        #match (len(components)):
-            #case 1:  # Table will not be split by breaking link
-                #table.break_link(node)
-                #table[node] = link_to
-
-            #case 2:  # Table might be split by breaking link
-                #if node in components[0] and link_to in components[0]:
-                    #table.split(components[1])
-                #elif node in components[1] and link_to in components[1]:
-                    #table.split(components[0])
-                #else: # New link will restore things to a single table, so no split after all
-                    #pass
-
-                #table.break_link(node)
-                #table[node] = link_to
-
-            #case _:
-                #self.logger.log(f'Length of components is {len(components)}, should be 1 or 2', level=Logger.ERROR)
-
-    #def _get_components_once_link_broken(self, node, table):
-        #'''
-        #Find out whether deleting one link will split cluster into two parts
-        
-        #Parameters:
-            #node     The node whose link we are about to break
-            #table    The table in which the node lives
-  
-        #Returns:
-           #The components of the graph on the assumption thsat the link from node has been deleted
-        #'''
-        #return Table.create_connected_components(table.create_edge_list(omit=node))
-
-    #def _link_to_separate_table(self, current_table, node_being_considered, target_table):
-        #components = self._get_components_once_link_broken(current_table, node_being_considered)
-        #match len(components):
-            #case 1:
-                ##self.logger.log(f'Moving {components[0]} to {target_table}')
-                ##target_table.join(components[0], current_table)
-                ##for node in components[0]:
-                    ##self.tables[node] = target_table
-                ##current_table.clear()
-                #self.logger.log(target_table)
-                #self.logger.log(current_table)
-            #case 2:
-                #self.logger.log(f'{components}')
-                ##if node_being_considered in components[0]:
-                    ##target_table.join(components[0], current_table)
-                    ##for node in components[0]:
-                        ##self.tables[node] = target_table
-                    ##current_table.delete(components[0])
-                ##elif node_being_considered in components[1]:
-                    ##target_table.join(components[1], current_table)
-                    ##for node in components[1]:
-                        ##self.tables[node] = target_table
-                    ##current_table.delete(components[1])
-                ##else:
-                    ##self.logger.log('WTF')
-            #case _:
-                #self.logger.log(f'oops: len(components)={len(components)}')
-
     def _link(self, start, end, table=None):
         '''
         Link two nodes, and also record that the first node is in the table
@@ -516,6 +453,9 @@ if __name__ == '__main__':
         def choose(self, n, initial=False):
             self.pos += 1
             return self.nodes[self.pos]
+        
+        def get_m(self):
+            return len(self.nodes)
   
     class TestTable(TestCase):
         '''
@@ -533,7 +473,7 @@ if __name__ == '__main__':
         '''        
         def setUp(self):
             chooser = MockChooser([0,0,1,2,4,4])
-            self.crp = ChineseRestaurantProcess(chooser=chooser,m=6)
+            self.crp = ChineseRestaurantProcess(chooser=chooser)
             self.crp.build()            
         
         def test_build_tables(self):
