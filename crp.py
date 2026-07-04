@@ -23,6 +23,7 @@
 '''
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 from unittest import TestCase, main, skip
 import numpy as np
 from shared.utils import Logger
@@ -114,7 +115,7 @@ class Table:
                 
         def move_nodes(components):
             '''
-            Move the nodes, and make a list of those those whoe links
+            Move the nodes, and make a list of those those whose links
             that will be deleted from the original table
             '''
             new_table = Table()
@@ -431,6 +432,7 @@ class ChineseRestaurantProcess:
             else:
                 table_to_link_to.join(link_to,table_after_break,node)
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()}')
+            self.tables[node] = table_to_link_to
             components = Table.create_connected_components(table_to_link_to.create_edge_list())
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} {len(components)} components')
             
@@ -467,17 +469,24 @@ if __name__ == '__main__':
         '''
         Parent for test cases: ensure that all tests tearDown
         '''
+        
+        def setUp(self):
+            self.logger = Logger(Path(__file__).stem,path='./logs',level=Logger.ERROR)
+            self.logger.__enter__()
+            
         def tearDown(self):
             '''
             Purge list of all Tables to prevent test classes interacting
             '''
             Table.tables.clear()
+            self.logger.__exit__(None, None, None)
             
     class TestFigure3(TestTable):
         '''
         Tests based on Figure 3 of Blei & Frazier
         '''        
         def setUp(self):
+            super().setUp()
             chooser = MockChooser([0,0,1,2,4,4])
             self.crp = ChineseRestaurantProcess(chooser=chooser)
             self.crp.build()            
@@ -519,6 +528,9 @@ if __name__ == '__main__':
 
     class TestCycle(TestTable):
         
+        def setUp(self):
+            super().setUp()
+        
         def test_break_cycle(self):
             table = Table()
             table.links = {1:0,2:1,3:2,4:3,0:4}
@@ -531,6 +543,9 @@ if __name__ == '__main__':
                 
     
     class TestSimple(TestTable):
+        def setUp(self):
+            super().setUp()
+            
         def test_table_create(self):
             t0 = Table()
             self.assertEqual(0, t0.seq)
