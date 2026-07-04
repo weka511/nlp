@@ -100,7 +100,7 @@ class Table:
             node      The node whose link is to be broken
             
         Returns:
-           The table which contains `node': this may be a newly ceated table, or the original
+           The table which contains `node': this may be a newly created table, or the original
         '''
         def standardize(components):
             '''
@@ -141,16 +141,20 @@ class Table:
         components = Table.create_connected_components(self.create_edge_list(omit=node))
         match len(components):
             case 0:
-                new_table.log('There are no components')
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} there are no components')
                 return self
             
             case 1:                          # Break must be in a cycle
-                self.links[node] = node      # Simply make node point to itself   
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Only one component')
+                self.links[node] = node      # Simply make node point to itself 
                 return self
             
-            case 2:                               # Break will spilt links in two     
+            case 2:                               # Break will split links in two    
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Break will split links in two ')
                 new_table,to_delete = move_nodes(standardize(components))
-                remove_redundant_links(to_delete)       
+                remove_redundant_links(to_delete)
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {self} ')
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {new_table} ')
                 return new_table
             
             case _:
@@ -370,7 +374,6 @@ class ChineseRestaurantProcess:
     
     Attributes:
         tables   Lookup table to find which Table holds each node
-        logger   For logging messages
     '''
 
     UNASSIGNED = -1
@@ -378,9 +381,8 @@ class ChineseRestaurantProcess:
     def __init__(self, chooser=None):
         '''
         Parameters:
-            tables
-            m
-            logger     For logging messages
+            tables      Map nodes to tables
+            m           Number of nodes
         '''
         self.m = chooser.get_m()
         self.tables = np.empty((self.m), dtype=Table)
@@ -415,6 +417,7 @@ class ChineseRestaurantProcess:
         '''
         Perform one gibbs step - WIP
         '''
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()}')
         for node in range(self.m):
             table = self.tables[node]
             table_after_break = table.break_at(node)
@@ -427,6 +430,9 @@ class ChineseRestaurantProcess:
                     table_to_link_to.join(link_to,table,node)
             else:
                 table_to_link_to.join(link_to,table_after_break,node)
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()}')
+            components = Table.create_connected_components(table_to_link_to.create_edge_list())
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} {len(components)} components')
             
    
     def _link(self, start, end, table=None):
