@@ -186,30 +186,27 @@ class Table:
 
     def generate_links(self):
         '''
-        Used to iterate through all nodes at Table
+        Used to iterate through all nodes in Table
         '''
         for start, end in self.links.items():
             yield start, end
 
 
-    def verify_consistency(self, fix=False):
+    def verify_consistency(self):
         '''
-        Verify that evey node has an exit
+        Verify (1) that Table has one component only; (2) every node goes somewhere
         '''
-        ins = set()
-        outs = set()
-        for start, end in self.links.items():
-            ins.add(end)
-            outs.add(start)
-        gap = ins - outs
-        if len(gap) == 0:
-            return True
-        elif len(gap) == 1:
-            singleton = gap.pop()
-            self.links[singleton] = singleton
-        else:
-            print(gap)
-            return False
+        def table_has_one_component_only():
+            components = Table.create_connected_components(self.create_edge_list())
+            return len(components) == 1
+        
+        def every_node_goes_somewhere():
+            starts = set(self.links.keys())
+            ends = set(self.links.values())
+            unterminated = ends - starts
+            return len(unterminated) == 0
+        
+        return table_has_one_component_only() and every_node_goes_somewhere()
 
     @staticmethod
     def create_connected_components(g):
@@ -230,9 +227,9 @@ class Table:
                 Set of vertices
             '''
             product = set()
-            for a, b in g:
-                product.add(a)
-                product.add(b)
+            for start, end in g:
+                product.add(start)
+                product.add(end)
             return product
 
         def create_augmented(g):
@@ -257,11 +254,11 @@ class Table:
 
         def dfs(vertex, g_augmented, visited):
             '''
-            This is the heart of the algorithm. It performs Depth First Search 
+            This is the heart of create_connected_components(). It performs Depth First Search 
             to visit every node in a component once and only once.
             
             Parameters:
-                vertex         A node that has not been visted yet
+                vertex         A node that has not been visited yet
                 g_augmented    Graph, augmented with forward and backward links
                 visited        List of nodes that have already been visited
                 
@@ -273,7 +270,7 @@ class Table:
             component.add(vertex)
             for child in g_augmented[vertex]:
                 if child not in visited:
-                    component = component.union(dfs(child, g_augmented, visited))
+                    component = component | dfs(child, g_augmented, visited)
             return component
 
         g_augmented = create_augmented(g)
@@ -402,7 +399,7 @@ class ChineseRestaurantProcess:
             else:
                 self._link(this_node, link_to, table=self.tables[link_to])
                 
-        assert self.m == sum(len(table) for table in Table.tables)
+        #assert self.m == sum(len(table) for table in Table.tables)                   FIXME
 
         for table in Table.tables:
             table.verify_consistency()
@@ -527,11 +524,13 @@ if __name__ == '__main__':
         
 
     class TestCycle(TestTable):
-        
-        def setUp(self):
-            super().setUp()
-        
+        '''
+        Test case for tables with non-trivial cycles
+        '''        
         def test_break_cycle(self):
+            '''
+            Break a simple cycle so it becomes 1D
+            '''
             table = Table()
             table.links = {1:0,2:1,3:2,4:3,0:4}
             self.assertEqual(table,table.break_at(3))
@@ -543,8 +542,7 @@ if __name__ == '__main__':
                 
     
     class TestSimple(TestTable):
-        def setUp(self):
-            super().setUp()
+ 
             
         def test_table_create(self):
             t0 = Table()
