@@ -141,7 +141,7 @@ class Table:
         components = Table.create_connected_components(self.create_edge_list(omit=node))
         match len(components):
             case 0:
-                self.logger('There are no components')
+                new_table.log('There are no components')
                 return self
             
             case 1:                          # Break must be in a cycle
@@ -375,7 +375,7 @@ class ChineseRestaurantProcess:
 
     UNASSIGNED = -1
 
-    def __init__(self, chooser=None, logger=None):
+    def __init__(self, chooser=None):
         '''
         Parameters:
             tables
@@ -384,7 +384,6 @@ class ChineseRestaurantProcess:
         '''
         self.m = chooser.get_m()
         self.tables = np.empty((self.m), dtype=Table)
-        self.logger = logger
         self.chooser = chooser
 
     def build(self):
@@ -392,6 +391,7 @@ class ChineseRestaurantProcess:
         Allocate each node to a table. It randomizes the order of nodes, then adds
         one at a time. If the 
         '''
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()}')
         for this_node in range(self.m):
             link_to = self.chooser.choose(this_node, initial=True)
             if this_node == link_to:

@@ -617,7 +617,7 @@ class Cluster(Command):
         d = Cluster._products_to_distances(skipgram.P)
         m,_ = d.shape
         chooser = DistanceDependentChooser(d,rng=rng,alpha=args.alpha,m=m)        
-        clusterer = ChineseRestaurantProcess(chooser=chooser,logger=logger)
+        clusterer = ChineseRestaurantProcess(chooser=chooser)
         clusterer.build()
         for i in range(args.Niter):
             clusterer.gibbs()
