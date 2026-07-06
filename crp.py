@@ -22,12 +22,20 @@
     https://www.jmlr.org/papers/v12/blei11a.html
 '''
 
+__all__ = ['Table', 'DistanceDependentChooser', 'NoDecay']
+__version__ = '0.0'
+__author__ = 'Simon Crase'
+
 from abc import ABC, abstractmethod
 from pathlib import Path
 from unittest import TestCase, main, skip
 import numpy as np
 from shared.utils import Logger
-        
+
+type Node = int            # A node number
+type NNode = int           # The number of nodes
+type Link = tuple[Node,Node]
+
 class Table:
     '''
     The Chinese Restaurant Process allocates elements to a Table. Each element is
@@ -39,7 +47,15 @@ class Table:
         seq    A  unique id for this Table
     '''
     tables = []        # List of all tables
-   
+
+    @staticmethod
+    def generate_tables():
+        '''
+        Used to iterate through all tables
+        '''
+        for table in Table.tables:
+            yield table
+
     def __init__(self):
         '''
         Initialize links to an empty list, allocate a sequence number to the table,
@@ -49,7 +65,7 @@ class Table:
         self.seq = len(Table.tables)
         Table.tables.append(self)
 
-    def __eq__(self, table):
+    def __eq__(self, table : 'Table'):
         '''
         Two tables are deemed equal if they have the same sequence number
         '''
@@ -68,16 +84,16 @@ class Table:
         links = ','.join([f'{a}->{b}' for a, b in self.links.items()])
         return f'Table {self.seq} [{len(self)}]: {links}'
 
-    def __getitem__(self, key):
+    def __getitem__(self, key : Node) -> Node:
         '''
         Get the node that the supplied node links to
         
         Parameters:
-            key        Stat of link
+            key        Start of link
         '''
         return self.links[key]
 
-    def __setitem__(self, start, end):
+    def __setitem__(self, start : Node, end : Node):
         '''
         Link two elements together
         
@@ -92,8 +108,8 @@ class Table:
             self.links[start] = end
         else:
             raise ValueError('Node must link to itself in an otherwise empty table, or to a distinct node')
-        
-    def break_at(self,node):
+
+    def break_at(self, node : Node) -> 'Table':
         '''
         Break one link in a Table.
         
@@ -108,11 +124,11 @@ class Table:
                 We will move `node` to the new table. Start by ensuring that
                 it is in the second group of components
             '''
-            if not node in components[1]:  
-                return [components[1],components[0]]
+            if not node in components[1]:
+                return [components[1], components[0]]
             else:
                 return components
-                
+
         def move_nodes(components):
             '''
             Move the nodes, and make a list of those those whose links
@@ -121,47 +137,48 @@ class Table:
             new_table = Table()
             new_table[node] = node
             to_delete = []
-            for a,b in self.links.items():
-                if a in components[0] and b in components[0]: 
+            for a, b in self.links.items():
+                if a in components[0] and b in components[0]:
                     pass # keep link
                 elif a in components[1] and b in components[1]:
                     new_table[a] = b
                     to_delete.append(a)
                 else:
                     to_delete.append(a)
-                    
-            return new_table,to_delete
-        
+
+            return new_table, to_delete
+
         def remove_redundant_links(to_delete):
             '''
             Remove links for those nodes that were removed
             '''
             for a in to_delete:
-                del self.links[a]        
-        
+                del self.links[a]
+
         components = Table.create_connected_components(self.create_edge_list(omit=node))
         match len(components):
             case 0:
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} there are no components')
                 return self
-            
+
             case 1:                          # Break must be in a cycle
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} Only one component')
-                self.links[node] = node      # Simply make node point to itself 
+                self.links[node] = node      # Simply make node point to itself
                 return self
-            
-            case 2:                               # Break will split links in two    
+
+            case 2:                               # Break will split links in two
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} Break will split links in two ')
-                new_table,to_delete = move_nodes(standardize(components))
+                new_table, to_delete = move_nodes(standardize(components))
                 remove_redundant_links(to_delete)
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} {self} ')
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} {new_table} ')
+
                 return new_table
-            
+
             case _:
                 raise RuntimeError(f'There are {len(components)} connected components')
-            
-    def join(self,node,table_split,node_to_connect):
+
+    def join(self, node : Node, table_split : 'Table', node_to_connect : 'Node'):
         '''
         Join two groups of nodes
         
@@ -174,7 +191,7 @@ class Table:
         self.links[node_to_connect] = node
         table_split.links.clear()
 
-    def create_edge_list(self, omit=-1):
+    def create_edge_list(self, omit : Node =-1) -> list[Link]:
         '''
         Convert links to edge-link format so we can use create_cc, 
         optionally omitting one specified link
@@ -191,7 +208,6 @@ class Table:
         for start, end in self.links.items():
             yield start, end
 
-
     def verify_consistency(self):
         '''
         Verify (1) that Table has one component only; (2) every node goes somewhere
@@ -199,17 +215,17 @@ class Table:
         def table_has_one_component_only():
             components = Table.create_connected_components(self.create_edge_list())
             return len(components) == 1
-        
+
         def every_node_goes_somewhere():
             starts = set(self.links.keys())
             ends = set(self.links.values())
             unterminated = ends - starts
             return len(unterminated) == 0
-        
+
         return table_has_one_component_only() and every_node_goes_somewhere()
 
     @staticmethod
-    def create_connected_components(g):
+    def create_connected_components(g : list[Link]):
         '''
         Create a list of connected components for a graph
         
@@ -306,15 +322,18 @@ class Chooser(ABC):
     It allows the real Chooser to be mocked for testing
     '''
     @abstractmethod
-    def choose(self, n, initial=False):
+    def choose(self, n:Node, initial=False) -> Node:
         '''
         Choose which node to link to
         '''
-        
+
     @abstractmethod
-    def get_m(self):
+    def get_m(self) -> NNode:
+        '''
+        Used to tell ChinesRestaurantProcess how many nodes it can expect
+        '''
         ...
-        
+
 
 class DistanceDependentChooser(Chooser):
     '''
@@ -338,19 +357,22 @@ class DistanceDependentChooser(Chooser):
         self.alpha = alpha
         self.m = m
 
-    def get_m(self):
+    def get_m(self) -> NNode:
         return self.m
-    
-    def get_indices(self, m):
+
+    def get_indices(self, m:Node):                #FIXME is this used anywhere?
         return self.rng.permutation(m)
 
-    def choose(self, n, initial=False):
+    def choose(self, n:NNode, initial:bool=False) -> Node:
         '''
         Choose which node to link to
+        
+        Parameters:
+            n 
         '''
         return self.rng.choice(n + 1 if initial else self.m, p=self._get_p(n, initial=initial))
 
-    def _get_p(self, node, initial=False):
+    def _get_p(self, node:NNode, initial:bool=False):
         '''
         Calculate probabilities for assignments after Blei & Frazier equation (2)
         
@@ -376,11 +398,10 @@ class ChineseRestaurantProcess:
 
     UNASSIGNED = -1
 
-    def __init__(self, chooser=None):
+    def __init__(self, chooser:'Chooser'=None):
         '''
         Parameters:
-            tables      Map nodes to tables
-            m           Number of nodes
+            chooser
         '''
         self.m = chooser.get_m()
         self.tables = np.empty((self.m), dtype=Table)
@@ -398,43 +419,43 @@ class ChineseRestaurantProcess:
                 self._link(this_node, link_to, table=Table())
             else:
                 self._link(this_node, link_to, table=self.tables[link_to])
-                
+
         assert self.m == sum(len(table) for table in Table.tables)
 
-        for table in Table.tables:
+        for table in Table.generate_tables():
             table.verify_consistency()
-
-    def generate_tables(self):
-        '''
-        Used to iterate through all tables
-        '''
-        for table in Table.tables:
-            yield table
 
     def gibbs(self):
         '''
-        Perform one gibbs step - WIP
+        Perform one gibbs step
         '''
         Logger.get_instance().log(f'{__file__} {Logger.get_line()}')
         for node in range(self.m):
-            table = self.tables[node]
-            table_after_break = table.break_at(node)
+            table_where_node_lives = self.tables[node]
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} {table_where_node_lives.verify_consistency()}')
+            # Break link
+            table_after_break = table_where_node_lives.break_at(node)
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} {table_after_break.verify_consistency()}')
             link_to = self.chooser.choose(node)
             table_to_link_to = self.tables[link_to]
-            if table == table_after_break:
-                if table == table_to_link_to:
-                    table.links[node] = link_to
+            table_to_link_to.verify_consistency()
+            
+            if table_where_node_lives == table_after_break:
+                if table_where_node_lives == table_to_link_to:
+                    table_where_node_lives.links[node] = link_to
+                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} {table_where_node_lives.verify_consistency()}')
                 else:
-                    table_to_link_to.join(link_to,table,node)
+                    table_to_link_to.join(link_to, table_where_node_lives, node)
+                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} {table_to_link_to.verify_consistency()}')
             else:
-                table_to_link_to.join(link_to,table_after_break,node)
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()}')
+                table_to_link_to.join(link_to, table_after_break, node)
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {table_to_link_to.verify_consistency()}')
+ 
             self.tables[node] = table_to_link_to
             components = Table.create_connected_components(table_to_link_to.create_edge_list())
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} {len(components)} components')
-            
-   
-    def _link(self, start, end, table=None):
+
+    def _link(self, start : Node, end : Node, table : 'Table'=None):
         '''
         Link two nodes, and also record that the first node is in the table
         
@@ -446,112 +467,114 @@ class ChineseRestaurantProcess:
         table[start] = end
         self.tables[start] = table
 
+
 if __name__ == '__main__':
     class MockChooser(Chooser):
         '''
         This class allows tests to build Tables
         '''
-        def __init__(self,nodes):
+
+        def __init__(self, nodes):
             self.nodes = nodes
             self.pos = -1
-            
+
         def choose(self, n, initial=False):
             self.pos += 1
             return self.nodes[self.pos]
-        
+
         def get_m(self):
             return len(self.nodes)
-  
+
     class TestTable(TestCase):
         '''
         Parent for test cases: ensure that all tests tearDown
         '''
-        
+
         def setUp(self):
-            self.logger = Logger(Path(__file__).stem,path='./logs',level=Logger.ERROR)
+            self.logger = Logger(Path(__file__).stem, path='./logs', level=Logger.ERROR)
             self.logger.__enter__()
-            
+
         def tearDown(self):
             '''
             Purge list of all Tables to prevent test classes interacting
             '''
             Table.tables.clear()
             self.logger.__exit__(None, None, None)
-            
+
     class TestFigure3(TestTable):
         '''
         Tests based on Figure 3 of Blei & Frazier
-        '''        
+        '''
+
         def setUp(self):
             super().setUp()
-            chooser = MockChooser([0,0,1,2,4,4])
+            Table.tables.clear()      #FIXME: why does test break without this? tearDown should have cleared
+            chooser = MockChooser([0, 0, 1, 2, 4, 4])
             self.crp = ChineseRestaurantProcess(chooser=chooser)
-            self.crp.build()            
-        
+            self.crp.build()
+
         def test_build_tables(self):
             '''
             This test verifies that we can construct the graph in the first panel of Figure 3 of Blei & Frazier
             '''
-            self.assertEqual(2,len(Table.tables))
+            self.assertEqual(2, len(Table.tables))
             table0 = Table.tables[0]
             table1 = Table.tables[1]
-            self.assertNotEqual(table0,table1)
-            self.assertEqual(0,table0[0])
-            self.assertEqual(0,table0[1])
-            self.assertEqual(1,table0[2])
-            self.assertEqual(2,table0[3])
-            self.assertEqual(4,table1[4])
-            self.assertEqual(4,table1[5])
-            
+            self.assertNotEqual(table0, table1)
+            self.assertEqual(0, table0[0])
+            self.assertEqual(0, table0[1])
+            self.assertEqual(1, table0[2])
+            self.assertEqual(2, table0[3])
+            self.assertEqual(4, table1[4])
+            self.assertEqual(4, table1[5])
+
         def test_break_link(self):
             '''
             This test verifies that we can construct the graph in lines 2 and 3 of Figure 3 of Blei & Frazier
-            '''            
+            '''
             table = Table.tables[0]
             table_split = table.break_at(2)
-            self.assertNotEqual(table_split,table)
-            self.assertEqual(3,len(Table.tables))
+            self.assertNotEqual(table_split, table)
+            self.assertEqual(3, len(Table.tables))
             table_join_to = self.crp.tables[4]
-            table_join_to.join(4,table_split,2)
-            self.assertEqual(6,sum([len(t) for t in Table.tables]))
-            self.assertEqual(4,len(table_join_to))
-            self.assertEqual(0,Table.tables[0][0])
-            self.assertEqual(0,Table.tables[0][1])
-            self.assertEqual(4,Table.tables[1][4])
-            self.assertEqual(4,Table.tables[1][5])
-            self.assertEqual(4,Table.tables[1][2])
-            self.assertEqual(2,Table.tables[1][3])
-        
+            table_join_to.join(4, table_split, 2)
+            self.assertEqual(6, sum([len(t) for t in Table.tables]))
+            self.assertEqual(4, len(table_join_to))
+            self.assertEqual(0, Table.tables[0][0])
+            self.assertEqual(0, Table.tables[0][1])
+            self.assertEqual(4, Table.tables[1][4])
+            self.assertEqual(4, Table.tables[1][5])
+            self.assertEqual(4, Table.tables[1][2])
+            self.assertEqual(2, Table.tables[1][3])
 
     class TestCycle(TestTable):
         '''
         Test case for tables with non-trivial cycles
-        '''        
+        '''
+
         def test_break_cycle(self):
             '''
             Break a simple cycle so it becomes 1D
             '''
             table = Table()
-            table.links = {1:0,2:1,3:2,4:3,0:4}
-            self.assertEqual(table,table.break_at(3))
-            self.assertEqual(0,table.links[1])
-            self.assertEqual(1,table.links[2])
-            self.assertEqual(3,table.links[3])
-            self.assertEqual(3,table.links[4])
-            self.assertEqual(4,table.links[0])
-                
-    
+            table.links = {1: 0, 2: 1, 3: 2, 4: 3, 0: 4}
+            self.assertEqual(table, table.break_at(3))
+            self.assertEqual(0, table.links[1])
+            self.assertEqual(1, table.links[2])
+            self.assertEqual(3, table.links[3])
+            self.assertEqual(3, table.links[4])
+            self.assertEqual(4, table.links[0])
+
     class TestSimple(TestTable):
- 
-            
+
         def test_table_create(self):
             t0 = Table()
             self.assertEqual(0, t0.seq)
             t1 = Table()
             self.assertEqual(1, t1.seq)
-            self.assertNotEqual(t0,t1)
-            self.assertEqual(2,len(Table.tables))       
-   
+            self.assertNotEqual(t0, t1)
+            self.assertEqual(2, len(Table.tables))
+
         def test_table_link(self):
             t0 = Table()
             self.assertEqual(0, len(t0))
@@ -593,7 +616,6 @@ if __name__ == '__main__':
             self.assertCountEqual([3, 4, 7, 8, 11, 12], components[1])
             self.assertCountEqual([6], components[2])
 
-
         def test_verify_consistency1(self):
             table = Table()
             table[3] = 3
@@ -613,5 +635,5 @@ if __name__ == '__main__':
             table.links[2] = 3
             table.links[1] = 2
             self.assertTrue(table.verify_consistency())
-            
+
     main()
