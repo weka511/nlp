@@ -399,7 +399,7 @@ class ChineseRestaurantProcess:
             else:
                 self._link(this_node, link_to, table=self.tables[link_to])
                 
-        #assert self.m == sum(len(table) for table in Table.tables)                   FIXME
+        assert self.m == sum(len(table) for table in Table.tables)
 
         for table in Table.tables:
             table.verify_consistency()
