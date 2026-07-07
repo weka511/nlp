@@ -131,80 +131,98 @@ class Table:
         
         Parameters:
             node      The node whose link is to be broken
+            owner     Used to update map from nodes to tables
             
         Returns:
            The table which contains `node': this may be a newly created table, or the original
         '''
-        def standardize(components):
-            '''
-                We will move `node` to the new table. Start by ensuring that
-                it is in the second group of components
-            '''
-            if not node in components[1]:
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Swapping components')
-                return [components[1], components[0]]
-            else:
-                return components
 
-        def move_nodes(components):
-            '''
-            Move the nodes, and make a list of those those whose
-            links will be deleted from the original table
-            
-            Parameters:
-                components
-            '''
-            new_table = Table()
-            new_table[node] = node
-            to_delete = []
-            for a, b in self.links.items():
-                if a in components[0] and b in components[0]:
-                    pass # keep link
-                elif a in components[1] and b in components[1]:
-                    try:
-                        new_table[a] = b
-                    except ValueError:
-                        Logger.get_instance().log(f'{__file__} {Logger.get_line()} a={a},b={b},old={new_table[a]}')
-                    to_delete.append(a)
-                    owner[a] = new_table
-                else:
-                    to_delete.append(a)
-
-            return new_table, to_delete
-
-        def remove_redundant_links(to_delete):
-            '''
-            Remove links for those nodes that were removed
-            '''
-            for a in to_delete:
-                del self.links[a]
-
+        # Simulate removal of link, which may split Table into two components
         components = Table.create_connected_components(self.create_edge_list(omit=node))
-        match len(components):
-            case 0:
+        
+        match len(components):       # Will table be split?
+            
+            case 0:       # This should never happen, unless table had only one element
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} there are no components\n'
-                                          'Table length = {len(self)}',
+                                          f'Table length = {len(self)}',
                                           level=Logger.WARNING)
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {self}',
+                                          level=Logger.WARNING)                
                 return self
 
             case 1:                          # Break must be in a cycle: we will have only one table
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Only one component')
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Only one component',
+                                          level=Logger.DEBUG)
                 self.links[node] = node      # Simply make node point to itself
                 return self
 
             case 2:                               # Break will split links in two
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} Break will split links in two ')
-                new_table, to_delete = move_nodes(standardize(components))
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {len(self)} {len(new_table)} {len(to_delete)}')
-                remove_redundant_links(to_delete)
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {len(self)} {len(new_table)} {len(to_delete)}')
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {self} ')
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {new_table} ')
+                new_table, to_delete = self._move_nodes(node,self._standardize(node,components),owner)
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} len={len(self)}, len_new={len(new_table)}'
+                                          f', len_to_delete={len(to_delete)}')
+                self._remove_redundant_links(to_delete)
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} len={len(self)}, len_new={len(new_table)}'
+                                          f' , len_to_delete{len(to_delete)}')
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {self} ',level=Logger.DEBUG)
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {new_table} ',level=Logger.DEBUG)
 
                 return new_table
 
             case _:
                 raise RuntimeError(f'There are {len(components)} connected components')
+            
+    def _standardize(self,node,components):
+        '''
+            Used when we are breaking a link, to ensure that the node is in the first component.
+            
+            Parameters:
+                node         The node where we are breaking
+                components   A list of nodes, partitioned into those that belong with node, and the rest
+        '''
+        if node in components[1]: return components
+        
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Swapping components')
+        return [components[1], components[0]]
+
+    def _move_nodes(self,node,components,owner):
+        '''
+        Used by break_at() to move the nodes, and make a list of those those whose
+        links will be deleted from the original table
+        
+        Parameters:
+            node         The node where we are breaking
+            components   A list of nodes, partitioned into those that belong with node, and the rest
+        '''
+        new_table = Table()
+        new_table[node] = node
+        to_delete = []
+        if not node in components[1]:
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} {node} {components[1]}',level=Logger.WARNING)
+        for a, b in self.links.items():
+            if a in components[0] and b in components[0]:
+                pass # keep link
+            elif a in components[1] and b in components[1]:
+                try:
+                    new_table[a] = b
+                except ValueError:
+                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} a={a},b={b},old={new_table[a]}')
+                to_delete.append(a)
+                owner[a] = new_table
+            else:
+                to_delete.append(a)
+
+        return new_table, to_delete   
+
+    def _remove_redundant_links(self,to_delete):
+        '''
+        Used by break_at() to remove links for those nodes that were removed
+        
+        Parameters:
+            to_delete
+        '''
+        for a in to_delete:
+            del self.links[a]
 
     def join(self, node : Node, table_split : 'Table', node_to_connect : 'Node', owner:TableOwner):
         '''
@@ -244,13 +262,32 @@ class Table:
         '''
         def table_has_one_component_only():
             components = Table.create_connected_components(self.create_edge_list())
-            return len(components) == 1
+            match len(components):
+                case 0:
+                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} There are {len(components)} components',
+                                              level=Logger.WARNING)
+                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} {self}',
+                                              level=Logger.WARNING)                    
+                    return False                
+                case 1:
+                    return True
+                case _:
+                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} There are {len(components)} components',
+                                              level=Logger.WARNING)
+                    return False
 
         def every_node_goes_somewhere():
             starts = set(self.links.keys())
             ends = set(self.links.values())
             unterminated = ends - starts
-            return len(unterminated) == 0
+            if len(unterminated) == 0:
+                return True
+            else:
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} There are {len(unterminated)} unterminated',
+                                          level=Logger.WARNING)
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {unterminated}',
+                                          level=Logger.WARNING)                
+                return False
 
         return table_has_one_component_only() and every_node_goes_somewhere()
 
@@ -440,7 +477,7 @@ class ChineseRestaurantProcess(TableOwner):
         Allocate each node to a table. It randomizes the order of nodes, then adds
         one at a time. If the 
         '''
-        Logger.get_instance().log(f'{__file__} {Logger.get_line()}')
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Building for {self.m} nodes')
         for this_node in range(self.m):
             link_to = self.chooser.choose(this_node, initial=True)
             if this_node == link_to:
@@ -452,36 +489,47 @@ class ChineseRestaurantProcess(TableOwner):
 
         for table in Table.generate_tables():
             table.verify_consistency()
+            
+        Logger.get_instance().log(f'{__file__} Complete')
 
     def gibbs(self):
         '''
         Perform one gibbs step
         '''
         for node in range(self.m):
-            Logger.get_instance().log(f'{__file__} {Logger.get_line()} node={node}')
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} Processing Node {node}')
             table_where_node_lives = self.tables[node]
-            Logger.get_instance().log(f'{__file__} {Logger.get_line()} {table_where_node_lives.verify_consistency()}')
-            # Break link
+            if not table_where_node_lives.verify_consistency():
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Inconsistent')
+                
+            # Break link from node
             table_after_break = table_where_node_lives.break_at(node,self)
-            Logger.get_instance().log(f'{__file__} {Logger.get_line()} {table_after_break.verify_consistency()}')
+            if not table_after_break.verify_consistency():
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} inconsistent')
             link_to = self.chooser.choose(node)
             table_to_link_to = self.tables[link_to]
             table_to_link_to.verify_consistency()
             
+            # Now link node to some other node (or itself)
+            
             if table_where_node_lives == table_after_break:
                 if table_where_node_lives == table_to_link_to:
                     table_where_node_lives.links[node] = link_to
-                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} {table_where_node_lives.verify_consistency()}')
+                    if not table_where_node_lives.verify_consistency():
+                        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Inconsistent')
                 else:
                     table_to_link_to.join(link_to, table_where_node_lives, node,self)
-                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} {table_to_link_to.verify_consistency()}')
+                    if not table_to_link_to.verify_consistency():
+                        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Inconsistent')
             else:
                 table_to_link_to.join(link_to, table_after_break, node,self)
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {table_to_link_to.verify_consistency()}')
+                if not table_to_link_to.verify_consistency():
+                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} Inconsistent')
  
             self.tables[node] = table_to_link_to
             components = Table.create_connected_components(table_to_link_to.create_edge_list())
-            Logger.get_instance().log(f'{__file__} {Logger.get_line()} {len(components)} components')
+            if len(components) != 1:
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {len(components)} components')
 
     def _link(self, start : Node, end : Node, table : 'Table'=None):
         '''
