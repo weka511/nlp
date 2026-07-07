@@ -161,7 +161,10 @@ class Table:
                 if a in components[0] and b in components[0]:
                     pass # keep link
                 elif a in components[1] and b in components[1]:
-                    new_table[a] = b
+                    try:
+                        new_table[a] = b
+                    except ValueError:
+                        Logger.get_instance().log(f'{__file__} {Logger.get_line()} a={a},b={b},old={new_table[a]}')
                     to_delete.append(a)
                     owner[a] = new_table
                 else:
@@ -454,8 +457,8 @@ class ChineseRestaurantProcess(TableOwner):
         '''
         Perform one gibbs step
         '''
-        Logger.get_instance().log(f'{__file__} {Logger.get_line()}')
         for node in range(self.m):
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} node={node}')
             table_where_node_lives = self.tables[node]
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} {table_where_node_lives.verify_consistency()}')
             # Break link
