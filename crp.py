@@ -36,6 +36,22 @@ type Node = int            # A node number
 type NNode = int           # The number of nodes
 type Link = tuple[Node,Node]
 
+class TableOwner(ABC):
+    def __init__(self, chooser:'Chooser' = None):
+        '''
+        Parameters:
+            chooser
+        '''
+        self.m = chooser.get_m()
+        self.tables = np.empty((self.m), dtype=Table)
+        self.chooser = chooser
+        
+    def __getitem__(self,node : Node):
+        return self.tables[node]
+    
+    def __setitem__(self,node : Node, table: 'Table'):
+        self.tables[node] = table
+        
 class Table:
     '''
     The Chinese Restaurant Process allocates elements to a Table. Each element is
@@ -109,7 +125,7 @@ class Table:
         else:
             raise ValueError('Node must link to itself in an otherwise empty table, or to a distinct node')
 
-    def break_at(self, node : Node) -> 'Table':
+    def break_at(self, node : Node,owner : TableOwner) -> 'Table':
         '''
         Break one link in a Table.
         
@@ -125,14 +141,18 @@ class Table:
                 it is in the second group of components
             '''
             if not node in components[1]:
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Swapping components')
                 return [components[1], components[0]]
             else:
                 return components
 
         def move_nodes(components):
             '''
-            Move the nodes, and make a list of those those whose links
-            that will be deleted from the original table
+            Move the nodes, and make a list of those those whose
+            links will be deleted from the original table
+            
+            Parameters:
+                components
             '''
             new_table = Table()
             new_table[node] = node
@@ -143,6 +163,7 @@ class Table:
                 elif a in components[1] and b in components[1]:
                     new_table[a] = b
                     to_delete.append(a)
+                    owner[a] = new_table
                 else:
                     to_delete.append(a)
 
@@ -158,10 +179,12 @@ class Table:
         components = Table.create_connected_components(self.create_edge_list(omit=node))
         match len(components):
             case 0:
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} there are no components')
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} there are no components\n'
+                                          'Table length = {len(self)}',
+                                          level=Logger.WARNING)
                 return self
 
-            case 1:                          # Break must be in a cycle
+            case 1:                          # Break must be in a cycle: we will have only one table
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} Only one component')
                 self.links[node] = node      # Simply make node point to itself
                 return self
@@ -169,7 +192,9 @@ class Table:
             case 2:                               # Break will split links in two
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} Break will split links in two ')
                 new_table, to_delete = move_nodes(standardize(components))
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {len(self)} {len(new_table)} {len(to_delete)}')
                 remove_redundant_links(to_delete)
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {len(self)} {len(new_table)} {len(to_delete)}')
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} {self} ')
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} {new_table} ')
 
@@ -178,7 +203,7 @@ class Table:
             case _:
                 raise RuntimeError(f'There are {len(components)} connected components')
 
-    def join(self, node : Node, table_split : 'Table', node_to_connect : 'Node'):
+    def join(self, node : Node, table_split : 'Table', node_to_connect : 'Node', owner:TableOwner):
         '''
         Join two groups of nodes
         
@@ -188,6 +213,8 @@ class Table:
             node_to_connect      The node that is being linked
         '''
         self.links |= table_split.links
+        for a,b in table_split.links.items():
+            owner[a] = self
         self.links[node_to_connect] = node
         table_split.links.clear()
 
@@ -388,7 +415,7 @@ class DistanceDependentChooser(Chooser):
         return p / p.sum()
 
 
-class ChineseRestaurantProcess:
+class ChineseRestaurantProcess(TableOwner):
     '''
     This class represents a Chinese Restaurant Process. 
     
@@ -403,9 +430,7 @@ class ChineseRestaurantProcess:
         Parameters:
             chooser
         '''
-        self.m = chooser.get_m()
-        self.tables = np.empty((self.m), dtype=Table)
-        self.chooser = chooser
+        super().__init__(chooser)
 
     def build(self):
         '''
@@ -434,7 +459,7 @@ class ChineseRestaurantProcess:
             table_where_node_lives = self.tables[node]
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} {table_where_node_lives.verify_consistency()}')
             # Break link
-            table_after_break = table_where_node_lives.break_at(node)
+            table_after_break = table_where_node_lives.break_at(node,self)
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} {table_after_break.verify_consistency()}')
             link_to = self.chooser.choose(node)
             table_to_link_to = self.tables[link_to]
@@ -445,10 +470,10 @@ class ChineseRestaurantProcess:
                     table_where_node_lives.links[node] = link_to
                     Logger.get_instance().log(f'{__file__} {Logger.get_line()} {table_where_node_lives.verify_consistency()}')
                 else:
-                    table_to_link_to.join(link_to, table_where_node_lives, node)
+                    table_to_link_to.join(link_to, table_where_node_lives, node,self)
                     Logger.get_instance().log(f'{__file__} {Logger.get_line()} {table_to_link_to.verify_consistency()}')
             else:
-                table_to_link_to.join(link_to, table_after_break, node)
+                table_to_link_to.join(link_to, table_after_break, node,self)
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} {table_to_link_to.verify_consistency()}')
  
             self.tables[node] = table_to_link_to
@@ -465,7 +490,7 @@ class ChineseRestaurantProcess:
             table    The link lives in this table
         '''
         table[start] = end
-        self.tables[start] = table
+        self[start] = table
 
 
 if __name__ == '__main__':
