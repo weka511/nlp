@@ -21,6 +21,9 @@
     allows the user to explore word vectors.
 '''
 
+__version__ = '0.0'
+__author__ = 'Simon Crase'
+
 from abc import ABC,abstractmethod
 from argparse import ArgumentParser
 from glob import glob
