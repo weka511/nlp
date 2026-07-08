@@ -403,17 +403,24 @@ class Command(ABC):
     def execute(self,args):
         '''
         Set up parameters needed by Command, then execute it
+        
+        Parameters:
+            args    Command line parameters as parsed by parse_args()
         '''
         with Logger(Path(__file__).stem,path=args.logs) as logger:
-            self._execute(args,rng = np.random.default_rng(
-                                        get_seed(args.seed,
-                                                 notify=lambda s: logger.log(f'{__file__} {Logger.get_line()} Created new seed {s}'))),
-                          logger=logger)
+            seed = get_seed(args.seed,
+                            notify=lambda s: logger.log(f'{__file__} {Logger.get_line()} Created new seed {s}'))
+            self._execute(args,rng = np.random.default_rng(seed),logger=logger)
         
     @abstractmethod
     def _execute(self,args,rng = np.random.default_rng(),logger=None):
         '''
         Perform command
+        
+        Parameters:
+            args
+            rng
+            logger
         '''
     
 class CreateExamples(Command):
@@ -426,6 +433,11 @@ class CreateExamples(Command):
     def _execute(self,args,rng = np.random.default_rng(),logger=None):
         '''
         Parse text into token, then build examples
+        
+        Parameters:
+            args
+            rng
+            logger
         ''' 
         examples = Examples(window=args.window,k=args.k,rng=rng)
         examples.build(
@@ -450,6 +462,11 @@ class AbstractTrainer(Command):
     def _execute(self,args,rng = np.random.default_rng(),logger=None):
         '''
         Adjust weights of  skipgrams and plot losses
+        
+        Parameters:
+            args
+            rng
+            logger
         '''
         self._plot_losses(args,self._train(self._create(args,rng,logger),args,logger=logger))     
         
@@ -541,11 +558,16 @@ class BuildDistances(Command):
     def __init__(self):
         super().__init__('build')
         
-    '''
-    Build table of scalar products between weight vectors
-    '''        
-        
     def _execute(self,args,rng = np.random.default_rng(),logger=None):
+        '''
+        Build table of scalar products between weight vectors
+        
+        Parameters:
+         args
+         rng
+         logger
+        '''        
+                
         skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
                                    report=lambda s: logger.log(s))
         logger.log('Calculating products')
@@ -616,6 +638,11 @@ class Cluster(Command):
         
     '''
     Select entries from table of scalar products
+    
+    Parameters:
+        args
+        rng
+        logger
     '''            
     def _execute(self,args,rng = np.random.default_rng(),logger=None):
         skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
@@ -634,6 +661,9 @@ class Cluster(Command):
         '''
         Convert scalar product of unit vectors to a distance. I have encountered a small problem
         with square roots no negative values, hence the offset
+        
+        Parameters:
+            P         Word vectors
         '''
         d_squared = (1 - P)/2
         offset = min(d_squared.min(),0)
