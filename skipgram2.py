@@ -39,7 +39,7 @@ from scipy.special import expit
 from crp import ChineseRestaurantProcess,DistanceDependentChooser
 from vocabulary import Vocabulary
 from tokenizer import generate_sentences,generate_text,generate_tokens,Token
-from shared.utils import Logger, user_has_requested_stop
+from shared.utils import Logger, user_has_requested_stop,get_seed
 
 class Examples:
     '''
@@ -405,7 +405,10 @@ class Command(ABC):
         Set up parameters needed by Command, then execute it
         '''
         with Logger(Path(__file__).stem,path=args.logs) as logger:
-            self._execute(args,rng = np.random.default_rng(args.seed),logger=logger)
+            self._execute(args,rng = np.random.default_rng(
+                                        get_seed(args.seed,
+                                                 notify=lambda s: logger.log(f'{__file__} {Logger.get_line()} Created new seed {s}'))),
+                          logger=logger)
         
     @abstractmethod
     def _execute(self,args,rng = np.random.default_rng(),logger=None):
