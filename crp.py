@@ -193,9 +193,14 @@ class Table:
         Parameters:
             node         The node where we are breaking
             components   A list of nodes, partitioned into those that belong with node, and the rest
+            
+        Returns:
+            The original table (if nothing moved), or a new one with those nodes that have moved
+            A list of nodes that were moved, which should be deleted from original
         '''
         new_table = Table()
         new_table[node] = node
+        owner[node] = new_table
         to_delete = []
         if not node in components[1]:
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} {node} {components[1]}',level=Logger.WARNING)
@@ -207,10 +212,11 @@ class Table:
                     new_table[a] = b
                 except ValueError:
                     Logger.get_instance().log(f'{__file__} {Logger.get_line()} a={a},b={b},old={new_table[a]}')
+                    
                 to_delete.append(a)
                 owner[a] = new_table
-            else:
-                to_delete.append(a)
+            elif a != node:  # Ignore split if orighin is node; we expect that case to split
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} a={a},b={b} separated',level=Logger.WARNING)
 
         return new_table, to_delete   
 
@@ -264,9 +270,10 @@ class Table:
             components = Table.create_connected_components(self.create_edge_list())
             match len(components):
                 case 0:
+                    if len(self) == 1: return True
                     Logger.get_instance().log(f'{__file__} {Logger.get_line()} There are {len(components)} components',
                                               level=Logger.WARNING)
-                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} {self}',
+                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} {self} {len(self)}',
                                               level=Logger.WARNING)                    
                     return False                
                 case 1:
