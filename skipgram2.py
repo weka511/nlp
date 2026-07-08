@@ -240,6 +240,14 @@ class SkipGram:
             return product    
     
     def __init__(self,examples,ndim=128,logger=None,rng=np.random.default_rng(),batch=1):
+        '''
+        Parameters:
+            examples
+            ndim
+            logger
+            rng
+            batch
+        '''
         self.examples = examples
         n_words = len(examples.vocabulary)
         self.word_vectors = SkipGram.create_unit_vectors(n_words,ndim,rng)
@@ -334,6 +342,11 @@ class LossCalculator:
         ToCalculate
     '''
     def __init__(self,examples,skipgram):
+        '''
+        Parameters:
+            examples
+            skipgram
+        '''
         self.positives = examples.positives
         self.negatives = examples.negatives
         self.k = examples.k
@@ -636,17 +649,17 @@ class Cluster(Command):
     def __init__(self):
         super().__init__('cluster')
         
-    '''
-    Select entries from table of scalar products
-    
-    Parameters:
-        args
-        rng
-        logger
-    '''            
     def _execute(self,args,rng = np.random.default_rng(),logger=None):
+        '''
+        Select entries from table of scalar products
+        
+        Parameters:
+            args    Parsed command line parameters
+            rng     Random number generator
+            logger  Logger
+        '''         
         skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
-                                   report=lambda s: logger.log(s))
+                                   report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
         d = Cluster._products_to_distances(skipgram.P)
         m,_ = d.shape
         chooser = DistanceDependentChooser(d,rng=rng,alpha=args.alpha,m=m)        
@@ -659,8 +672,9 @@ class Cluster(Command):
     @staticmethod   
     def _products_to_distances(P):
         '''
-        Convert scalar product of unit vectors to a distance. I have encountered a small problem
-        with square roots no negative values, hence the offset
+        Convert scalar product of unit vectors to a distance. 
+        I have encountered a small problem with square roots of 
+        negative values, hence the offset
         
         Parameters:
             P         Word vectors
