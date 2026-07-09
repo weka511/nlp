@@ -37,6 +37,11 @@ type NNode = int           # The number of nodes
 type Link = tuple[Node,Node]
 
 class TableOwner(ABC):
+    '''
+    Abstract base class for Chinese Restaurant process. It encapsulates
+    the knoweldge that every non-empty table must belong to some node.
+    
+    '''
     def __init__(self, chooser:'Chooser' = None):
         '''
         Parameters:
@@ -47,10 +52,38 @@ class TableOwner(ABC):
         self.chooser = chooser
         
     def __getitem__(self,node : Node):
+        '''
+        Find out which table contains specified node
+        
+        Parameters:
+            node
+        '''
         return self.tables[node]
     
     def __setitem__(self,node : Node, table: 'Table'):
+        '''
+        Record the table that contains spcified node
+        
+        Parameters:
+            node
+            table
+        '''
         self.tables[node] = table
+     
+    def generate_tables(self):
+        table_seqs = set()
+        for i in range(self.m):
+            table = self.tables[i]
+            if table.seq not in table_seqs:
+                yield table
+                table_seqs.add(table.seq)
+    
+    def verify_tables(self):
+        for table in self.generate_tables():
+            for start,end in table.links.items():
+                assert self.tables[start] == table
+                assert self.tables[end] == table    
+                
         
 class Table:
     '''
@@ -63,14 +96,6 @@ class Table:
         seq    A  unique id for this Table
     '''
     tables = []        # List of all tables
-
-    @staticmethod
-    def generate_tables():
-        '''
-        Used to iterate through all tables
-        '''
-        for table in Table.tables:
-            yield table
 
     def __init__(self):
         '''
@@ -163,7 +188,7 @@ class Table:
                                           f', len_to_delete={len(to_delete)}')
                 self._remove_redundant_links(to_delete)
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} len={len(self)}, len_new={len(new_table)}'
-                                          f' , len_to_delete{len(to_delete)}')
+                                          f', len_to_delete={len(to_delete)}')
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} {self} ',level=Logger.DEBUG)
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} {new_table} ',level=Logger.DEBUG)
 
@@ -201,7 +226,7 @@ class Table:
         new_table = Table()
         new_table[node] = node
         owner[node] = new_table
-        to_delete = []
+        to_delete = set()
         if not node in components[1]:
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} {node} {components[1]}',level=Logger.WARNING)
         for a, b in self.links.items():
@@ -213,9 +238,10 @@ class Table:
                 except ValueError:
                     Logger.get_instance().log(f'{__file__} {Logger.get_line()} a={a},b={b},old={new_table[a]}')
                     
-                to_delete.append(a)
+                to_delete.add(a)
+                to_delete.add(b)
                 owner[a] = new_table
-            elif a != node:  # Ignore split if orighin is node; we expect that case to split
+            elif a != node:  # Ignore split if origin is node; we expect that case to split
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} a={a},b={b} separated',level=Logger.WARNING)
 
         return new_table, to_delete   
@@ -230,20 +256,23 @@ class Table:
         for a in to_delete:
             del self.links[a]
 
-    def join(self, node : Node, table_split : 'Table', node_to_connect : 'Node', owner:TableOwner):
+    def join(self, node : Node, table_to_join : 'Table', node_to_connect : 'Node', owner:TableOwner):
         '''
         Join two groups of nodes
         
         Parameters:
-            node                 The node that we are going to connect to
-            table_split          Contains nodes that were split off
-            node_to_connect      The node that is being linked
+            node             The node that we are going to connect to
+            table_to_join    Contains nodes that are to be joined to this table
+            node_to_connect  The node that is being linked
+            owner            The Chinese Restaurant Process, which keeps a record of which table items belong in             
         '''
-        self.links |= table_split.links
-        for a,b in table_split.links.items():
+        self.links |= table_to_join.links
+        for a,b in table_to_join.links.items():
             owner[a] = self
+            owner[b] = self
         self.links[node_to_connect] = node
-        table_split.links.clear()
+        owner[node_to_connect] = self
+        table_to_join.links.clear()
 
     def create_edge_list(self, omit : Node =-1) -> list[Link]:
         '''
@@ -262,7 +291,7 @@ class Table:
         for start, end in self.links.items():
             yield start, end
 
-    def verify_consistency(self):
+    def verify_consistency(self,line=None):
         '''
         Verify (1) that Table has one component only; (2) every node goes somewhere
         '''
@@ -273,7 +302,7 @@ class Table:
                     if len(self) == 1: return True
                     Logger.get_instance().log(f'{__file__} {Logger.get_line()} There are {len(components)} components',
                                               level=Logger.WARNING)
-                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} {self} {len(self)}',
+                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} {self} len={len(self)}',
                                               level=Logger.WARNING)                    
                     return False                
                 case 1:
@@ -293,9 +322,12 @@ class Table:
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} There are {len(unterminated)} unterminated',
                                           level=Logger.WARNING)
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} {unterminated}',
-                                          level=Logger.WARNING)                
+                                          level=Logger.WARNING)
+                #Logger.get_instance().log(f'{__file__} {Logger.get_line()} {self.links}',
+                                          #level=Logger.WARNING)                   
                 return False
-
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} {line}',
+                                  level=Logger.INFO)
         return table_has_one_component_only() and every_node_goes_somewhere()
 
     @staticmethod
@@ -494,8 +526,8 @@ class ChineseRestaurantProcess(TableOwner):
 
         assert self.m == sum(len(table) for table in Table.tables)
 
-        for table in Table.generate_tables():
-            table.verify_consistency()
+        #for table in Table.generate_tables():
+            #table.verify_consistency()
             
         Logger.get_instance().log(f'{__file__} Complete')
 
@@ -504,33 +536,36 @@ class ChineseRestaurantProcess(TableOwner):
         Perform one gibbs step
         '''
         for node in range(self.m):
+            for table in self.tables:
+                if len(table) ==0:
+                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} {table} has zero length')
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} Processing Node {node}')
             table_where_node_lives = self.tables[node]
-            if not table_where_node_lives.verify_consistency():
+            if not table_where_node_lives.verify_consistency(Logger.get_line()):
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} Inconsistent')
                 
             # Break link from node
             table_after_break = table_where_node_lives.break_at(node,self)
-            if not table_after_break.verify_consistency():
+            if not table_after_break.verify_consistency(Logger.get_line()):
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} inconsistent')
             link_to = self.chooser.choose(node)
             table_to_link_to = self.tables[link_to]
-            table_to_link_to.verify_consistency()
+            table_to_link_to.verify_consistency(Logger.get_line())
             
             # Now link node to some other node (or itself)
             
             if table_where_node_lives == table_after_break:
                 if table_where_node_lives == table_to_link_to:
                     table_where_node_lives.links[node] = link_to
-                    if not table_where_node_lives.verify_consistency():
+                    if not table_where_node_lives.verify_consistency(Logger.get_line()):
                         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Inconsistent')
                 else:
                     table_to_link_to.join(link_to, table_where_node_lives, node,self)
-                    if not table_to_link_to.verify_consistency():
+                    if not table_to_link_to.verify_consistency(Logger.get_line()):
                         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Inconsistent')
             else:
                 table_to_link_to.join(link_to, table_after_break, node,self)
-                if not table_to_link_to.verify_consistency():
+                if not table_to_link_to.verify_consistency(Logger.get_line()):
                     Logger.get_instance().log(f'{__file__} {Logger.get_line()} Inconsistent')
  
             self.tables[node] = table_to_link_to
@@ -568,6 +603,10 @@ if __name__ == '__main__':
         def get_m(self):
             return len(self.nodes)
 
+    class MockOwner(TableOwner):
+        def __init__(self):
+            super().__init__(MockChooser([]))
+
     class TestTable(TestCase):
         '''
         Parent for test cases: ensure that all tests tearDown
@@ -591,10 +630,13 @@ if __name__ == '__main__':
 
         def setUp(self):
             super().setUp()
-            Table.tables.clear()      #FIXME: why does test break without this? tearDown should have cleared
+            Table.tables.clear()
             chooser = MockChooser([0, 0, 1, 2, 4, 4])
             self.crp = ChineseRestaurantProcess(chooser=chooser)
             self.crp.build()
+            
+        def test_verify_tables(self):
+            self.crp.verify_tables()
 
         def test_build_tables(self):
             '''
@@ -610,17 +652,17 @@ if __name__ == '__main__':
             self.assertEqual(2, table0[3])
             self.assertEqual(4, table1[4])
             self.assertEqual(4, table1[5])
-
+  
         def test_break_link(self):
             '''
             This test verifies that we can construct the graph in lines 2 and 3 of Figure 3 of Blei & Frazier
             '''
             table = Table.tables[0]
-            table_split = table.break_at(2)
+            table_split = table.break_at(2,self.crp)
             self.assertNotEqual(table_split, table)
             self.assertEqual(3, len(Table.tables))
             table_join_to = self.crp.tables[4]
-            table_join_to.join(4, table_split, 2)
+            table_join_to.join(4, table_split, 2,self.crp)
             self.assertEqual(6, sum([len(t) for t in Table.tables]))
             self.assertEqual(4, len(table_join_to))
             self.assertEqual(0, Table.tables[0][0])
@@ -630,18 +672,20 @@ if __name__ == '__main__':
             self.assertEqual(4, Table.tables[1][2])
             self.assertEqual(2, Table.tables[1][3])
 
+ 
     class TestCycle(TestTable):
         '''
         Test case for tables with non-trivial cycles
         '''
-
+        
         def test_break_cycle(self):
             '''
             Break a simple cycle so it becomes 1D
             '''
             table = Table()
+            owner = MockOwner()
             table.links = {1: 0, 2: 1, 3: 2, 4: 3, 0: 4}
-            self.assertEqual(table, table.break_at(3))
+            self.assertEqual(table, table.break_at(3,owner))
             self.assertEqual(0, table.links[1])
             self.assertEqual(1, table.links[2])
             self.assertEqual(3, table.links[3])
