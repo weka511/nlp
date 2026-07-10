@@ -71,18 +71,33 @@ class TableOwner(ABC):
         self.tables[node] = table
      
     def generate_tables(self):
+        '''
+        Used to iterate through all tables that are managed by this owner
+        '''
         table_seqs = set()
-        for i in range(self.m):
-            table = self.tables[i]
+        for node in range(self.m):
+            table = self.tables[node]
             if table.seq not in table_seqs:
                 yield table
                 table_seqs.add(table.seq)
     
     def verify_tables(self):
+        '''
+        Used to verify that all tables are linked correctly in self.tables
+        '''
         for table in self.generate_tables():
-            for start,end in table.links.items():
-                assert self.tables[start] == table
-                assert self.tables[end] == table    
+            self.verify_linked_correctly(table)
+        
+    def verify_linked_correctly(self,table):
+        '''
+        Used to verify that specified table is linked correctly in self.tables
+        
+        Parameters:
+            table
+        '''        
+        for start,end in table.links.items():
+            assert self.tables[start] == table
+            assert self.tables[end] == table    
                 
         
 class Table:
@@ -179,6 +194,7 @@ class Table:
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} Only one component',
                                           level=Logger.DEBUG)
                 self.links[node] = node      # Simply make node point to itself
+                owner.verify_tables()
                 return self
 
             case 2:                               # Break will split links in two
@@ -191,7 +207,7 @@ class Table:
                                           f', len_to_delete={len(to_delete)}')
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} {self} ',level=Logger.DEBUG)
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} {new_table} ',level=Logger.DEBUG)
-
+                owner.verify_tables()
                 return new_table
 
             case _:
@@ -273,6 +289,7 @@ class Table:
         self.links[node_to_connect] = node
         owner[node_to_connect] = self
         table_to_join.links.clear()
+        owner.verify_tables()
 
     def create_edge_list(self, omit : Node =-1) -> list[Link]:
         '''
