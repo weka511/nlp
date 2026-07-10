@@ -313,6 +313,9 @@ class Table:
         Verify (1) that Table has one component only; (2) every node goes somewhere
         '''
         def table_has_one_component_only():
+ 
+            #if self.seq == 12:
+                #z=0
             components = Table.create_connected_components(self.create_edge_list())
             match len(components):
                 case 0:
@@ -567,6 +570,10 @@ class ChineseRestaurantProcess(TableOwner):
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} inconsistent')
             link_to = self.chooser.choose(node)
             table_to_link_to = self.tables[link_to]
+            while table_to_link_to == table_after_break:  #FIXME #66 arises whn this equality is true
+                link_to = self.chooser.choose(node)
+                table_to_link_to = self.tables[link_to]                
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} link to {link_to} in table {table_to_link_to.seq}, len= {len(table_to_link_to)}')
             table_to_link_to.verify_consistency(Logger.get_line())
             
             # Now link node to some other node (or itself)
@@ -581,7 +588,11 @@ class ChineseRestaurantProcess(TableOwner):
                     if not table_to_link_to.verify_consistency(Logger.get_line()):
                         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Inconsistent')
             else:
+                ll = len(table_to_link_to)
+                seq = table_to_link_to.seq
+                assert table_to_link_to != table_after_break
                 table_to_link_to.join(link_to, table_after_break, node,self)
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {ll} {seq} {len(table_to_link_to)}')
                 if not table_to_link_to.verify_consistency(Logger.get_line()):
                     Logger.get_instance().log(f'{__file__} {Logger.get_line()} Inconsistent')
  
