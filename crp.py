@@ -272,7 +272,7 @@ class Table:
         for a in to_delete:
             del self.links[a]
 
-    def join(self, node : Node, table_to_join : 'Table', node_to_connect : 'Node', owner:TableOwner):
+    def join(self, node : Node, table_to_join : 'Table', node_to_connect : 'Node', owner:TableOwner,purge=True):
         '''
         Join two groups of nodes
         
@@ -280,7 +280,8 @@ class Table:
             node             The node that we are going to connect to
             table_to_join    Contains nodes that are to be joined to this table
             node_to_connect  The node that is being linked
-            owner            The Chinese Restaurant Process, which keeps a record of which table items belong in             
+            owner            The Chinese Restaurant Process, which keeps a record of which table items belong in
+            purge            Used when table are disticct to purge table that has been joined
         '''
         self.links |= table_to_join.links
         for a,b in table_to_join.links.items():
@@ -288,7 +289,8 @@ class Table:
             owner[b] = self
         self.links[node_to_connect] = node
         owner[node_to_connect] = self
-        table_to_join.links.clear()
+        if purge:
+            table_to_join.links.clear()
         owner.verify_tables()
 
     def create_edge_list(self, omit : Node =-1) -> list[Link]:
@@ -570,9 +572,9 @@ class ChineseRestaurantProcess(TableOwner):
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} inconsistent')
             link_to = self.chooser.choose(node)
             table_to_link_to = self.tables[link_to]
-            while table_to_link_to == table_after_break:  #FIXME #66 arises whn this equality is true
-                link_to = self.chooser.choose(node)
-                table_to_link_to = self.tables[link_to]                
+            #while table_to_link_to == table_after_break:  #FIXME #66 arises whn this equality is true
+                #link_to = self.chooser.choose(node)
+                #table_to_link_to = self.tables[link_to]                
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} link to {link_to} in table {table_to_link_to.seq}, len= {len(table_to_link_to)}')
             table_to_link_to.verify_consistency(Logger.get_line())
             
@@ -588,11 +590,11 @@ class ChineseRestaurantProcess(TableOwner):
                     if not table_to_link_to.verify_consistency(Logger.get_line()):
                         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Inconsistent')
             else:
-                ll = len(table_to_link_to)
-                seq = table_to_link_to.seq
-                assert table_to_link_to != table_after_break
-                table_to_link_to.join(link_to, table_after_break, node,self)
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {ll} {seq} {len(table_to_link_to)}')
+                #ll = len(table_to_link_to)
+                #seq = table_to_link_to.seq
+                #assert table_to_link_to != table_after_break
+                table_to_link_to.join(link_to, table_after_break, node,self,purge=table_to_link_to != table_after_break)
+                #Logger.get_instance().log(f'{__file__} {Logger.get_line()} {ll} {seq} {len(table_to_link_to)}')
                 if not table_to_link_to.verify_consistency(Logger.get_line()):
                     Logger.get_instance().log(f'{__file__} {Logger.get_line()} Inconsistent')
  
