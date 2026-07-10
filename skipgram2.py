@@ -17,7 +17,7 @@
 
 '''
     Skipgrams as described in Chapter 6 of Jurafsky & Martin.
-    This program generates examples, train skipgrams, and
+    This program generates examples, trains skipgrams, and
     allows the user to explore word vectors.
 '''
 
