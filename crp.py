@@ -191,8 +191,8 @@ class Table:
                 return self
 
             case 1:                          # Break must be in a cycle: we will have only one table
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Only one component',
-                                          level=Logger.DEBUG)
+                #Logger.get_instance().log(f'{__file__} {Logger.get_line()} Only one component',
+                                          #level=Logger.DEBUG)
                 self.links[node] = node      # Simply make node point to itself
                 owner.verify_tables()
                 return self
@@ -200,13 +200,13 @@ class Table:
             case 2:                               # Break will split links in two
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} Break will split links in two ')
                 new_table, to_delete = self._move_nodes(node,self._standardize(node,components),owner)
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} len={len(self)}, len_new={len(new_table)}'
-                                          f', len_to_delete={len(to_delete)}')
+                #Logger.get_instance().log(f'{__file__} {Logger.get_line()} len={len(self)}, len_new={len(new_table)}'
+                                          #f', len_to_delete={len(to_delete)}')
                 self._remove_redundant_links(to_delete)
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} len={len(self)}, len_new={len(new_table)}'
-                                          f', len_to_delete={len(to_delete)}')
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {self} ',level=Logger.DEBUG)
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {new_table} ',level=Logger.DEBUG)
+                #Logger.get_instance().log(f'{__file__} {Logger.get_line()} len={len(self)}, len_new={len(new_table)}'
+                                          #f', len_to_delete={len(to_delete)}')
+                #Logger.get_instance().log(f'{__file__} {Logger.get_line()} {self} ',level=Logger.DEBUG)
+                #Logger.get_instance().log(f'{__file__} {Logger.get_line()} {new_table} ',level=Logger.DEBUG)
                 owner.verify_tables()
                 return new_table
 
@@ -348,8 +348,8 @@ class Table:
                 #Logger.get_instance().log(f'{__file__} {Logger.get_line()} {self.links}',
                                           #level=Logger.WARNING)                   
                 return False
-        Logger.get_instance().log(f'{__file__} {Logger.get_line()} {line}',
-                                  level=Logger.INFO)
+        #Logger.get_instance().log(f'{__file__} {Logger.get_line()} {line}',
+                                  #level=Logger.INFO)
         return table_has_one_component_only() and every_node_goes_somewhere()
 
     @staticmethod
@@ -571,10 +571,7 @@ class ChineseRestaurantProcess(TableOwner):
             if not table_after_break.verify_consistency(Logger.get_line()):
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} inconsistent')
             link_to = self.chooser.choose(node)
-            table_to_link_to = self.tables[link_to]
-            #while table_to_link_to == table_after_break:  #FIXME #66 arises whn this equality is true
-                #link_to = self.chooser.choose(node)
-                #table_to_link_to = self.tables[link_to]                
+            table_to_link_to = self.tables[link_to]           
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} link to {link_to} in table {table_to_link_to.seq}, len= {len(table_to_link_to)}')
             table_to_link_to.verify_consistency(Logger.get_line())
             
@@ -590,11 +587,7 @@ class ChineseRestaurantProcess(TableOwner):
                     if not table_to_link_to.verify_consistency(Logger.get_line()):
                         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Inconsistent')
             else:
-                #ll = len(table_to_link_to)
-                #seq = table_to_link_to.seq
-                #assert table_to_link_to != table_after_break
                 table_to_link_to.join(link_to, table_after_break, node,self,purge=table_to_link_to != table_after_break)
-                #Logger.get_instance().log(f'{__file__} {Logger.get_line()} {ll} {seq} {len(table_to_link_to)}')
                 if not table_to_link_to.verify_consistency(Logger.get_line()):
                     Logger.get_instance().log(f'{__file__} {Logger.get_line()} Inconsistent')
  
