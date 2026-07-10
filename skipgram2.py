@@ -65,7 +65,7 @@ class Examples:
         '''
         with open(file_name, 'rb') as inp:
             product = load(inp) 
-            logger.log(f'Loaded examples from {file_name.resolve()}')
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} Loaded examples from {file_name.resolve()}')
             return product
         
     def __init__(self,window=2,k=2,rng=np.random.default_rng(),alpha=0.75):
@@ -84,20 +84,20 @@ class Examples:
         self.rng = rng
         self.alpha = alpha
         
-    def build(self,sentence_generator,logger=None):
+    def build(self,sentence_generator):
         '''
         Build examples using a generator for sentences
         
         Parameters:
             sentence_generator    Used to iterate through sentences in corpus
         '''
-        logger.log(f'Building examples: window={self.window}, k={self.k}')
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Building examples: window={self.window}, k={self.k}')
         self.positives = self._create_positives(sentence_generator)
-        logger.log('Built positive examples')
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Built positive examples')
         self.negatives = self._create_negatives()
-        logger.log('Completed building examples')
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Completed building examples')
         
-    def save(self,file,report=print):
+    def save(self,file,report=lambda s:Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}')):
         '''
         Save Examples using pickle.
         
@@ -422,7 +422,8 @@ class Command(ABC):
         '''
         with Logger(Path(__file__).stem,path=args.logs) as logger:
             for key,value in vars(args).items():
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {key}={value}')            
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {key}={value}')  
+                
             seed = get_seed(args.seed,
                             notify=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()}' 
                                                                        f' Created new seed {s}'))
@@ -451,21 +452,21 @@ class CreateExamples(Command):
         Parse text into token, then build examples
         
         Parameters:
-            args
-            rng
+            args          Command lins parameters
+            rng           Random number generator
             logger
         ''' 
         examples = Examples(window=args.window,k=args.k,rng=rng)
+ 
         examples.build(
             generate_sentences(
                 generate_tokens(
                     generate_text(
-                        file_names=[globbed for name in args.input for globbed in glob(join(args.data, name))],
-                        logger=logger
-                    ))),
-            logger=logger)
+                        file_names=[globbed for name in args.input for globbed in glob(join(args.data, name))]
+                    ))))
         
-        examples.save((Path(args.data) / args.output).with_suffix('.pkl'),report=lambda s:logger.log(s))        
+        examples.save((Path(args.data) / args.output).with_suffix('.pkl'),
+                      report=lambda s:Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))        
 
 class AbstractTrainer(Command):
     '''

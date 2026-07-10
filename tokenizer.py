@@ -19,13 +19,14 @@
 
 from re import split
 from unittest import TestCase,main
+from shared.utils import Logger
 
 class Token:
     Apostrophe = "'"
     Period = '.'
     Apostrophe2 = '’'  #FIXME - Issue #45
     
-def generate_text(file_names : [str] = [],logger=None):
+def generate_text(file_names : [str] = []):
     '''
     Generator for reading text from a corpus. It allows us to read the file, one line at a time.
 
@@ -36,7 +37,7 @@ def generate_text(file_names : [str] = [],logger=None):
     
     for file_name in file_names:
         with open(file_name, encoding='utf-8') as text_file:
-            logger.log(f'Processing {file_name}')
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} Processing {file_name}')
             for line in text_file:
                 yield line.strip()
 
