@@ -421,8 +421,11 @@ class Command(ABC):
             args    Command line parameters as parsed by parse_args()
         '''
         with Logger(Path(__file__).stem,path=args.logs) as logger:
+            for key,value in vars(args).items():
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {key}={value}')            
             seed = get_seed(args.seed,
-                            notify=lambda s: logger.log(f'{__file__} {Logger.get_line()} Created new seed {s}'))
+                            notify=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()}' 
+                                                                       f' Created new seed {s}'))
             self._execute(args,rng = np.random.default_rng(seed),logger=logger)
         
     @abstractmethod
@@ -689,7 +692,8 @@ def parse_args(choices):
     
     window = 2
     k = 2
-    alpha = 0.75
+    weight = 0.75
+    alpha = 2.0
     ndim = 128
     eta = 0.01
     batch = 2**12
@@ -716,7 +720,7 @@ def parse_args(choices):
     examples_group = parser.add_argument_group('Examples',description='Used for examples')
     examples_group.add_argument('-w','--window', type=int,default=window,help=f'Width of window for context [{window}]')
     examples_group.add_argument('-k','--k',type=int,default=k,help=f'Number of negative context words for each positive [{k}]')
-    examples_group.add_argument('--alpha',default=alpha,type=float,help=f'The exponent from equation (6.32) [{alpha}]')
+    examples_group.add_argument('--weight',default=weight,type=float,help=f'The exponent from equation (6.32) [{weight}]')
     
     training_group = parser.add_argument_group('Training',description='Used for train')
     training_group.add_argument('-d','--ndim',type=int,default=ndim,help=f'Length of word vectors [{ndim}]')
@@ -733,10 +737,14 @@ def parse_args(choices):
     explore_group.add_argument('--nwords',type=int,default=nwords,help=f'Number of words to explore [{nwords}]')
     explore_group.add_argument('--nclosest',
                                type=int,default=nclosest,help=f'Number of closest words to explore [{nclosest}]')
+    
     explore_group2 = parser.add_argument_group(title='Explore2',description='Used for explore2')
     explore_group2.add_argument('--min',type=float,default=threshold,
                                help=f'Display pairs if product exceeds this value [{threshold}]')
     
+    cluster_group = parser.add_argument_group(title='Cluster',description='Used when we clustyer word vectors')
+    cluster_group.add_argument('--alpha',default=alpha,type=float,help=f'Scaling parameter [{alpha}]')
+
     return parser.parse_args()
         
 def main():
@@ -754,7 +762,7 @@ def main():
         Explore2(),
         Cluster()
     ])
-    args = parse_args(Command.get_choices())
+    args = parse_args(Command.get_choices()) 
     Command.get_command(args.command).execute(args)
 
     elapsed = time() - start
