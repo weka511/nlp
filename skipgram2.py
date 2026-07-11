@@ -32,10 +32,14 @@ from pathlib import Path
 from pickle import dump, HIGHEST_PROTOCOL, load
 from shutil import copyfile
 from time import time
+
 import numpy as np
 from matplotlib.pyplot import figure,show
 from matplotlib import rc
 from scipy.special import expit
+from scipy.cluster.hierarchy import dendrogram
+from sklearn.cluster import AgglomerativeClustering
+
 from crp import ChineseRestaurantProcess,DistanceDependentChooser
 from vocabulary import Vocabulary
 from tokenizer import generate_sentences,generate_text,generate_tokens,Token
@@ -448,6 +452,7 @@ class Command(ABC):
             args    Command line parameters as parsed by parse_args()
         '''
         with Logger(Path(__file__).stem,path=args.logs) as _:
+            start  = time()
             for key,value in vars(args).items():
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} {key} = {value}')  
                 
@@ -455,6 +460,11 @@ class Command(ABC):
                             notify=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()}' 
                                                                        f' Created new seed {s}'))
             self._execute(args,rng = np.random.default_rng(seed))
+            
+            elapsed = time() - start
+            minutes = int(elapsed/60)
+            seconds = elapsed - 60*minutes
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} Elapsed Time {minutes} m {seconds:.2f} s')            
         
     @abstractmethod
     def _execute(self,args,rng = np.random.default_rng()):
@@ -687,8 +697,60 @@ class Explore2(Command):
             for j in range(n):
                 if i != j and P[i,j] > args.min:
                     Logger.get_instance().log(f'{__file__} {Logger.get_line()} {vocabulary.get_word(i)} {vocabulary.get_word(j)} {P[i,j]}')
- 
 
+def plot_dendrogram(model, **kwargs):
+    # Create linkage matrix and then plot the dendrogram
+
+    # create the counts of samples under each node
+    counts = np.zeros(model.children_.shape[0])
+    n_samples = len(model.labels_)
+    for i, merge in enumerate(model.children_):
+        current_count = 0
+        for child_idx in merge:
+            if child_idx < n_samples:
+                current_count += 1  # leaf node
+            else:
+                current_count += counts[child_idx - n_samples]
+        counts[i] = current_count
+
+    linkage_matrix = np.column_stack(
+        [model.children_, model.distances_, counts]
+        ).astype(float)
+
+    # Plot the corresponding dendrogram
+    dendrogram(linkage_matrix, **kwargs)
+
+ 
+class DrawDendrogram(Command):
+    '''
+    Build and plot dendrogram
+    '''
+    def __init__(self):
+        super().__init__('build-tree')
+        
+    def _execute(self,args,rng = np.random.default_rng()):
+        '''
+        Cluster word vectors using CRP
+        
+        Parameters:
+            args    Parsed command line parameters
+            rng     Random number generator
+        '''         
+        skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
+                                   report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
+        distance_matrix = Cluster._products_to_distances(skipgram.P)
+        m,_ = distance_matrix.shape
+        model = AgglomerativeClustering(
+            #n_clusters=2, 
+            distance_threshold=0,
+            n_clusters=None,
+            metric='precomputed', 
+            linkage='complete'
+        )
+
+        labels = model.fit_predict(distance_matrix)
+        plot_dendrogram(model, truncate_mode="level", p=3)
+        
 class Cluster(Command):
     '''
     Cluster word vectors using ChineseRestaurantProcess
@@ -785,7 +847,7 @@ def parse_args(choices):
     explore_group2.add_argument('--min',type=float,default=threshold,
                                help=f'Display pairs if product exceeds this value [{threshold}]')
     
-    cluster_group = parser.add_argument_group(title='Cluster',description='Used when we word vectors')
+    cluster_group = parser.add_argument_group(title='Cluster',description='Used when we cluster word vectors')
     cluster_group.add_argument('--alpha',default=alpha,type=float,help=f'Scaling parameter [{alpha}]')
 
     return parser.parse_args()
@@ -795,7 +857,7 @@ def main():
                   'serif': ['Palatino'],
                   'size': 8})
     rc('text', usetex=True)    
-    start  = time()
+
     Command.append([
         CreateExamples(),
         TrainSkipgrams(),
@@ -803,15 +865,11 @@ def main():
         BuildDistances(),
         Explore1(),
         Explore2(),
-        Cluster()
+        Cluster(),
+        DrawDendrogram()
     ])
     args = parse_args(Command.get_choices()) 
     Command.get_command(args.command).execute(args)
-
-    elapsed = time() - start
-    minutes = int(elapsed/60)
-    seconds = elapsed - 60*minutes
-    Logger.get_instance().log(f'{__file__} {Logger.get_line()} Elapsed Time {minutes} m {seconds:.2f} s')
     
     if args.show:
         show()
