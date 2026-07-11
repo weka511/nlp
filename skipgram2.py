@@ -55,13 +55,12 @@ class Examples:
     '''
     
     @staticmethod
-    def create(file_name,logger):
+    def create(file_name):
         '''
         A factory method to instantiate a set of Examples from a saved file
         
         Parameters:
             file_name    Name of file where examples have been stored
-            logger
         '''
         with open(file_name, 'rb') as inp:
             product = load(inp) 
@@ -227,7 +226,8 @@ class SkipGram:
         return Product/np.linalg.norm(Product,axis=1,keepdims=True)
     
     @staticmethod
-    def create(file_name,report=print):
+    def create(file_name,
+               report=lambda s:Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}')):
         '''
         A factory method to instantiate a Skipgram from a saved file
         
@@ -295,7 +295,9 @@ class SkipGram:
                 
             loss_calculator.append(i)
     
-    def save(self,file_path,report=print,description='word vectors'):
+    def save(self,file_path,
+             report=lambda s:Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'),
+             description='word vectors'):
         '''
         Save Examples using pickle.
         
@@ -422,7 +424,7 @@ class Command(ABC):
         '''
         with Logger(Path(__file__).stem,path=args.logs) as logger:
             for key,value in vars(args).items():
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {key}={value}')  
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {key} = {value}')  
                 
             seed = get_seed(args.seed,
                             notify=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()}' 
@@ -435,9 +437,9 @@ class Command(ABC):
         Perform command
         
         Parameters:
-            args
-            rng
-            logger
+            args       Command line parameters as parsed by parse_args()
+            rng        Random nuber generator
+            logger     FIXME (remove as part of issue #66
         '''
     
 class CreateExamples(Command):
@@ -449,12 +451,12 @@ class CreateExamples(Command):
         
     def _execute(self,args,rng = np.random.default_rng(),logger=None):
         '''
-        Parse text into token, then build examples
+        Parse text into tokens, then build examples
         
         Parameters:
-            args          Command lins parameters
-            rng           Random number generator
-            logger
+            args       Command line parameters as parsed by parse_args()
+            rng        Random nuber generator
+            logger     FIXME (remove as part of issue #66
         ''' 
         examples = Examples(window=args.window,k=args.k,rng=rng)
  
@@ -481,11 +483,11 @@ class AbstractTrainer(Command):
         Adjust weights of  skipgrams and plot losses
         
         Parameters:
-            args
-            rng
-            logger
+            args       Command line parameters as parsed by parse_args()
+            rng        Random nuber generator
+            logger     FIXME (remove as part of issue #66
         '''
-        self._plot_losses(args,self._train(self._create(args,rng,logger),args,logger=logger))     
+        self._plot_losses(args,self._train(self._create(args,rng),args))     
         
     @abstractmethod    
     def _create(self,args,rng = np.random.default_rng(),logger=None):
@@ -510,8 +512,9 @@ class AbstractTrainer(Command):
             losses.append(loss_calculator.get_loss())
             loss_calculator.reset()
             if i % args.freq == 1:
-                logger.log (f'Step {i}, loss={losses[-1]}')
-                skipgram.save((Path(args.data) / args.output).with_suffix('.pkl'),report=lambda s:logger.log(s))
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Step {i}, loss={losses[-1]}')
+                skipgram.save((Path(args.data) / args.output).with_suffix('.pkl'),
+                              report=lambda s:Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
                 if user_has_requested_stop(): break
         return losses
     
@@ -520,8 +523,8 @@ class AbstractTrainer(Command):
         Display evolution of loss
         
         Parameters:
-            args
-            losses
+            args       Command line arguments
+            losses     A list of training losses
         '''
         fig = figure(figsize=(10,10))
         ax = fig.add_subplot(1,1,1)
@@ -543,13 +546,12 @@ class TrainSkipgrams(AbstractTrainer):
     def __init__(self):
         super().__init__('train')
         
-    def _create(self,args,rng = np.random.default_rng(),logger=None):
+    def _create(self,args,rng = np.random.default_rng()):
         '''
         Create new skipgram for training
         '''
-        return SkipGram(Examples.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),logger),
+        return SkipGram(Examples.create((Path(args.data) / args.input[0]).with_suffix('.pkl')),
                         ndim=args.ndim,
-                        logger=logger,
                         rng=rng,
                         batch=args.batch)
     
@@ -564,9 +566,9 @@ class RestartSkipgrams(AbstractTrainer):
         '''
         Instantiate skipgram from file
         '''
-        logger.log(f'Restarting Training')
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Restarting Training')
         return SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
-                                   report=lambda s: logger.log(s))
+                                   report=lambda s:Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
  
 class BuildDistances(Command):
     '''
@@ -580,9 +582,9 @@ class BuildDistances(Command):
         Build table of scalar products between weight vectors
         
         Parameters:
-         args
-         rng
-         logger
+            args       Command line parameters as parsed by parse_args()
+            rng        Random nuber generator
+            logger     FIXME (remove as part of issue #66
         '''        
                 
         skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
@@ -599,12 +601,17 @@ class Explore1(Command):
     '''
     def __init__(self):
         super().__init__('explore1')
-        
-    '''
-    Select entries from table of scalar products
-    '''        
-        
+           
     def _execute(self,args,rng = np.random.default_rng(),logger=None):
+            
+        '''
+        Select entries from table of scalar products
+        
+        Parameters:
+            args       Command line parameters as parsed by parse_args()
+            rng        Random nuber generator
+            logger     FIXME (remove as part of issue #66
+        '''         
         skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
                                    report=lambda s: logger.log(s))
         P = skipgram.P
@@ -629,12 +636,16 @@ class Explore2(Command):
     '''
     def __init__(self):
         super().__init__('explore2')
-        
-    '''
-    Select entries from table of scalar products
-    '''        
-        
+              
     def _execute(self,args,rng = np.random.default_rng(),logger=None):
+        '''
+        Select entries from table of scalar products
+        
+        Parameters:
+            args       Command line parameters as parsed by parse_args()
+            rng        Random nuber generator
+            logger     FIXME (remove as part of issue #66
+        '''              
         skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
                                    report=lambda s: logger.log(s))
         P = skipgram.P
@@ -655,7 +666,7 @@ class Cluster(Command):
         
     def _execute(self,args,rng = np.random.default_rng(),logger=None):
         '''
-        Select entries from table of scalar products
+        Cluster word vectors using CRP
         
         Parameters:
             args    Parsed command line parameters
