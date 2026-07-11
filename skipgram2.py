@@ -206,11 +206,11 @@ class SkipGram:
     Skipgrams after Chaper 6
     
     Attributes:
-        examples
-        word_vectors
-        context_vectors
-        rng
-        batch
+        examples         Training examples
+        word_vectors     Word vectors produced by skipgram training
+        context_vectors  Context vectors produced by skipgram training
+        rng              Random number generator
+        batch            Batch size
     '''
     @staticmethod
     def create_unit_vectors(m,ndim,rng):
@@ -218,9 +218,9 @@ class SkipGram:
         Create a set of normed unit vectors 
         
         Parameters:
-            m               Number of vectors
-            ndim  Dimensionality
-            rng             Random number generator
+            m       Number of vectors
+            ndim    Dimensionality
+            rng     Random number generator
         '''
         Product = rng.uniform(size=(m,ndim))
         return Product/np.linalg.norm(Product,axis=1,keepdims=True)
@@ -233,6 +233,7 @@ class SkipGram:
         
         Parameters:
             file_name    Name of file where ngrams have been stored
+            report       Function used to report success
         '''
         with open(file_name, 'rb') as inp:
             product = load(inp) 
@@ -242,11 +243,10 @@ class SkipGram:
     def __init__(self,examples,ndim=128,rng=np.random.default_rng(),batch=1):
         '''
         Parameters:
-            examples
-            ndim
-            logger
-            rng
-            batch
+            examples   Training examples
+            ndim       Size of word vectors
+            rng        Random number generator
+            batch      Batch size
         '''
         self.examples = examples
         n_words = len(examples.vocabulary)
@@ -259,6 +259,10 @@ class SkipGram:
         '''
         Compute partial derivatives and update w and c
         Section 6.8.2
+        
+        Parameters:
+            loss_calculator    Used to calculte loss
+            eta                Training rate
         '''
         n,_ = self.examples.positives.shape
         for i in self.rng.integers(n,size=(self.batch)):
@@ -335,19 +339,19 @@ class LossCalculator:
     losses that have changed.
     
     Attributes:
-        positives
-        negatives
-        k
-        word_vectors
-        context_vectors
-        Losses
-        ToCalculate
+        positives         Positive examples
+        negatives         Negative examples
+        k                 Number of negative context words for each positive
+        word_vectors      Word vectors learned during training
+        context_vectors   Conrext vectors learned during training
+        Losses            Used to hold calculated losses
+        ToCalculate       Indices of words have changed
     '''
     def __init__(self,examples,skipgram):
         '''
         Parameters:
-            examples
-            skipgram
+            examples     Tarining examples
+            skipgram     Skipgram object
         '''
         self.positives = examples.positives
         self.negatives = examples.negatives
@@ -358,11 +362,14 @@ class LossCalculator:
         self.Losses = np.zeros((n))
         self.ToCalculate = list(range(n))
         
-    def append(self,i):
+    def append(self,index):
         '''
         Indicate that one word has changed
+        
+        Parameters:
+            index     Identifies word that has changed
         '''
-        self.ToCalculate.append(i)
+        self.ToCalculate.append(index)
         
     def get_loss(self):
         '''
@@ -401,18 +408,36 @@ class Command(ABC):
     
     @staticmethod
     def append(commands):
+        '''
+        List of Mommands that are availavle to user
+        '''
         for command in commands:
             Command.choices[command.key] = command
         
     @staticmethod
     def get_choices():
+        '''
+        Get list of available Commands
+        '''
         return [key for key in Command.choices.keys()]
     
     @staticmethod
     def get_command(key):
+        '''
+        Get Command given the user's specification
+        
+        Parameters:
+            key      Command name specified by user
+        '''
         return Command.choices[key]
         
     def __init__(self,key):
+        '''
+        Used when command is created to set the name that the user specifies
+        
+        Parameters:
+            key      The name that the user specifies for this command
+        '''
         self.key = key
     
     def execute(self,args):
@@ -438,7 +463,7 @@ class Command(ABC):
         
         Parameters:
             args       Command line parameters as parsed by parse_args()
-            rng        Random nuber generator
+            rng        Random number generator
         '''
     
 class CreateExamples(Command):
@@ -454,7 +479,7 @@ class CreateExamples(Command):
         
         Parameters:
             args       Command line parameters as parsed by parse_args()
-            rng        Random nuber generator
+            rng        Random number generator
         ''' 
         examples = Examples(window=args.window,k=args.k,rng=rng)
  
@@ -482,7 +507,7 @@ class AbstractTrainer(Command):
         
         Parameters:
             args       Command line parameters as parsed by parse_args()
-            rng        Random nuber generator
+            rng        Random number generator
         '''
         self._plot_losses(args,self._train(self._create(args,rng),args))     
         
@@ -492,15 +517,18 @@ class AbstractTrainer(Command):
         Implemented by descendents to either instantiate a new Skipgram
         or recall one that has been created previously.
         
-        Arguments:
-            args
-            rng
-            logger
+        Parameters:
+            args       Command line parameters as parsed by parse_args()
+            rng        Random number generator
         '''
         
     def _train(self,skipgram,args):
         '''
         Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
+        
+        Parameters:
+            skipgram    The Skipgram to be trained
+            args        Command line parameters as parsed by parse_args()
         '''        
         losses = []
         loss_calculator = LossCalculator(skipgram.examples,skipgram) 
@@ -513,6 +541,7 @@ class AbstractTrainer(Command):
                 skipgram.save((Path(args.data) / args.output).with_suffix('.pkl'),
                               report=lambda s:Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
                 if user_has_requested_stop(): break
+                
         return losses
     
     def _plot_losses(self,args,losses):
@@ -546,6 +575,10 @@ class TrainSkipgrams(AbstractTrainer):
     def _create(self,args,rng = np.random.default_rng()):
         '''
         Create new skipgram for training
+        
+        Parameters:
+            args      Command line parameters as parsed by parse_args()
+            rng       Random number generator
         '''
         return SkipGram(Examples.create((Path(args.data) / args.input[0]).with_suffix('.pkl')),
                         ndim=args.ndim,
@@ -562,6 +595,10 @@ class RestartSkipgrams(AbstractTrainer):
     def _create(self,args,rng = np.random.default_rng()):
         '''
         Instantiate skipgram from file
+        
+        Parameters:
+            args      Command line parameters as parsed by parse_args()
+            rng       Random number generator
         '''
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Restarting Training')
         return SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
@@ -580,7 +617,7 @@ class BuildDistances(Command):
         
         Parameters:
             args       Command line parameters as parsed by parse_args()
-            rng        Random nuber generator
+            rng        Random number generator
         '''        
                 
         skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
@@ -606,7 +643,7 @@ class Explore1(Command):
         
         Parameters:
             args       Command line parameters as parsed by parse_args()
-            rng        Random nuber generator
+            rng        Random number generator
         '''         
         skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
                                    report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
@@ -639,7 +676,7 @@ class Explore2(Command):
         
         Parameters:
             args       Command line parameters as parsed by parse_args()
-            rng        Random nuber generator
+            rng        Random number generator
         '''              
         skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
                                    report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
@@ -666,7 +703,6 @@ class Cluster(Command):
         Parameters:
             args    Parsed command line parameters
             rng     Random number generator
-            logger  Logger
         '''         
         skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
                                    report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
@@ -775,7 +811,7 @@ def main():
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
-    print (f'Elapsed Time {minutes} m {seconds:.2f} s')
+    Logger.get_instance().log(f'{__file__} {Logger.get_line()} Elapsed Time {minutes} m {seconds:.2f} s')
     
     if args.show:
         show()
