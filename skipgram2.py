@@ -239,7 +239,7 @@ class SkipGram:
             report (f'Loaded skipgrams from {file_name.resolve()}')
             return product    
     
-    def __init__(self,examples,ndim=128,logger=None,rng=np.random.default_rng(),batch=1):
+    def __init__(self,examples,ndim=128,rng=np.random.default_rng(),batch=1):
         '''
         Parameters:
             examples
@@ -422,24 +422,23 @@ class Command(ABC):
         Parameters:
             args    Command line parameters as parsed by parse_args()
         '''
-        with Logger(Path(__file__).stem,path=args.logs) as logger:
+        with Logger(Path(__file__).stem,path=args.logs) as _:
             for key,value in vars(args).items():
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} {key} = {value}')  
                 
             seed = get_seed(args.seed,
                             notify=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()}' 
                                                                        f' Created new seed {s}'))
-            self._execute(args,rng = np.random.default_rng(seed),logger=logger)
+            self._execute(args,rng = np.random.default_rng(seed))
         
     @abstractmethod
-    def _execute(self,args,rng = np.random.default_rng(),logger=None):
+    def _execute(self,args,rng = np.random.default_rng()):
         '''
         Perform command
         
         Parameters:
             args       Command line parameters as parsed by parse_args()
             rng        Random nuber generator
-            logger     FIXME (remove as part of issue #66
         '''
     
 class CreateExamples(Command):
@@ -449,14 +448,13 @@ class CreateExamples(Command):
     def __init__(self):
         super().__init__('examples')
         
-    def _execute(self,args,rng = np.random.default_rng(),logger=None):
+    def _execute(self,args,rng = np.random.default_rng()):
         '''
         Parse text into tokens, then build examples
         
         Parameters:
             args       Command line parameters as parsed by parse_args()
             rng        Random nuber generator
-            logger     FIXME (remove as part of issue #66
         ''' 
         examples = Examples(window=args.window,k=args.k,rng=rng)
  
@@ -478,19 +476,18 @@ class AbstractTrainer(Command):
     def __init__(self,key):
         super().__init__(key)
         
-    def _execute(self,args,rng = np.random.default_rng(),logger=None):
+    def _execute(self,args,rng = np.random.default_rng()):
         '''
         Adjust weights of  skipgrams and plot losses
         
         Parameters:
             args       Command line parameters as parsed by parse_args()
             rng        Random nuber generator
-            logger     FIXME (remove as part of issue #66
         '''
         self._plot_losses(args,self._train(self._create(args,rng),args))     
         
     @abstractmethod    
-    def _create(self,args,rng = np.random.default_rng(),logger=None):
+    def _create(self,args,rng = np.random.default_rng()):
         '''
         Implemented by descendents to either instantiate a new Skipgram
         or recall one that has been created previously.
@@ -501,7 +498,7 @@ class AbstractTrainer(Command):
             logger
         '''
         
-    def _train(self,skipgram,args,logger=None):
+    def _train(self,skipgram,args):
         '''
         Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
         '''        
@@ -562,7 +559,7 @@ class RestartSkipgrams(AbstractTrainer):
     def __init__(self):
         super().__init__('restart')
         
-    def _create(self,args,rng = np.random.default_rng(),logger=None):
+    def _create(self,args,rng = np.random.default_rng()):
         '''
         Instantiate skipgram from file
         '''
@@ -577,23 +574,23 @@ class BuildDistances(Command):
     def __init__(self):
         super().__init__('build')
         
-    def _execute(self,args,rng = np.random.default_rng(),logger=None):
+    def _execute(self,args,rng = np.random.default_rng()):
         '''
         Build table of scalar products between weight vectors
         
         Parameters:
             args       Command line parameters as parsed by parse_args()
             rng        Random nuber generator
-            logger     FIXME (remove as part of issue #66
         '''        
                 
         skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
-                                   report=lambda s: logger.log(s))
-        logger.log('Calculating products')
+                                   report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Calculating products')
         skipgram.calculate_products(args.normalize)
-        logger.log('Calculated products')
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Calculated products')
         skipgram.save((Path(args.data) / args.output).with_suffix('.pkl'),
-                      report=lambda s:logger.log(s),description='word vectors and distances')
+                      report=lambda s:Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'),
+                      description='word vectors and distances')
  
 class Explore1(Command):
     '''
@@ -602,7 +599,7 @@ class Explore1(Command):
     def __init__(self):
         super().__init__('explore1')
            
-    def _execute(self,args,rng = np.random.default_rng(),logger=None):
+    def _execute(self,args,rng = np.random.default_rng()):
             
         '''
         Select entries from table of scalar products
@@ -610,10 +607,9 @@ class Explore1(Command):
         Parameters:
             args       Command line parameters as parsed by parse_args()
             rng        Random nuber generator
-            logger     FIXME (remove as part of issue #66
         '''         
         skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
-                                   report=lambda s: logger.log(s))
+                                   report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
         P = skipgram.P
         vocabulary = skipgram.examples.vocabulary
  
@@ -622,12 +618,12 @@ class Explore1(Command):
                 word = vocabulary.get_word(token)
                 indices = np.argsort(P[token,:])[::-1]
                 for i in range(args.nclosest):
-                    logger.log(f'{token} {word}: {indices[i]} {vocabulary.get_word(indices[i])} {P[token,indices[i]]}')
+                    Logger.get_instance().log(f'{__file__} {Logger.get_line()}{token} {word}: {indices[i]} {vocabulary.get_word(indices[i])} {P[token,indices[i]]}')
         else:
             token = vocabulary.token[args.word]
             indices = np.argsort(P[token,:])[::-1]
             for i in range(args.nclosest):
-                logger.log(f'{token} {args.word}: {indices[i]} {vocabulary.get_word(indices[i])} {P[token,indices[i]]}')            
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {token} {args.word}: {indices[i]} {vocabulary.get_word(indices[i])} {P[token,indices[i]]}')            
 
 
 class Explore2(Command):
@@ -637,24 +633,23 @@ class Explore2(Command):
     def __init__(self):
         super().__init__('explore2')
               
-    def _execute(self,args,rng = np.random.default_rng(),logger=None):
+    def _execute(self,args,rng = np.random.default_rng()):
         '''
         Select entries from table of scalar products
         
         Parameters:
             args       Command line parameters as parsed by parse_args()
             rng        Random nuber generator
-            logger     FIXME (remove as part of issue #66
         '''              
         skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
-                                   report=lambda s: logger.log(s))
+                                   report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
         P = skipgram.P
         vocabulary = skipgram.examples.vocabulary
         m,n = P.shape
         for i in range(m):
             for j in range(n):
                 if i != j and P[i,j] > args.min:
-                    logger.log(f'{vocabulary.get_word(i)} {vocabulary.get_word(j)} {P[i,j]}')
+                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} {vocabulary.get_word(i)} {vocabulary.get_word(j)} {P[i,j]}')
  
 
 class Cluster(Command):
@@ -664,7 +659,7 @@ class Cluster(Command):
     def __init__(self):
         super().__init__('cluster')
         
-    def _execute(self,args,rng = np.random.default_rng(),logger=None):
+    def _execute(self,args,rng = np.random.default_rng()):
         '''
         Cluster word vectors using CRP
         
@@ -754,7 +749,7 @@ def parse_args(choices):
     explore_group2.add_argument('--min',type=float,default=threshold,
                                help=f'Display pairs if product exceeds this value [{threshold}]')
     
-    cluster_group = parser.add_argument_group(title='Cluster',description='Used when we clustyer word vectors')
+    cluster_group = parser.add_argument_group(title='Cluster',description='Used when we word vectors')
     cluster_group.add_argument('--alpha',default=alpha,type=float,help=f'Scaling parameter [{alpha}]')
 
     return parser.parse_args()
