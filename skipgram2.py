@@ -570,7 +570,7 @@ class AbstractTrainer(Command):
             args       Command line arguments
             losses     A list of training losses
         '''
-        fig = figure(figsize=(10,10))
+        fig = figure(figsize=(12,12))
         ax = fig.add_subplot(1,1,1)
         ax.plot(losses)
         ax.set_title(f'Training: ndim={args.ndim}, batch = {args.batch}, '
@@ -743,28 +743,44 @@ class DrawDendrogram(Command):
         )
 
         model = model.fit(distance_matrix)
-        vocabulary = skipgram.examples.vocabulary
-        n,_ = model.children_.shape
-        for i in range(n//2):
-            i0 = model.children_[i,0]
-            i1 = model.children_[i,1]
-            if i0 < len(vocabulary) and i1 < len(vocabulary):
-                mm = distance_matrix[i0,:].mean()
-                print (vocabulary[i0],vocabulary[i1],distance_matrix[i0,i1],mm)
-                
-        fig = figure(figsize=(10,10))
-        ax = fig.add_subplot(1,1,1)    
-        self.plot_dendrogram(model, truncate_mode='level', p=args.levels,ax=ax)
+        cluster_distances = []
+        for word1,word2,distance in self.report_distances(model,distance_matrix,
+                                                          vocabulary = skipgram.examples.vocabulary):
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} {word1} {word2} {distance:.3f}')
+            cluster_distances.append(distance)
+            
+        fig = figure(figsize=(18,18))
+        ax1 = fig.add_subplot(2,2,1)
+        ax2 = fig.add_subplot(2,2,2)
+        
+        dendrogram(
+            np.column_stack(
+                [model.children_, model.distances_, self.count_samples(model)]
+            ).astype(float),
+            truncate_mode='level', 
+            p=args.levels,
+            ax=ax1)
+        ax1.set_title(f'Top {args.levels} levels')
+        
+        ax2.hist(distance_matrix.flatten(),alpha=0.5,density=True,color='xkcd:blue',label='Matrix')
+        ax2.hist(cluster_distances,alpha=0.5,density=True,color='xkcd:red',label='Terminal')
+        ax2.legend()
+        ax2.set_title('Distances')
+        ax2.set_xlabel('d')
+        ax2.set_ylabel('Frequency')
+        
+        fig.suptitle(f'{args.input[0]}')
         fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))
         
-    def plot_dendrogram(self,model, **kwargs):
+
+    def count_samples(self,model):
         '''
-        Create linkage matrix and then plot the dendrogram
+        Create the counts of samples under each node
         
         Parameters:
             model
-        '''   
-        counts = np.zeros(model.children_.shape[0])    # create the counts of samples under each node
+        '''
+        counts = np.zeros(model.children_.shape[0])
         n_samples = len(model.labels_)
         for i, merge in enumerate(model.children_):
             current_count = 0
@@ -774,13 +790,25 @@ class DrawDendrogram(Command):
                 else:
                     current_count += counts[child_idx - n_samples]
             counts[i] = current_count
+            
+        return counts
+
+    def report_distances(self,model,distance_matrix,vocabulary):
+        n,_ = model.children_.shape
+        count = len([i for i in range(n) if max(model.children_[i,0],model.children_[i,1]) < len(vocabulary)])
+        pairs = np.zeros((count,2),dtype=int)
+        distances = np.zeros((count),dtype=float)
+        j = 0
+        for i in range(n):
+            if max(model.children_[i,0],model.children_[i,1]) < len(vocabulary):
+                pairs[j,0] = model.children_[i,0]
+                pairs[j,1] = model.children_[i,1]
+                distances[j] = distance_matrix[pairs[j,0],pairs[j,1]]
+                j += 1
     
-        linkage_matrix = np.column_stack(
-            [model.children_, model.distances_, counts]
-        ).astype(float)
-
-        dendrogram(linkage_matrix, **kwargs)      # Plot the corresponding dendrogram  
-
+        for i in np.argsort(distances):
+            yield vocabulary[pairs[i,0]],vocabulary[pairs[i,1]],distances[i]   
+                
 class Cluster(Command):
     '''
     Cluster word vectors using ChineseRestaurantProcess
