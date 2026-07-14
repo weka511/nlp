@@ -714,7 +714,40 @@ class Explore2(Command):
                 if i != j and P[i, j] > args.min:
                     Logger.get_instance().log(f'{__file__} {Logger.get_line()} {vocabulary.get_word(i)} {vocabulary.get_word(j)} {P[i, j]}')
 
-
+class WordCluster:
+    @staticmethod
+    def build(model):
+        n_samples, = model.labels_.shape
+        n_clusters,_ = model.children_.shape
+        clusters = np.full((n_clusters),WordCluster(),dtype=WordCluster)
+        for i in range(n_samples - 1):
+            print (i,model.children_[i,:],model.distances_[i]) 
+            clusters[i].add_child(model.children_[i,0],clusters,n_samples)
+            clusters[i].add_child(model.children_[i,1],clusters,n_samples)
+            
+        clusters[-1] = WordCluster(model.children_.max() + 1)
+        for i in range(n_samples-2,-1,-1):
+            print (i,model.children_[i,:],model.distances_[i])
+            child1 = model.children_[i,0]
+            z=0
+        z=0
+        
+            
+    def __init__(self):
+        #self.cluster_id = cluster_id
+        self.children = []
+        self.distance = 0.0
+        self.words = []
+        
+    def set_distance(self,distance):
+        self.distance = distance
+        
+    def add_child(self,child_index,clusters,n_samples):
+        if child_index < n_samples:
+            self.words.append(child_index)
+        else:
+            self.children.append(clusters[child_index-n_samples])
+    
 class DrawDendrogram(Command):
     '''
     Build and plot dendrogram
@@ -725,7 +758,7 @@ class DrawDendrogram(Command):
 
     def _execute(self, args, rng=np.random.default_rng()):
         '''
-        Cluster word vectors using CRP
+        Cluster word vectors using AgglomerativeClustering
         
         Parameters:
             args    Parsed command line parameters
@@ -733,28 +766,33 @@ class DrawDendrogram(Command):
         '''
         skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
                                    report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
-        distance_matrix = Cluster._products_to_distances(skipgram.P)
+        distance_matrix = ClusterUsingCRP.products_to_distances(skipgram.P)
         m, _ = distance_matrix.shape
         model = AgglomerativeClustering(
             distance_threshold=0,
             n_clusters=None,
             metric='precomputed',
-            linkage='complete'
+            linkage='complete',
+            compute_distances=True
         )
 
         model = model.fit(distance_matrix)
+        WordCluster.build(model)
+            
         cluster_distances = []
         for word1,word2,distance in self.report_distances(model,distance_matrix,
                                                           vocabulary = skipgram.examples.vocabulary):
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} {word1} {word2} {distance:.3f}')
             cluster_distances.append(distance)
             
+        self._plot(model,distance_matrix,cluster_distances,args)
+            
+    def _plot(self,model,distance_matrix,cluster_distances,args):    
         fig = figure(figsize=(18,18))
         ax1 = fig.add_subplot(2,2,1)
         ax2 = fig.add_subplot(2,2,2)
         
-        dendrogram(
-            np.column_stack(
+        dendrogram(np.column_stack(
                 [model.children_, model.distances_, self.count_samples(model)]
             ).astype(float),
             truncate_mode='level', 
@@ -771,7 +809,7 @@ class DrawDendrogram(Command):
         
         fig.suptitle(f'{args.input[0]}')
         fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))
-        
+            
 
     def count_samples(self,model):
         '''
@@ -809,7 +847,7 @@ class DrawDendrogram(Command):
         for i in np.argsort(distances):
             yield vocabulary[pairs[i,0]],vocabulary[pairs[i,1]],distances[i]   
                 
-class Cluster(Command):
+class ClusterUsingCRP(Command):
     '''
     Cluster word vectors using ChineseRestaurantProcess
     '''
@@ -826,7 +864,7 @@ class Cluster(Command):
         '''
         skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
                                    report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
-        d = Cluster._products_to_distances(skipgram.P)
+        d = ClusterUsingCRP.products_to_distances(skipgram.P)
         m, _ = d.shape
         chooser = DistanceDependentChooser(d, rng=rng, alpha=args.alpha, m=m)
         clusterer = ChineseRestaurantProcess(chooser=chooser)
@@ -835,7 +873,7 @@ class Cluster(Command):
             clusterer.gibbs()
 
     @staticmethod
-    def _products_to_distances(P):
+    def products_to_distances(P):
         '''
         Convert scalar product of unit vectors to a distance. 
         I have encountered a small problem with square roots of 
@@ -926,7 +964,7 @@ def main():
         BuildDistances(),
         Explore1(),
         Explore2(),
-        Cluster(),
+        ClusterUsingCRP(),
         DrawDendrogram()
     ])
     args = parse_args(Command.get_choices())
