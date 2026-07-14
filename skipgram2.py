@@ -715,29 +715,33 @@ class Explore2(Command):
                     Logger.get_instance().log(f'{__file__} {Logger.get_line()} {vocabulary.get_word(i)} {vocabulary.get_word(j)} {P[i, j]}')
 
 class WordCluster:
+    next_cluster_id = 0
     @staticmethod
     def build(model):
         n_samples, = model.labels_.shape
         n_clusters,_ = model.children_.shape
-        clusters = np.full((n_clusters),WordCluster(),dtype=WordCluster)
-        for i in range(n_samples - 1):
-            print (i,model.children_[i,:],model.distances_[i]) 
+        clusters = np.empty((n_clusters),dtype=WordCluster)
+        for i in range(n_clusters):
+            clusters[i] = WordCluster()
+        #for i in range(n_samples - 1): 
             clusters[i].add_child(model.children_[i,0],clusters,n_samples)
             clusters[i].add_child(model.children_[i,1],clusters,n_samples)
-            
-        clusters[-1] = WordCluster(model.children_.max() + 1)
-        for i in range(n_samples-2,-1,-1):
-            print (i,model.children_[i,:],model.distances_[i])
-            child1 = model.children_[i,0]
-            z=0
-        z=0
+            clusters[i].set_distance(model.distances_[i])
+        
+        return clusters, np.argsort(model.distances_)
         
             
     def __init__(self):
-        #self.cluster_id = cluster_id
+        self.cluster_id = WordCluster.next_cluster_id
+        WordCluster.next_cluster_id += 1
         self.children = []
         self.distance = 0.0
         self.words = []
+        self.parent = None
+        
+    #def __eq__(self,other):
+        #if other == None: return False
+        #return self.cluster_id == other.cluster_id
         
     def set_distance(self,distance):
         self.distance = distance
@@ -746,7 +750,18 @@ class WordCluster:
         if child_index < n_samples:
             self.words.append(child_index)
         else:
-            self.children.append(clusters[child_index-n_samples])
+            child = clusters[child_index-n_samples]
+            self.children.append(child)
+            child.parent = self
+            
+    def search_up(self,child=None):
+        print (self.cluster_id)
+        if self.parent == None:
+            if child.cluster_id  == self.children[0].cluster_id : return self.children[1]
+            if child.cluster_id  == self.children[1].cluster_id : return self.children[0]
+        else:
+            return self.parent.search_up(self)
+        
     
 class DrawDendrogram(Command):
     '''
@@ -777,16 +792,21 @@ class DrawDendrogram(Command):
         )
 
         model = model.fit(distance_matrix)
-        WordCluster.build(model)
+        clusters,indices = WordCluster.build(model)
+        index = 0     # FIXME
+        branch = clusters[index].search_up()   
+        z=branch.cluster_id
             
-        cluster_distances = []
-        for word1,word2,distance in self.report_distances(model,distance_matrix,
-                                                          vocabulary = skipgram.examples.vocabulary):
-            Logger.get_instance().log(f'{__file__} {Logger.get_line()} {word1} {word2} {distance:.3f}')
-            cluster_distances.append(distance)
+        #cluster_distances = []
+        #for word1,word2,distance in self.report_distances(model,distance_matrix,
+                                                          #vocabulary = skipgram.examples.vocabulary):
+            #Logger.get_instance().log(f'{__file__} {Logger.get_line()} {word1} {word2} {distance:.3f}')
+            #cluster_distances.append(distance)
             
         self._plot(model,distance_matrix,cluster_distances,args)
-            
+     
+
+    
     def _plot(self,model,distance_matrix,cluster_distances,args):    
         fig = figure(figsize=(18,18))
         ax1 = fig.add_subplot(2,2,1)
