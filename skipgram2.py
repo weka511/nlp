@@ -755,13 +755,24 @@ class WordCluster:
             child.parent = self
             
     def search_up(self,child=None):
-        print (self.cluster_id)
+        #print (self.cluster_id)
         if self.parent == None:
             if child.cluster_id  == self.children[0].cluster_id : return self.children[1]
             if child.cluster_id  == self.children[1].cluster_id : return self.children[0]
         else:
             return self.parent.search_up(self)
         
+    def search_down(self,rng=np.random.default_rng(),words=[]):
+        if len(self.words) > 0:
+            for word in self.words:
+                words.append(word)
+        match len(self.children):
+            case 0:
+                return words
+            case 1:
+                return self.children[0].search_down(rng=rng,words=words)
+            case 2:
+                return self.children[rng.choice(2)].search_down(rng=rng,words=words)
     
 class DrawDendrogram(Command):
     '''
@@ -793,15 +804,22 @@ class DrawDendrogram(Command):
 
         model = model.fit(distance_matrix)
         clusters,indices = WordCluster.build(model)
-        index = 0     # FIXME
-        branch = clusters[index].search_up()   
-        z=branch.cluster_id
-            
-        #cluster_distances = []
-        #for word1,word2,distance in self.report_distances(model,distance_matrix,
-                                                          #vocabulary = skipgram.examples.vocabulary):
-            #Logger.get_instance().log(f'{__file__} {Logger.get_line()} {word1} {word2} {distance:.3f}')
-            #cluster_distances.append(distance)
+        vocabulary = skipgram.examples.vocabulary
+        for index in range(128):
+            branch = clusters[index].search_up()   
+            outgroup = branch.search_down(rng=rng)
+            cluster = clusters[index]
+            if len(cluster.words) < 2: continue
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} ' 
+                                      f'{vocabulary[cluster.words[0]]},'
+                                      f'{vocabulary[cluster.words[1]]},'
+                                      f'{vocabulary[outgroup[0]]},'
+                                      f'{vocabulary[outgroup[1]]}'
+                                      )
+        cluster_distances = [distance for _,_,distance in self.report_distances(
+            model,distance_matrix,
+            vocabulary = skipgram.examples.vocabulary)]
+    
             
         self._plot(model,distance_matrix,cluster_distances,args)
      
