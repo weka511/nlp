@@ -754,14 +754,29 @@ class WordCluster:
             self.children.append(child)
             child.parent = self
             
-    def search_up(self,child=None):
-        if self.parent == None:
+    def search_up(self,child=None,steps=-1):
+        '''
+        Traverse path to root or for a specified number of steps
+        
+        Parameters:
+            child    Used only for recursion: default to None
+            steps    If posigtive, stop after this many steps
+                     if root has not been reached
+        '''
+        if self.parent == None or steps == 0:
             if child.cluster_id  == self.children[0].cluster_id : return self.children[1]
             if child.cluster_id  == self.children[1].cluster_id : return self.children[0]
         else:
-            return self.parent.search_up(self)
+            return self.parent.search_up(self,steps - 1)
         
     def search_down(self,words,rng=np.random.default_rng()):
+        '''
+        Traverse a path down to a leaf
+        
+        Parameters:
+            words
+            rng
+        '''
         for word in self.words:
             words.append(word)
             
@@ -816,14 +831,24 @@ class DrawDendrogram(Command):
         cluster_distances = [distance for _,_,distance in self.report_distances(
                                                                 model,distance_matrix,
                                                                 vocabulary = vocabulary
-                            )]
+                                                            )
+                             ]
     
             
         self._plot(model,distance_matrix,cluster_distances,args)
      
 
     
-    def _plot(self,model,distance_matrix,cluster_distances,args):    
+    def _plot(self,model,distance_matrix,cluster_distances,args): 
+        '''
+        Plot dendrogram and histogtam of distances
+        
+        Parameters:
+            model
+            distance_matrix
+            cluster_distances
+            args
+        '''
         fig = figure(figsize=(18,18))
         ax1 = fig.add_subplot(2,2,1)
         ax2 = fig.add_subplot(2,2,2)
@@ -868,6 +893,8 @@ class DrawDendrogram(Command):
         return counts
 
     def report_distances(self,model,distance_matrix,vocabulary):
+        '''
+        '''
         n,_ = model.children_.shape
         count = len([i for i in range(n) if max(model.children_[i,0],model.children_[i,1]) < len(vocabulary)])
         pairs = np.zeros((count,2),dtype=int)
