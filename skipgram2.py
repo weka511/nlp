@@ -654,66 +654,6 @@ class BuildDistances(Command):
                       description='word vectors and distances')
 
 
-class Explore1(Command):
-    '''
-    Select entries from table of scalar products
-    '''
-
-    def __init__(self):
-        super().__init__('explore1')
-
-    def _execute(self, args, rng=np.random.default_rng()):
-        '''
-        Select entries from table of scalar products
-        
-        Parameters:
-            args       Command line parameters as parsed by parse_args()
-            rng        Random number generator
-        '''
-        skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
-                                   report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
-        P = skipgram.P
-        vocabulary = skipgram.examples.vocabulary
-
-        if args.word == None:
-            for token in rng.integers((len(vocabulary)), size=args.nwords):
-                word = vocabulary.get_word(token)
-                indices = np.argsort(P[token, :])[::-1]
-                for i in range(args.nclosest):
-                    Logger.get_instance().log(f'{__file__} {Logger.get_line()}{token} {word}: {indices[i]} {vocabulary.get_word(indices[i])} {P[token, indices[i]]}')
-        else:
-            token = vocabulary.token[args.word]
-            indices = np.argsort(P[token, :])[::-1]
-            for i in range(args.nclosest):
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {token} {args.word}: {indices[i]} {vocabulary.get_word(indices[i])} {P[token, indices[i]]}')
-
-
-class Explore2(Command):
-    '''
-    Select entries from table of scalar products
-    '''
-
-    def __init__(self):
-        super().__init__('explore2')
-
-    def _execute(self, args, rng=np.random.default_rng()):
-        '''
-        Select entries from table of scalar products
-        
-        Parameters:
-            args       Command line parameters as parsed by parse_args()
-            rng        Random number generator
-        '''
-        skipgram = SkipGram.create((Path(args.data) / args.input[0]).with_suffix('.pkl'),
-                                   report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
-        P = skipgram.P
-        vocabulary = skipgram.examples.vocabulary
-        m, n = P.shape
-        for i in range(m):
-            for j in range(n):
-                if i != j and P[i, j] > args.min:
-                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} {vocabulary.get_word(i)} {vocabulary.get_word(j)} {P[i, j]}')
-
 class WordCluster:
     next_cluster_id = 0
     @staticmethod
@@ -817,7 +757,7 @@ class DrawDendrogram(Command):
         clusters,indices = WordCluster.build(model)
         vocabulary = skipgram.examples.vocabulary
         n_samples, = model.labels_.shape
-        for index in rng.choice(n_samples//2,args.Niter,replace=False):    # FIXME
+        for index in rng.choice(n_samples//2,args.Niter,replace=False):
             ingroup = clusters[index]
             branch = ingroup.search_up()   
             outgroup = branch.search_down([],rng=rng)
@@ -828,14 +768,8 @@ class DrawDendrogram(Command):
                                       f'({vocabulary[outgroup[0]]},'
                                       f'{vocabulary[outgroup[1]]})'
                                       )
-        cluster_distances = [distance for _,_,distance in self.report_distances(
-                                                                model,distance_matrix,
-                                                                vocabulary = vocabulary
-                                                            )
-                             ]
-    
-            
-        self._plot(model,distance_matrix,cluster_distances,args)
+                       
+        self._plot(model,distance_matrix,[model.distances_[i] for i in range(n_samples//2)],args)
      
 
     
@@ -892,23 +826,7 @@ class DrawDendrogram(Command):
             
         return counts
 
-    def report_distances(self,model,distance_matrix,vocabulary):
-        '''
-        '''
-        n,_ = model.children_.shape
-        count = len([i for i in range(n) if max(model.children_[i,0],model.children_[i,1]) < len(vocabulary)])
-        pairs = np.zeros((count,2),dtype=int)
-        distances = np.zeros((count),dtype=float)
-        j = 0
-        for i in range(n):
-            if max(model.children_[i,0],model.children_[i,1]) < len(vocabulary):
-                pairs[j,0] = model.children_[i,0]
-                pairs[j,1] = model.children_[i,1]
-                distances[j] = distance_matrix[pairs[j,0],pairs[j,1]]
-                j += 1
-    
-        for i in np.argsort(distances):
-            yield vocabulary[pairs[i,0]],vocabulary[pairs[i,1]],distances[i]   
+  
                 
 class ClusterUsingCRP(Command):
     '''
@@ -996,16 +914,7 @@ def parse_args(choices):
     build_group.add_argument('--normalize', default=False, action='store_true',
                              help='Normalize vectors before calculating products')
 
-    explore_group = parser.add_argument_group(title='Explore1', description='Used for explore1')
-    explore_group.add_argument('--word', default=None, help='Used to explore a single word')
-    explore_group.add_argument('--nwords', type=int, default=nwords, help=f'Number of words to explore [{nwords}]')
-    explore_group.add_argument('--nclosest',
-                               type=int, default=nclosest, help=f'Number of closest words to explore [{nclosest}]')
-
-    explore_group2 = parser.add_argument_group(title='Explore2', description='Used for explore2')
-    explore_group2.add_argument('--min', type=float, default=threshold,
-                                help=f'Display pairs if product exceeds this value [{threshold}]')
-
+   
     cluster_group = parser.add_argument_group(title='Cluster', description='Used when we cluster word vectors')
     cluster_group.add_argument('--alpha', default=alpha, type=float, help=f'Scaling parameter [{alpha}]')
     
@@ -1025,8 +934,6 @@ def main():
         TrainSkipgrams(),
         RestartSkipgrams(),
         BuildDistances(),
-        Explore1(),
-        Explore2(),
         ClusterUsingCRP(),
         DrawDendrogram()
     ])
