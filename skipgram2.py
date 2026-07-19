@@ -16,7 +16,9 @@
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 '''
-    Skipgrams as described in Chapter 6 of Jurafsky & Martin.
+    Skipgrams as described in Chapter 6 of 	
+    Speech and Language Processing (3rd ed. draft)
+    Dan Jurafsky and James H. Martin .
     This program generates examples, trains skipgrams, and
     allows the user to explore word vectors.
 '''
@@ -210,7 +212,7 @@ class Examples:
 
 class SkipGram:
     '''
-    Skipgrams after Chaper 6
+    Skipgrams after Chaper 6 of	Jurafsky and Martin 
     
     Attributes:
         examples         Training examples
@@ -230,7 +232,9 @@ class SkipGram:
             rng     Random number generator
         '''
         Product = rng.uniform(size=(m, ndim))
-        return Product / np.linalg.norm(Product, axis=1, keepdims=True)
+        return Product / np.linalg.norm(Product, 
+                                        axis=1,
+                                        keepdims=True)
 
     @staticmethod
     def create(file_name,
@@ -268,7 +272,7 @@ class SkipGram:
         Section 6.8.2
         
         Parameters:
-            loss_calculator    Used to calculte loss
+            loss_calculator    Used to calculate loss
             eta                Training rate
         '''
         n, _ = self.examples.positives.shape
@@ -508,8 +512,57 @@ class CreateExamples(Command):
         examples.save((Path(args.data) / args.output).with_suffix('.pkl'),
                       report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
 
+        
+class SGD:
+    '''
+    Perform minimize losses of skipgrams by
+    performing Scalar Gradient Descent
+    '''
+    def __init__(self,loss_calculator, skipgram, args):
+        self.loss_calculator = loss_calculator
+        self.skipgram = skipgram
+        self.Niter = args.Niter
+        self.eta=args.eta
+        self.freq = args.freq
+        self.data = args.data
+        self.output = args.output
+    
+    def train(self):
+        '''
+        Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
+        
+        Parameters:
+            skipgram    The Skipgram to be trained
+            args        Command line parameters as parsed by parse_args()
+        '''
+        losses = []
 
-class AbstractTrainer(Command):
+        for i in range(self.Niter):
+            self.skipgram.step(self.loss_calculator, eta=self.get_eta())
+            losses.append(self.loss_calculator.get_loss())
+            self.loss_calculator.reset()
+            if i % self.freq == 1:
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Step {i}, loss={losses[-1]}')
+                self.save_progress()
+                if user_has_requested_stop():
+                    break
+
+        return losses 
+    
+    def get_eta(self):
+        '''
+        Establisg step size
+        '''
+        return self.eta
+    
+    def save_progress(self):
+        '''
+        Save current state of data
+        '''
+        self.skipgram.save((Path(self.data) / self.output).with_suffix('.pkl'),
+                      report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))        
+    
+class AbstractTrainSkipgrams(Command):
     '''
     Used by TrainSkipgrams and RestartSkipgrams to adjust 
     weights of  skipgrams after 6.8.2 of Jurafsky & Martin.
@@ -547,20 +600,13 @@ class AbstractTrainer(Command):
             skipgram    The Skipgram to be trained
             args        Command line parameters as parsed by parse_args()
         '''
-        losses = []
-        loss_calculator = LossCalculator(skipgram.examples, skipgram)
-        for i in range(args.Niter):
-            skipgram.step(loss_calculator, eta=args.eta)
-            losses.append(loss_calculator.get_loss())
-            loss_calculator.reset()
-            if i % args.freq == 1:
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Step {i}, loss={losses[-1]}')
-                skipgram.save((Path(args.data) / args.output).with_suffix('.pkl'),
-                              report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
-                if user_has_requested_stop():
-                    break
-
-        return losses
+        return SGD(
+            LossCalculator(skipgram.examples,
+                           skipgram), 
+            skipgram,
+            args
+            ).train()
+ 
 
     def _plot_losses(self, args, losses):
         '''
@@ -584,7 +630,7 @@ class AbstractTrainer(Command):
         fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))
 
 
-class TrainSkipgrams(AbstractTrainer):
+class TrainSkipgrams(AbstractTrainSkipgrams):
     '''
     Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
     '''
@@ -606,7 +652,7 @@ class TrainSkipgrams(AbstractTrainer):
                         batch=args.batch)
 
 
-class RestartSkipgrams(AbstractTrainer):
+class RestartSkipgrams(AbstractTrainSkipgrams):
     '''
     Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
     '''
