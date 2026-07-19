@@ -526,6 +526,7 @@ class SGD:
         self.freq = args.freq
         self.data = args.data
         self.output = args.output
+        self.tau = args.tau
     
     def train(self):
         '''
@@ -537,23 +538,27 @@ class SGD:
         '''
         losses = []
 
-        for i in range(self.Niter):
-            self.skipgram.step(self.loss_calculator, eta=self.get_eta())
+        for k in range(self.Niter):
+            self.skipgram.step(self.loss_calculator, eta=self.get_eta(k))
             losses.append(self.loss_calculator.get_loss())
             self.loss_calculator.reset()
-            if i % self.freq == 1:
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Step {i}, loss={losses[-1]}')
+            if k % self.freq == 1:
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Step {k}, loss={losses[-1]}')
                 self.save_progress()
                 if user_has_requested_stop():
                     break
 
         return losses 
     
-    def get_eta(self):
+    def get_eta(self,k):
         '''
-        Establisg step size
+        Establish step size
         '''
-        return self.eta
+        if k < self.tau:
+            alpha = k / self.tau
+            return (1 - alpha)*self.eta[0] + alpha*self.eta[1]
+        else:
+            return self.eta[1]
     
     def save_progress(self):
         '''
@@ -924,6 +929,7 @@ def parse_args(choices):
     alpha = 2.0
     ndim = 128
     eta = 0.01
+    tau = 1
     batch = 2**12
     Niter = 10000
     freq = 50
@@ -952,7 +958,8 @@ def parse_args(choices):
 
     training_group = parser.add_argument_group('Training', description='Used for train')
     training_group.add_argument('-d', '--ndim', type=int, default=ndim, help=f'Length of word vectors [{ndim}]')
-    training_group.add_argument('--eta', default=eta, type=float, help=f'Training speed [{eta}]')
+    training_group.add_argument('--eta', default=eta, type=float, nargs='+', help=f'Training speed [{eta}]')
+    training_group.add_argument('--tau', default=tau, type=int, help=f'Stop reducing eta after this many steps [{tau}]')
     training_group.add_argument('-m', '--batch', type=int, default=batch, help=f'Number of samples in a batch [{batch}]')
     training_group.add_argument('--freq', type=int, default=freq, help=f'Interval between printing training steps [{freq}]')
 
@@ -966,7 +973,18 @@ def parse_args(choices):
     
     dendrogram_group = parser.add_argument_group(title='Draw Dendrogram', description='Used when we create dendogram')
     dendrogram_group.add_argument('--levels', type=int, default=3,help='Number of levels')
-    return parser.parse_args()
+    args = parser.parse_args()
+    match len(args.eta):
+        case 1:
+            if args.tau != 1:
+                raise ValueError(f'tau must be 1')
+        case 2:
+            if args.tau == 1:
+                raise ValueError(f'tau must not be 1')            
+        case _:
+            raise ValueError(f'Too many values: {args.eta}')
+ 
+    return args
 
 
 def main():
