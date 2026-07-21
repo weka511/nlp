@@ -528,22 +528,23 @@ class Stepsize(ABC):
         
 class AdaptiveStepsize(Stepsize):
     '''
-    This class reduces the step size if the error increases
+    This class reduces the step size if the loss increases.
     '''
-    def __init__(self,args,losses,ratio=0.5):
+    def __init__(self,args,losses,ratio=0.9,eta_min=0.001):
         self.eta = args.eta[0]
         self.losses = losses
         self.ratio = ratio
+        self.eta_min = eta_min
         
     def get_eta(self,k):
         '''
-        Assign step size
+        Assign step size. If error is incrasingm reduce stepsize, as long as it exceeds the minimum allowed.
         
         Parameters:
              k        Iteration number
         '''        
-        if len(self.losses) > 2 and self.losses[-1] > self.losses[-2]:
-            self.eta *= ratio
+        if len(self.losses) > 2 and self.losses[-1] > self.losses[-2] and self.eta > self.eta_min:
+            self.eta *= self.ratio
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} Step {k}, eta={self.eta}')
 
         return self.eta
@@ -551,7 +552,8 @@ class AdaptiveStepsize(Stepsize):
 
 class ReducingStepsize(Stepsize):
     '''
-    This class Reduces the spetize steadily
+    This class Reduces the step size steadily from maximum to minimum, 
+    regardless of loss
     '''
     def __init__(self,args):
         self.eta = args.eta
@@ -606,12 +608,13 @@ class SGD:
         self.loss_calculator = loss_calculator
         self.skipgram = skipgram
         self.Niter = args.Niter
-        self.eta=args.eta
+        self.eta = args.eta
         self.freq = args.freq
         self.data = args.data
         self.output = args.output
         self.tau = args.tau
         self.losses = []
+        self.etas = []
         #self.stepsize = ReducingStepsize(args)
         self.stepsize = AdaptiveStepsize(args,self.losses)
  
@@ -621,16 +624,17 @@ class SGD:
         Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
         '''
         for k in range(self.Niter):
-            self.skipgram.step(self.loss_calculator, eta=self.stepsize.get_eta(k))
+            self.etas.append(self.stepsize.get_eta(k)) 
+            self.skipgram.step(self.loss_calculator, eta=self.etas[-1])
             self.losses.append(self.loss_calculator.get_loss())
             self.loss_calculator.reset()
             if k % self.freq == 1:
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Step {k}, loss={self.losses[-1]}')
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Step {k}, eta={self.etas[-1]}, loss={self.losses[-1]}')
                 self.save_progress()
                 if user_has_requested_stop():
                     break
 
-        return self.losses 
+        return self.losses,self.etas 
     
      
     def save_progress(self):
@@ -657,7 +661,8 @@ class AbstractTrainSkipgrams(Command):
             args       Command line parameters as parsed by parse_args()
             rng        Random number generator
         '''
-        self._plot_losses(args, self._train(self._create(args, rng), args))
+        losses,etas = self._train(self._create(args, rng),args)
+        self._plot_losses(args, losses,etas)
 
     @abstractmethod
     def _create(self, args, rng=np.random.default_rng()):
@@ -686,7 +691,7 @@ class AbstractTrainSkipgrams(Command):
             ).train()
  
 
-    def _plot_losses(self, args, losses):
+    def _plot_losses(self, args, losses, etas):
         '''
         Display evolution of loss
         
@@ -696,7 +701,7 @@ class AbstractTrainSkipgrams(Command):
         '''
         fig = figure(figsize=(12,12))
         ax = fig.add_subplot(1,1,1)
-        ax.plot(losses)
+        plot1 = ax.plot(losses,c='xkcd:blue',label='Loss')
         ax.set_title(f'Training: ndim={args.ndim}, batch = {args.batch}, '
                      r'$\eta=$'
                      f'{args.eta}')
@@ -704,7 +709,13 @@ class AbstractTrainSkipgrams(Command):
         ax.set_ylim(0, y1)
         ax.set_xlabel('Step')
         ax.set_ylabel('Loss')
+        ax2 = ax.twinx()
+        plot2 = ax2.plot(etas,c='xkcd:red',label=r'$\eta$')
+        ax2.set_ylabel(r'$\eta$')
 
+        plots = plot1 + plot2
+        ax.legend(plots, [l.get_label() for l in plots])
+        
         fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))
 
 
