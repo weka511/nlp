@@ -515,10 +515,35 @@ class CreateExamples(Command):
         
 class SGD:
     '''
-    Perform minimize losses of skipgrams by
+    Minimize losses of skipgrams by
     performing Scalar Gradient Descent
     '''
+    
+    @staticmethod
+    def adjust_args(args):
+        '''
+        Used to verify arguments that establish step size;
+        this is beyond what ArgumentParser can do.
+        '''
+        match len(args.eta):
+            case 1:
+                args.tau = 1
+            case 2:
+                if args.tau == None:
+                    args.tau = args.Niter           
+            case _:
+                raise ValueError(f'Too many values: {args.eta}')
+        return args
+    
     def __init__(self,loss_calculator, skipgram, args):
+        '''
+        Initialize Stochastic Gradinet Descent
+        
+        Paramaters
+            loss_calculator
+            skipgram
+            args
+        '''
         self.loss_calculator = loss_calculator
         self.skipgram = skipgram
         self.Niter = args.Niter
@@ -531,10 +556,6 @@ class SGD:
     def train(self):
         '''
         Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
-        
-        Parameters:
-            skipgram    The Skipgram to be trained
-            args        Command line parameters as parsed by parse_args()
         '''
         losses = []
 
@@ -553,8 +574,13 @@ class SGD:
     def get_eta(self,k):
         '''
         Establish step size
+        
+        Parameters:
+            k       Iteration number
         '''
-        if k < self.tau:
+        if len(self.eta) == 1:
+            return self.eta[0]
+        elif k < self.tau:
             alpha = k / self.tau
             return (1 - alpha)*self.eta[0] + alpha*self.eta[1]
         else:
@@ -929,7 +955,7 @@ def parse_args(choices):
     alpha = 2.0
     ndim = 128
     eta = 0.01
-    tau = 1
+ 
     batch = 2**12
     Niter = 10000
     freq = 50
@@ -959,7 +985,7 @@ def parse_args(choices):
     training_group = parser.add_argument_group('Training', description='Used for train')
     training_group.add_argument('-d', '--ndim', type=int, default=ndim, help=f'Length of word vectors [{ndim}]')
     training_group.add_argument('--eta', default=eta, type=float, nargs='+', help=f'Training speed [{eta}]')
-    training_group.add_argument('--tau', default=tau, type=int, help=f'Stop reducing eta after this many steps [{tau}]')
+    training_group.add_argument('--tau', default=None, type=int, help=f'Stop reducing eta after this many steps')
     training_group.add_argument('-m', '--batch', type=int, default=batch, help=f'Number of samples in a batch [{batch}]')
     training_group.add_argument('--freq', type=int, default=freq, help=f'Interval between printing training steps [{freq}]')
 
@@ -973,19 +999,8 @@ def parse_args(choices):
     
     dendrogram_group = parser.add_argument_group(title='Draw Dendrogram', description='Used when we create dendogram')
     dendrogram_group.add_argument('--levels', type=int, default=3,help='Number of levels')
-    args = parser.parse_args()
-    match len(args.eta):
-        case 1:
-            if args.tau != 1:
-                raise ValueError(f'tau must be 1')
-        case 2:
-            if args.tau == 1:
-                raise ValueError(f'tau must not be 1')            
-        case _:
-            raise ValueError(f'Too many values: {args.eta}')
  
-    return args
-
+    return SGD.adjust_args(parser.parse_args())
 
 def main():
     rc('font', **{'family': 'serif',
