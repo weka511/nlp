@@ -512,6 +512,65 @@ class CreateExamples(Command):
         examples.save((Path(args.data) / args.output).with_suffix('.pkl'),
                       report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
 
+class Stepsize(ABC):
+    '''
+    This class is responsible for setting the step size, eta
+    '''
+    @abstractmethod
+    def get_eta(k):
+        '''
+        Assign step size
+        
+        Parameters:
+             k        Iteration number
+        '''
+        ...
+        
+class AdaptiveStepsize(Stepsize):
+    '''
+    This class reduces the step size if the error increases
+    '''
+    def __init__(self,args,losses,ratio=0.5):
+        self.eta = args.eta[0]
+        self.losses = losses
+        self.ratio = ratio
+        
+    def get_eta(self,k):
+        '''
+        Assign step size
+        
+        Parameters:
+             k        Iteration number
+        '''        
+        if len(self.losses) > 2 and self.losses[-1] > self.losses[-2]:
+            self.eta *= ratio
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} Step {k}, eta={self.eta}')
+
+        return self.eta
+  
+
+class ReducingStepsize(Stepsize):
+    '''
+    This class Reduces the spetize steadily
+    '''
+    def __init__(self,args):
+        self.eta = args.eta
+        self.tau = args.tau
+        
+    def get_eta(self,k):
+        '''
+        Establish step size
+        
+        Parameters:
+            k       Iteration number
+        '''
+        if len(self.eta) == 1:
+            return self.eta[0]
+        elif k < self.tau:
+            alpha = k / self.tau
+            return (1 - alpha)*self.eta[0] + alpha*self.eta[1]
+        else:
+            return self.eta[1]
         
 class SGD:
     '''
@@ -552,40 +611,28 @@ class SGD:
         self.data = args.data
         self.output = args.output
         self.tau = args.tau
+        self.losses = []
+        #self.stepsize = ReducingStepsize(args)
+        self.stepsize = AdaptiveStepsize(args,self.losses)
+ 
     
     def train(self):
         '''
         Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
         '''
-        losses = []
-
         for k in range(self.Niter):
-            self.skipgram.step(self.loss_calculator, eta=self.get_eta(k))
-            losses.append(self.loss_calculator.get_loss())
+            self.skipgram.step(self.loss_calculator, eta=self.stepsize.get_eta(k))
+            self.losses.append(self.loss_calculator.get_loss())
             self.loss_calculator.reset()
             if k % self.freq == 1:
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Step {k}, loss={losses[-1]}')
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Step {k}, loss={self.losses[-1]}')
                 self.save_progress()
                 if user_has_requested_stop():
                     break
 
-        return losses 
+        return self.losses 
     
-    def get_eta(self,k):
-        '''
-        Establish step size
-        
-        Parameters:
-            k       Iteration number
-        '''
-        if len(self.eta) == 1:
-            return self.eta[0]
-        elif k < self.tau:
-            alpha = k / self.tau
-            return (1 - alpha)*self.eta[0] + alpha*self.eta[1]
-        else:
-            return self.eta[1]
-    
+     
     def save_progress(self):
         '''
         Save current state of data
