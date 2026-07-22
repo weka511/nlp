@@ -1066,7 +1066,7 @@ def parse_args(choices):
     weight = 0.75
     alpha = 2.0
     ndim = 128
-    eta = 0.01
+    eta = [0.1, 0.01]
  
     batch = 2**12
     Niter = 10000
