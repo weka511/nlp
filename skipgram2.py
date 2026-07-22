@@ -131,11 +131,11 @@ class Examples:
 
     def _add_sentence(self, sentence, positives):
         '''
-        Add one sentance to positives
+        Add pairs of tokens, (word,context), generated from sentance to positives
         
         Parameters:
-            sentence
-            positives
+            sentence    A sentence in text form (not tokenized)
+            positives   A list of positive examples, i.e. Pairs of tokens, (word,context)
         '''
         tokens = [self.vocabulary.tokenize(word) for word in sentence if self._is_word(word)]
 
@@ -143,8 +143,9 @@ class Examples:
             positives.append([w, c])
 
     '''
-    Create positive examples. Each token gines rise to a set of pairs: the second
-    token of each pair is close to the first, within a distance controlled by self.window.
+    Create positive examples. Each token gives rise to a set of pairs: the second
+    token of each pair is from a position in the sentence close to the first,
+    within a distance controlled by self.window.
     
     Parameters:
         tokens    List of tokens for positive examples
@@ -362,7 +363,7 @@ class LossCalculator:
     def __init__(self, examples, skipgram):
         '''
         Parameters:
-            examples     Tarining examples
+            examples     Training examples
             skipgram     Skipgram object
         '''
         self.positives = examples.positives
@@ -524,17 +525,19 @@ class Stepsize(ABC):
         Parameters:
              k        Iteration number
         '''
-        ...
         
 class AdaptiveStepsize(Stepsize):
     '''
     This class reduces the step size if the loss increases.
     '''
-    def __init__(self,args,losses,ratio=0.9,eta_min=0.001):
+    def __init__(self,args,losses):
         self.eta = args.eta[0]
         self.losses = losses
-        self.ratio = ratio
-        self.eta_min = eta_min
+        self.ratio = args.ratio
+        self.eta_min = args.eta[1]
+        
+    def __str__(self):
+        return f'Adaptive Stepsize eta={self.eta}, eta_min={self.eta_min}, ratio={self.ratio}'
         
     def get_eta(self,k):
         '''
@@ -559,6 +562,9 @@ class ReducingStepsize(Stepsize):
         self.eta = args.eta
         self.tau = args.tau
         
+    def __str__(self):
+        return f'Reducing Stepsize eta={self.eta}, tau={self.tau}'    
+        
     def get_eta(self,k):
         '''
         Establish step size
@@ -578,6 +584,16 @@ class SGD:
     '''
     Minimize losses of skipgrams by
     performing Scalar Gradient Descent
+    
+    Parameters:
+        loss_calculator   Used to calculate loss at each step
+        skipgram          Skipgram weights
+        Niter             Number of iterations
+        freq              Determine jhow often we report progress
+        data              Path to data files
+        output            Used to construct file name for saibg data
+        losses            Used to hold history of losses
+        etas              Used to heold history of step sizes
     '''
     
     @staticmethod
@@ -598,30 +614,36 @@ class SGD:
     
     def __init__(self,loss_calculator, skipgram, args):
         '''
-        Initialize Stochastic Gradinet Descent
+        Initialize Stochastic Gradient Descent
         
         Paramaters
-            loss_calculator
-            skipgram
-            args
+            loss_calculator     Used to calculate loss at each step
+            skipgram            Skipgram weights
+            args                Command line arguments
         '''
         self.loss_calculator = loss_calculator
         self.skipgram = skipgram
         self.Niter = args.Niter
-        self.eta = args.eta
         self.freq = args.freq
         self.data = args.data
         self.output = args.output
-        self.tau = args.tau
         self.losses = []
         self.etas = []
-        #self.stepsize = ReducingStepsize(args)
-        self.stepsize = AdaptiveStepsize(args,self.losses)
- 
-    
+        match args.stepsize:
+            case 'Adaptive':
+                self.stepsize = AdaptiveStepsize(args,self.losses)
+            case 'Reducing':
+                self.stepsize = ReducingStepsize(args)   
+                
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Step strategy {self.stepsize}')
+        
     def train(self):
         '''
         Adjust weights of  skipgrams after 6.8.2 of Jurafsky & Martin
+        
+        Returns:
+            History of losses
+            History of step sizes
         '''
         for k in range(self.Niter):
             self.etas.append(self.stepsize.get_eta(k)) 
@@ -683,6 +705,7 @@ class AbstractTrainSkipgrams(Command):
             skipgram    The Skipgram to be trained
             args        Command line parameters as parsed by parse_args()
         '''
+  
         return SGD(
             LossCalculator(skipgram.examples,
                            skipgram), 
@@ -698,23 +721,27 @@ class AbstractTrainSkipgrams(Command):
         Parameters:
             args       Command line arguments
             losses     A list of training losses
+            etas       Step sizes
         '''
         fig = figure(figsize=(12,12))
-        ax = fig.add_subplot(1,1,1)
-        plot1 = ax.plot(losses,c='xkcd:blue',label='Loss')
-        ax.set_title(f'Training: ndim={args.ndim}, batch = {args.batch}, '
+        ax1 = fig.add_subplot(1,1,1)
+        plot1 = ax1.plot(losses,c='xkcd:blue',label='Loss')
+        ax1.set_title(f'Training: ndim={args.ndim}, batch = {args.batch}, '
                      r'$\eta=$'
                      f'{args.eta}')
-        y0, y1 = ax.get_ylim()
-        ax.set_ylim(0, y1)
-        ax.set_xlabel('Step')
-        ax.set_ylabel('Loss')
-        ax2 = ax.twinx()
-        plot2 = ax2.plot(etas,c='xkcd:red',label=r'$\eta$')
+        y0, y1 = ax1.get_ylim()
+        ax1.set_ylim(0, y1)
+        ax1.set_xlabel('Step')
+        ax1.set_ylabel('Loss')
+        
+        ax2 = ax1.twinx()
+        plot2 = ax2.plot(etas,c='xkcd:red',linestyle='dashed',label=r'$\eta$')
+        eta0, eta1 = ax2.get_ylim()
+        ax2.set_ylim(0, eta1)        
         ax2.set_ylabel(r'$\eta$')
 
         plots = plot1 + plot2
-        ax.legend(plots, [l.get_label() for l in plots])
+        ax1.legend(plots, [l.get_label() for l in plots])
         
         fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))
 
@@ -790,15 +817,37 @@ class BuildDistances(Command):
 
 
 class WordCluster:
+    '''
+    This class represents a cluster generated by AgglomerativeClustering. 
+    Each cluster has two immediate descendents, either words or other cluysters
+    
+    Attributes:
+        cluster_id      Identifies 
+        children        Immediate descendents that are other clusters
+        distance        Distance from parent, as calculated by AgglomerativeClustering    
+        words           Immediate descendents that are
+        parent          Allows traversal up the tree
+    '''
     next_cluster_id = 0
+    
     @staticmethod
     def build(model):
+        '''
+        Construct a tree of word clusters from the results of AgglomerativeClustering
+        
+        Parameters:
+            model      Results of AgglomerativeClustering
+            
+        Returns:
+           A list containing the clusters, also linked to form a tree
+           Indices to sort the list by ascending distances
+           
+        '''
         n_samples, = model.labels_.shape
         n_clusters,_ = model.children_.shape
         clusters = np.empty((n_clusters),dtype=WordCluster)
         for i in range(n_clusters):
             clusters[i] = WordCluster()
-        #for i in range(n_samples - 1): 
             clusters[i].add_child(model.children_[i,0],clusters,n_samples)
             clusters[i].add_child(model.children_[i,1],clusters,n_samples)
             clusters[i].set_distance(model.distances_[i])
@@ -813,15 +862,22 @@ class WordCluster:
         self.distance = 0.0
         self.words = []
         self.parent = None
-        
-    #def __eq__(self,other):
-        #if other == None: return False
-        #return self.cluster_id == other.cluster_id
-        
+              
     def set_distance(self,distance):
+        '''
+        Store distance in a cluster
+        '''
         self.distance = distance
         
     def add_child(self,child_index,clusters,n_samples):
+        '''
+        Add an immediate descendnt to c word cluster, either a word or another cluster
+        
+        Parameters:
+            child_index
+            clusters
+            n_samples
+        '''
         if child_index < n_samples:
             self.words.append(child_index)
         else:
@@ -831,7 +887,7 @@ class WordCluster:
             
     def search_up(self,child=None,steps=-1):
         '''
-        Traverse path to root or for a specified number of steps
+        Traverse path upwards to root or for a specified number of steps
         
         Parameters:
             child    Used only for recursion: default to None
@@ -906,8 +962,6 @@ class DrawDendrogram(Command):
                        
         self._plot(model,distance_matrix,[model.distances_[i] for i in range(n_samples//2)],args)
      
-
-    
     def _plot(self,model,distance_matrix,cluster_distances,args): 
         '''
         Plot dendrogram and histogtam of distances
@@ -1044,9 +1098,11 @@ def parse_args(choices):
     training_group.add_argument('-d', '--ndim', type=int, default=ndim, help=f'Length of word vectors [{ndim}]')
     training_group.add_argument('--eta', default=eta, type=float, nargs='+', help=f'Training speed [{eta}]')
     training_group.add_argument('--tau', default=None, type=int, help=f'Stop reducing eta after this many steps')
+    training_group.add_argument('--ratio', default=0.9, type=float, help=f'Used to reduce eta')
     training_group.add_argument('-m', '--batch', type=int, default=batch, help=f'Number of samples in a batch [{batch}]')
     training_group.add_argument('--freq', type=int, default=freq, help=f'Interval between printing training steps [{freq}]')
-
+    training_group.add_argument('--stepsize',choices=['Adaptive','Reducing'],default='Adaptive',help='Strategy for establishing stepsize')
+    
     build_group = parser.add_argument_group(title='Build', description='Used for building distances')
     build_group.add_argument('--normalize', default=False, action='store_true',
                              help='Normalize vectors before calculating products')
