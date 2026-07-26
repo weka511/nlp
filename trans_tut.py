@@ -225,6 +225,17 @@ class Transformer(nn.Module):
 def parse_args():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--N','-N',type=int,default=100,help='Number of epochs for training')
+    parser.add_argument('--src_vocab_size',type=int,default=5000,help='Number of epochs for training')
+    parser.add_argument('--tgt_vocab_size',type=int,default=5000,help='Number of epochs for training')
+    parser.add_argument('--d_model',type=int,default=512,help='Number of epochs for training')
+    parser.add_argument('--num_heads',type=int,default=8,help='Number of epochs for training')
+    parser.add_argument('--num_layers',type=int,default=6,help='Number of epochs for training')
+    parser.add_argument('--max_seq_length',type=int,default=100,help='Number of epochs for training')
+    parser.add_argument('--d_ff',type=int,default=2048,help='Number of epochs for training')
+    parser.add_argument('--dropout',type=float,default=0.1,help='Number of epochs for training')
+    parser.add_argument('--lr',type=float,default=0.0001,help='Number of epochs for training')
+    parser.add_argument('--betas',type=float,default=(0.9, 0.98),nargs=2,help='Number of epochs for training')
+    parser.add_argument('--eps',type=float,default=1e-9,help='Number of epochs for training')
     return parser.parse_args()
 
 def train(transformer,N,optimizer,src_data, tgt_data,criterion,tgt_vocab_size):
@@ -260,29 +271,20 @@ def validate(transformer,src_vocab_size,tgt_vocab_size,max_seq_length,criterion)
 def main():
     start  = time()
     args = parse_args()
-    
-    src_vocab_size = 5000
-    tgt_vocab_size = 5000
-    d_model = 512
-    num_heads = 8
-    num_layers = 6
-    d_ff = 2048
-    max_seq_length = 100
-    dropout = 0.1
-    
-    transformer = Transformer(src_vocab_size, tgt_vocab_size, d_model, num_heads, num_layers, 
-                              d_ff, max_seq_length, dropout)
+       
+    transformer = Transformer(args.src_vocab_size, args.tgt_vocab_size, args.d_model, args.num_heads, args.num_layers, 
+                              args.d_ff, args.max_seq_length, args.dropout)
     
     # Generate random sample data
-    src_data = torch.randint(1, src_vocab_size, (64, max_seq_length))  # (batch_size, seq_length)
-    tgt_data = torch.randint(1, tgt_vocab_size, (64, max_seq_length))  # (batch_size, seq_length)
+    src_data = torch.randint(1, args.src_vocab_size, (64, args.max_seq_length))  # (batch_size, seq_length)
+    tgt_data = torch.randint(1, args.tgt_vocab_size, (64, args.max_seq_length))  # (batch_size, seq_length)
     
     criterion = nn.CrossEntropyLoss(ignore_index=0)
-    optimizer = optim.Adam(transformer.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
+    optimizer = optim.Adam(transformer.parameters(), lr=args.lr, betas=args.betas, eps=args.eps)
     
-    train(transformer,args.N,optimizer,src_data, tgt_data,criterion,tgt_vocab_size)
+    train(transformer,args.N,optimizer,src_data, tgt_data,criterion,args.tgt_vocab_size)
        
-    validate(transformer,src_vocab_size,tgt_vocab_size,max_seq_length,criterion)
+    validate(transformer,args.src_vocab_size,args.tgt_vocab_size,args.max_seq_length,criterion)
 
     elapsed = time() - start
     minutes = int(elapsed/60)
