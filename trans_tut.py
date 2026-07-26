@@ -1,0 +1,279 @@
+#!/usr/bin/env python
+
+#   Copyright (C) 2026 Simon Crase
+
+#   This program is free software: you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation, either version 3 of the License, or
+#   (at your option) any later version.
+
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+'''
+    Code snarfed from 
+    Transformer Model Tutorial in PyTorch: From Theory to Code, by Arjun Aarkar
+    https://www.datacamp.com/tutorial/building-a-transformer-with-py-torch
+'''
+
+from argparse import ArgumentParser
+from time import time
+import numpy as np
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.utils.data as data
+
+class MultiHeadAttention(nn.Module):
+    '''
+    The multi-head attention mechanism computes the attention between each pair of positions in 
+    a sequence. It consists of multiple attention heads that capture different 
+    aspects of the input sequence.
+    
+    Attributes:
+        d_model    Model's dimension
+        num_heads  Number of attention heads
+        d_k        Dimension of each head's key, query, and value
+        W_q        Query transformation
+        W_k        Key transformation
+        W_v        Value transformation
+        W_o        Output transformation
+    '''
+    def __init__(self, d_model, num_heads):
+        '''
+        Attributes:
+            d_model    Model's dimension
+            num_heads  Number of attention heads
+        '''
+        super().__init__()
+        assert d_model % num_heads == 0, f'd_model [{d_model}] must be divisible by num_heads [{num_heads}]'
+        
+        self.d_model = d_model 
+        self.num_heads = num_heads 
+        self.d_k = d_model // num_heads 
+        
+        # Linear layers for transforming inputs
+        self.W_q = nn.Linear(d_model, d_model) 
+        self.W_k = nn.Linear(d_model, d_model) 
+        self.W_v = nn.Linear(d_model, d_model) 
+        self.W_o = nn.Linear(d_model, d_model)
+        
+    def scaled_dot_product_attention(self, Q, K, V, mask=None):
+        '''
+        Calculate scaled dot product attention
+        
+        Parameters:
+            Q
+            K
+            V
+            mask    Used to for prevent attention to certain parts like padding)
+        '''
+        # Calculate attention scores
+        attn_scores = torch.matmul(Q, K.transpose(-2, -1)) / np.sqrt(self.d_k)
+        
+        if mask is not None:
+            attn_scores = attn_scores.masked_fill(mask == 0, -1e9)
+        
+        attn_probs = torch.softmax(attn_scores, dim=-1)     # Obtain attention probabilities
+        
+        # Multiply by values to obtain the final output
+        return torch.matmul(attn_probs, V)
+
+        
+    def split_heads(self, x):
+        '''
+        Reshape the input to have num_heads for multi-head attention
+        '''
+        batch_size, seq_length, d_model = x.size()
+        return x.view(batch_size, seq_length, self.num_heads, self.d_k).transpose(1, 2)
+        
+    def combine_heads(self, x):
+        '''
+        Combine the multiple heads back to original shape
+        '''
+        batch_size, _, seq_length, d_k = x.size()
+        return x.transpose(1, 2).contiguous().view(batch_size, seq_length, self.d_model)
+        
+    def forward(self, Q, K, V, mask=None):
+        '''
+        The forward method is where the actual computation happens:
+        '''
+        # Apply linear transformations and split heads
+        Q = self.split_heads(self.W_q(Q))
+        K = self.split_heads(self.W_k(K))
+        V = self.split_heads(self.W_v(V))
+        
+        # Perform scaled dot-product attention
+        attn_output = self.scaled_dot_product_attention(Q, K, V, mask)
+        
+        # Combine heads and apply output transformation
+        return self.W_o(self.combine_heads(attn_output))
+    
+class PositionWiseFeedForward(nn.Module):
+    def __init__(self, d_model, d_ff):
+        super(PositionWiseFeedForward, self).__init__()
+        self.fc1 = nn.Linear(d_model, d_ff)
+        self.fc2 = nn.Linear(d_ff, d_model)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        return self.fc2(self.relu(self.fc1(x)))
+
+class PositionalEncoding(nn.Module):
+    '''
+    The PositionalEncoding class adds information about the position of tokens within the sequence. 
+    Since the transformer model lacks inherent knowledge of the order of tokens
+    (due to its self-attention mechanism), this class helps the model to consider
+    the position of tokens in the sequence. The sinusoidal functions used are chosen to
+    allow the model to easily learn to attend to relative positions,
+    as they produce a unique and smooth encoding for each position in the sequence.
+    '''
+    def __init__(self, d_model, max_seq_length):
+        super(PositionalEncoding, self).__init__()
+        
+        pe = torch.zeros(max_seq_length, d_model)
+        position = torch.arange(0, max_seq_length, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(np.log(10000.0) / d_model))
+        
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        
+        self.register_buffer('pe', pe.unsqueeze(0))
+        
+    def forward(self, x):
+        return x + self.pe[:, :x.size(1)]
+    
+class EncoderLayer(nn.Module):
+    def __init__(self, d_model, num_heads, d_ff, dropout):
+        super(EncoderLayer, self).__init__()
+        self.self_attn = MultiHeadAttention(d_model, num_heads)
+        self.feed_forward = PositionWiseFeedForward(d_model, d_ff)
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.dropout = nn.Dropout(dropout)
+        
+    def forward(self, x, mask):
+        attn_output = self.self_attn(x, x, x, mask)
+        x = self.norm1(x + self.dropout(attn_output))
+        ff_output = self.feed_forward(x)
+        x = self.norm2(x + self.dropout(ff_output))
+        return x
+
+class DecoderLayer(nn.Module):
+    def __init__(self, d_model, num_heads, d_ff, dropout):
+        super(DecoderLayer, self).__init__()
+        self.self_attn = MultiHeadAttention(d_model, num_heads)
+        self.cross_attn = MultiHeadAttention(d_model, num_heads)
+        self.feed_forward = PositionWiseFeedForward(d_model, d_ff)
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.norm3 = nn.LayerNorm(d_model)
+        self.dropout = nn.Dropout(dropout)
+        
+    def forward(self, x, enc_output, src_mask, tgt_mask):
+        attn_output = self.self_attn(x, x, x, tgt_mask)
+        x = self.norm1(x + self.dropout(attn_output))
+        attn_output = self.cross_attn(x, enc_output, enc_output, src_mask)
+        x = self.norm2(x + self.dropout(attn_output))
+        ff_output = self.feed_forward(x)
+        x = self.norm3(x + self.dropout(ff_output))
+        return x
+    
+class Transformer(nn.Module):
+    def __init__(self, src_vocab_size, tgt_vocab_size, d_model, num_heads, num_layers, d_ff, max_seq_length, dropout):
+        super(Transformer, self).__init__()
+        self.encoder_embedding = nn.Embedding(src_vocab_size, d_model)
+        self.decoder_embedding = nn.Embedding(tgt_vocab_size, d_model)
+        self.positional_encoding = PositionalEncoding(d_model, max_seq_length)
+
+        self.encoder_layers = nn.ModuleList([EncoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
+        self.decoder_layers = nn.ModuleList([DecoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
+
+        self.fc = nn.Linear(d_model, tgt_vocab_size)
+        self.dropout = nn.Dropout(dropout)
+
+    def generate_mask(self, src, tgt):
+        src_mask = (src != 0).unsqueeze(1).unsqueeze(2)
+        tgt_mask = (tgt != 0).unsqueeze(1).unsqueeze(3)
+        seq_length = tgt.size(1)
+        nopeak_mask = (1 - torch.triu(torch.ones(1, seq_length, seq_length), diagonal=1)).bool()
+        tgt_mask = tgt_mask & nopeak_mask
+        return src_mask, tgt_mask
+
+    def forward(self, src, tgt):
+        src_mask, tgt_mask = self.generate_mask(src, tgt)
+        src_embedded = self.dropout(self.positional_encoding(self.encoder_embedding(src)))
+        tgt_embedded = self.dropout(self.positional_encoding(self.decoder_embedding(tgt)))
+
+        enc_output = src_embedded
+        for enc_layer in self.encoder_layers:
+            enc_output = enc_layer(enc_output, src_mask)
+
+        dec_output = tgt_embedded
+        for dec_layer in self.decoder_layers:
+            dec_output = dec_layer(dec_output, enc_output, src_mask, tgt_mask)
+
+        output = self.fc(dec_output)
+        return output
+    
+def parse_args():
+    parser = ArgumentParser(description=__doc__)
+    return parser.parse_args()
+    
+def main():
+    start  = time()
+    args = parse_args()
+    
+    src_vocab_size = 5000
+    tgt_vocab_size = 5000
+    d_model = 512
+    num_heads = 8
+    num_layers = 6
+    d_ff = 2048
+    max_seq_length = 100
+    dropout = 0.1
+    
+    transformer = Transformer(src_vocab_size, tgt_vocab_size, d_model, num_heads, num_layers, d_ff, max_seq_length, dropout)
+    
+    # Generate random sample data
+    src_data = torch.randint(1, src_vocab_size, (64, max_seq_length))  # (batch_size, seq_length)
+    tgt_data = torch.randint(1, tgt_vocab_size, (64, max_seq_length))  # (batch_size, seq_length)
+    
+    criterion = nn.CrossEntropyLoss(ignore_index=0)
+    optimizer = optim.Adam(transformer.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
+    
+    transformer.train()
+    
+    for epoch in range(100):
+        optimizer.zero_grad()
+        output = transformer(src_data, tgt_data[:, :-1])
+        loss = criterion(output.contiguous().view(-1, tgt_vocab_size), tgt_data[:, 1:].contiguous().view(-1))
+        loss.backward()
+        optimizer.step()
+        print(f'Epoch: {epoch+1}, Loss: {loss.item()}')
+        
+        transformer.eval()
+        
+        # Generate random sample validation data
+        val_src_data = torch.randint(1, src_vocab_size, (64, max_seq_length))  # (batch_size, seq_length)
+        val_tgt_data = torch.randint(1, tgt_vocab_size, (64, max_seq_length))  # (batch_size, seq_length)
+        
+        with torch.no_grad():
+        
+            val_output = transformer(val_src_data, val_tgt_data[:, :-1])
+            val_loss = criterion(val_output.contiguous().view(-1, tgt_vocab_size), val_tgt_data[:, 1:].contiguous().view(-1))
+            print(f'Validation Loss: {val_loss.item()}')    
+    
+    elapsed = time() - start
+    minutes = int(elapsed/60)
+    seconds = elapsed - 60*minutes
+    print (f'Elapsed Time {minutes} m {seconds:.2f} s')
+    
+if __name__=='__main__':
+    main()
