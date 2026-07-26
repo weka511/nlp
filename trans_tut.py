@@ -224,8 +224,39 @@ class Transformer(nn.Module):
     
 def parse_args():
     parser = ArgumentParser(description=__doc__)
+    parser.add_argument('--N','-N',type=int,default=100,help='Number of epochs for training')
     return parser.parse_args()
+
+def train(transformer,N,optimizer,src_data, tgt_data,criterion,tgt_vocab_size):
+
+    transformer.train()
     
+    for epoch in range(N):
+        optimizer.zero_grad()
+        output = transformer(src_data, tgt_data[:, :-1])
+        loss = criterion(
+                    output.contiguous().view(-1, tgt_vocab_size),
+                    tgt_data[:, 1:].contiguous().view(-1)
+        )
+        loss.backward()
+        optimizer.step()
+        print(f'Epoch: {epoch+1}, Loss: {loss.item()}')
+        
+def validate(transformer,src_vocab_size,tgt_vocab_size,max_seq_length,criterion):        
+    transformer.eval()
+    
+    # Generate random sample validation data
+    val_src_data = torch.randint(1, src_vocab_size, (64, max_seq_length))  # (batch_size, seq_length)
+    val_tgt_data = torch.randint(1, tgt_vocab_size, (64, max_seq_length))  # (batch_size, seq_length)
+    
+    with torch.no_grad():
+        val_output = transformer(val_src_data, val_tgt_data[:, :-1])
+        val_loss = criterion(
+                        val_output.contiguous().view(-1, tgt_vocab_size),
+                        val_tgt_data[:, 1:].contiguous().view(-1)
+        )
+        print(f'Validation Loss: {val_loss.item()}')  
+        
 def main():
     start  = time()
     args = parse_args()
@@ -239,7 +270,8 @@ def main():
     max_seq_length = 100
     dropout = 0.1
     
-    transformer = Transformer(src_vocab_size, tgt_vocab_size, d_model, num_heads, num_layers, d_ff, max_seq_length, dropout)
+    transformer = Transformer(src_vocab_size, tgt_vocab_size, d_model, num_heads, num_layers, 
+                              d_ff, max_seq_length, dropout)
     
     # Generate random sample data
     src_data = torch.randint(1, src_vocab_size, (64, max_seq_length))  # (batch_size, seq_length)
@@ -248,28 +280,10 @@ def main():
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     optimizer = optim.Adam(transformer.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
     
-    transformer.train()
-    
-    for epoch in range(100):
-        optimizer.zero_grad()
-        output = transformer(src_data, tgt_data[:, :-1])
-        loss = criterion(output.contiguous().view(-1, tgt_vocab_size), tgt_data[:, 1:].contiguous().view(-1))
-        loss.backward()
-        optimizer.step()
-        print(f'Epoch: {epoch+1}, Loss: {loss.item()}')
-        
-        transformer.eval()
-        
-        # Generate random sample validation data
-        val_src_data = torch.randint(1, src_vocab_size, (64, max_seq_length))  # (batch_size, seq_length)
-        val_tgt_data = torch.randint(1, tgt_vocab_size, (64, max_seq_length))  # (batch_size, seq_length)
-        
-        with torch.no_grad():
-        
-            val_output = transformer(val_src_data, val_tgt_data[:, :-1])
-            val_loss = criterion(val_output.contiguous().view(-1, tgt_vocab_size), val_tgt_data[:, 1:].contiguous().view(-1))
-            print(f'Validation Loss: {val_loss.item()}')    
-    
+    train(transformer,args.N,optimizer,src_data, tgt_data,criterion,tgt_vocab_size)
+       
+    validate(transformer,src_vocab_size,tgt_vocab_size,max_seq_length,criterion)
+
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
