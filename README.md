@@ -15,6 +15,7 @@ template.py|Template for new code with command line interface
 tfidf.py|Implementation of td-idf algorithm
 tfidf-harness.py|Test harness for td-idf algorithm
 tokenizer.py|Prepare text for processing
+trans_tut.py|[Transformer Model Tutorial in PyTorch: From Theory to Code](https://www.datacamp.com/tutorial/building-a-transformer-with-py-torch) Arjun Aarkar
 vocabulary.py|Establish mapping between words and tokens
 
 ## Data folder
