@@ -22,9 +22,11 @@
 '''
 
 from argparse import ArgumentParser
+from pathlib import Path
 from time import time
-import numpy as np
 
+import numpy as np
+from matplotlib.pyplot import figure,show
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -236,12 +238,16 @@ def parse_args():
     parser.add_argument('--lr',type=float,default=0.0001,help='Number of epochs for training')
     parser.add_argument('--betas',type=float,default=(0.9, 0.98),nargs=2,help='Number of epochs for training')
     parser.add_argument('--eps',type=float,default=1e-9,help='Number of epochs for training')
+    parser.add_argument('--show',default=False,action='store_true', help='Controls whether plots are shown')
+    parser.add_argument('--figs', default='./figs', help=f'Path used to store plots')
+    parser.add_argument('--output', default=Path(__file__).name, help=f'File name for output')
     return parser.parse_args()
 
 def train(transformer,N,optimizer,src_data, tgt_data,criterion,tgt_vocab_size):
 
     transformer.train()
     
+    Losses = []
     for epoch in range(N):
         optimizer.zero_grad()
         output = transformer(src_data, tgt_data[:, :-1])
@@ -252,6 +258,8 @@ def train(transformer,N,optimizer,src_data, tgt_data,criterion,tgt_vocab_size):
         loss.backward()
         optimizer.step()
         print(f'Epoch: {epoch+1}, Loss: {loss.item()}')
+        Losses.append(loss.item())
+    return Losses
         
 def validate(transformer,src_vocab_size,tgt_vocab_size,max_seq_length,criterion):        
     transformer.eval()
@@ -267,7 +275,24 @@ def validate(transformer,src_vocab_size,tgt_vocab_size,max_seq_length,criterion)
                         val_tgt_data[:, 1:].contiguous().view(-1)
         )
         print(f'Validation Loss: {val_loss.item()}')  
+    return val_loss.item()
         
+def plot_losses(Losses,validation_loss,args):
+    fig = figure(figsize=(12,12))
+    ax1 = fig.add_subplot(1,1,1)
+    ax1.plot(range(len(Losses)),Losses,c='xkcd:blue',label='Training')
+    ax1.hlines(validation_loss,0,len(Losses)-1,
+               colors='xkcd:red',
+               label=f'Validation {validation_loss}',
+               linestyles='dashed')
+    ax1.legend(title='Losses')
+    ax1.set_xlabel('Steps')
+    ax1.set_ylabel('Loss')
+    _,y1 = ax1.get_ylim()
+    ax1.set_ylim((0,y1))
+     
+    fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))
+    
 def main():
     start  = time()
     args = parse_args()
@@ -282,14 +307,15 @@ def main():
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     optimizer = optim.Adam(transformer.parameters(), lr=args.lr, betas=args.betas, eps=args.eps)
     
-    train(transformer,args.N,optimizer,src_data, tgt_data,criterion,args.tgt_vocab_size)
-       
-    validate(transformer,args.src_vocab_size,args.tgt_vocab_size,args.max_seq_length,criterion)
-
+    Losses = train(transformer,args.N,optimizer,src_data, tgt_data,criterion,args.tgt_vocab_size)
+    validation_loss = validate(transformer,args.src_vocab_size,args.tgt_vocab_size,args.max_seq_length,criterion)
+    plot_losses(Losses,validation_loss,args)  
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
     print (f'Elapsed Time {minutes} m {seconds:.2f} s')
+    if args.show:
+        show()    
     
 if __name__=='__main__':
     main()
