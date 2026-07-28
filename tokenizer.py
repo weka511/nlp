@@ -17,6 +17,7 @@
 
 '''A library for extract tokens from a text'''
 
+from collections.abc import Iterator
 from re import split
 from unittest import TestCase,main
 from shared.utils import Logger
@@ -26,7 +27,7 @@ class Token:
     Period = '.'
     Apostrophe2 = '’'  #FIXME - Issue #45
     
-def generate_text(file_names : [str] = []):
+def generate_text(file_names : [str] = []) -> Iterator[str]:
     '''
     Generator for reading text from a corpus. It allows us to read the file, one line at a time.
 
@@ -74,7 +75,7 @@ def consolidate_apostrophes(tokens : [str]):
             
     yield word 
     
-def generate_tokens(text: [str]):
+def generate_tokens(text: [str]) ->Iterator[str]:
     '''
     Extract tokens from text
     
@@ -89,7 +90,7 @@ def generate_tokens(text: [str]):
             yield token.lower()
 
 
-def generate_sentences(tokens : [str]):
+def generate_sentences(tokens : [str]) -> Iterator [str]:
     '''
     Split list of tokens into list of lists
     

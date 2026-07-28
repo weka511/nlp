@@ -28,6 +28,7 @@ __author__ = 'Simon Crase'
 
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser
+from collections.abc import Iterator
 from glob import glob
 from os.path import join
 from pathlib import Path
@@ -55,14 +56,16 @@ class Examples:
     Attributes:
         k             Number of negative context words for each positive
         vocabulary    Relates words to tokens
-        positives     Positive examples: pairs w and c, which form inices in vocabulary
-        negatives     Negative examples: pairs w and c, which form inices in vocabulary
+        positives     Positive examples: pairs w and c, which form indices in vocabulary
+        negatives     Negative examples: pairs w and c, which form indices in vocabulary
         rng           Random number generator
         window        Width of window for context
     '''
-
+    WORD_INDEX = 0          # Array index (into positives and negatives) for context words
+    CONTEXT_INDEX = 1       # Array index (into positives and negatives) for context tokens
+    
     @staticmethod
-    def create(file_name):
+    def create(file_name:str) -> 'Examples':
         '''
         A factory method to instantiate a set of Examples from a saved file
         
@@ -74,7 +77,11 @@ class Examples:
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} Loaded examples from {file_name.resolve()}')
             return product
 
-    def __init__(self, window=2, k=2, rng=np.random.default_rng(), alpha=0.75):
+    def __init__(self, 
+                 window: int=2,
+                 k: int=2, 
+                 rng: 'np.random._generator.Generator'=np.random.default_rng(),
+                 alpha: float=0.75):
         '''
         Parameters:
             window    Width of window for context
@@ -99,10 +106,26 @@ class Examples:
         '''
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Building examples: window={self.window}, k={self.k}')
         self.positives = self._create_positives(sentence_generator)
-        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Built positive examples')
+        n_positive,_ = self.positives.shape
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Built {n_positive} positive examples')
         self.negatives = self._create_negatives()
-        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Completed building examples')
-
+        n_negative,_ = self.negatives.shape
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Built {n_negative} negative examples')
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Completed building examples')    
+        
+    def list_examples(self,examples):
+        '''
+        Used to list examples
+        
+        Parameters:
+            Examples to be listed - positive or negative
+        '''
+        m,_ = examples.shape
+        for i in range(m):
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} '
+                                      f'{self.vocabulary[examples[i,Examples.WORD_INDEX]]} '
+                                      f'{self.vocabulary[examples[i,Examples.CONTEXT_INDEX]]}')
+        
     def save(self, file, report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}')):
         '''
         Save Examples using pickle.
@@ -126,12 +149,12 @@ class Examples:
         '''
         positives = []
         for sentence in sentence_generator:
-            self._add_sentence(sentence, positives)
+            self._add_tokens_from_sentence(sentence, positives)
         return np.array(positives)
 
-    def _add_sentence(self, sentence, positives):
+    def _add_tokens_from_sentence(self, sentence, positives):
         '''
-        Add pairs of tokens, (word,context), generated from sentance to positives
+        Add pairs of tokens, (word,context), generated from sentence to positives
         
         Parameters:
             sentence    A sentence in text form (not tokenized)
@@ -142,16 +165,15 @@ class Examples:
         for w, c in self._generate_positive(tokens):
             positives.append([w, c])
 
-    '''
-    Create positive examples. Each token gives rise to a set of pairs: the second
-    token of each pair is from a position in the sentence close to the first,
-    within a distance controlled by self.window.
-    
-    Parameters:
-        tokens    List of tokens for positive examples
-    '''
-
     def _generate_positive(self, tokens):
+        '''
+        A generator used to create positive examples. Each token gives rise to a set of pairs:
+        the second token of each pair is from a position in the sentence close to the first,
+        within a distance controlled by self.window.
+        
+        Parameters:
+            tokens    List of tokens for positive examples
+        '''        
         for i in range(len(tokens)):
             for j in range(-self.window, self.window + 1):
                 if j != 0:    # Pair of tokens must not be identical
@@ -160,31 +182,39 @@ class Examples:
                     except IndexError:               # Don't go beyond boundary of tokens
                         pass
 
-    '''
-    Create negative examples. For each positive example, (w,c), create k pairs (w,c'),
-    where c' is never used in any positve example for w.
-    
-    Returns:
-         Matrix of negative examples
-    '''
-
     def _create_negatives(self):
+        '''
+        Create negative examples. For each positive example, (w,c), create k pairs (w,c'),
+        where c' is never used in any positve example for w.
+        
+        Returns:
+             Matrix of negative examples
+        '''
+        # Sort positive examples by first word (w)
         indices = np.argsort(self.positives[:, 0])
         self.positives = self.positives[indices, :]
         m, _ = self.positives.shape
-        word_tokens, breaks = np.unique(self.positives[:, 0], return_index=True)
-        breaks = np.hstack([breaks, [m + 1]])
+        # Organize into groups with same w, and record the indices where w changes
+        word_tokens, indices = np.unique(self.positives[:, 0], return_index=True)
+        index_w_change = np.hstack([indices, [m + 1]])
+        
         Product = np.full((m * self.k, 2), -1)
         for i in range(len(word_tokens)):
-            neg_min = self.k * breaks[i]                  # Position of first negative example for ith token
-            neg_max = min(self.k * breaks[i + 1], m * self.k)  # Just beyond last negative example for ith token
-            n_negative = neg_max - neg_min              # Number of examples to be generated this step
-            Product[neg_min:neg_max, 0] = word_tokens[i] # Word for negatve examples must match postive
-
-            probabilities = self._get_p(forbidden=np.unique(self.positives[breaks[i]:breaks[i + 1], 1]),
-                                        counts=self.vocabulary.get_counts())
-            negative_contexts = self.rng.choice(len(self.vocabulary), p=probabilities, size=n_negative)
-            Product[neg_min:neg_max, 1] = negative_contexts
+            # Find boundaries for negative example for ith token
+            neg_min = self.k * index_w_change[i]                       # Position of first negative example
+            neg_max = min(self.k * index_w_change[i + 1], m * self.k)  # Just beyond end of example
+            
+            # Word for negative examples must match positive
+            Product[neg_min:neg_max, Examples.WORD_INDEX] = word_tokens[i] 
+            
+            # When we build negative contexts, we must avoid words that appear in a positive context
+                                          
+            p = self._get_p(forbidden=self.positives[index_w_change[i]:index_w_change[i + 1],Examples.CONTEXT_INDEX],
+                            counts=self.vocabulary.get_counts())            
+            Product[neg_min:neg_max, Examples.CONTEXT_INDEX] = self.rng.choice(
+                                                                        len(self.vocabulary),
+                                                                        p=p,
+                                                                        size=neg_max - neg_min)
         return Product
 
     def _get_p(self, forbidden=[], counts=[]):
@@ -509,6 +539,12 @@ class CreateExamples(Command):
                     generate_text(
                         file_names=[globbed for name in args.input for globbed in glob(join(args.data, name))]
                     ))))
+        
+        if args.list:
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} Positive Examples')
+            examples.list_examples(examples.positives)
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} Negative Examples')
+            examples.list_examples(examples.negatives)                
 
         examples.save((Path(args.data) / args.output).with_suffix('.pkl'),
                       report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
@@ -1093,7 +1129,8 @@ def parse_args(choices):
     examples_group.add_argument('-w', '--window', type=int, default=window, help=f'Width of window for context [{window}]')
     examples_group.add_argument('-k', '--k', type=int, default=k, help=f'Number of negative context words for each positive [{k}]')
     examples_group.add_argument('--weight', default=weight, type=float, help=f'The exponent from equation (6.32) [{weight}]')
-
+    examples_group.add_argument('--list', default=False,action='store_true', help='List generated examples')
+    
     training_group = parser.add_argument_group('Training', description='Used for train')
     training_group.add_argument('-d', '--ndim', type=int, default=ndim, help=f'Length of word vectors [{ndim}]')
     training_group.add_argument('--eta', default=eta, type=float, nargs='+', help=f'Training speed [{eta}]')
