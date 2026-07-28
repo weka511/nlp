@@ -18,7 +18,9 @@
 '''Template for python script'''
 
 from argparse import ArgumentParser
+from pathlib import Path
 from time import time
+
 import numpy as np
 
 def parse_args():
