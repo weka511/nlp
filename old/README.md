@@ -11,6 +11,5 @@ rnn2.py|[Sean Robertsons's NLP demo: Generating Names with a Character-Level RNN
 seq2seq.py|[Sean Robertsons's NLP demo: Translation with a Sequence to Sequence Network and Attention](https://pytorch.org/tutorials/intermediate/seq2seq_translation_tutorial.html)
 skipgram.py|This program has been written to test my understanding of [word2vec](https://arxiv.org/abs/1301.3781/Word2Vec). It includes code for training the weights explicitly, using a hand-coded stochastic gradient optimizer and loss function.
 template-test.py|Template for new code using python unittest
-transformer.py|An attempt to understand Transformers, based on [Arun Mohan's demo](https://www.kaggle.com/code/arunmohan003/transformer-from-scratch-using-pytorch/notebook)
 word2vec.py |This program has been written to test my understanding of [word2vec](https://arxiv.org/abs/1301.3781/Word2Vec). The code was originally based on [Mateusz Bednarski's article--Implementing word2vec in PyTorch](https://towardsdatascience.com/implementing-word2vec-in-pytorch-skip-gram-model-e6bae040d2fb)
 word2vec2.py|Test harness for skipgram.py. It builds examples, trains weights, and some test code.
