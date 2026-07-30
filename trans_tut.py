@@ -14,7 +14,7 @@
 
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
+ # https://youtu.be/Ub3GoFaUcds?t=2253
 '''
     Code snarfed from 
     Transformer Model Tutorial in PyTorch: From Theory to Code, by Arjun Aarkar
@@ -38,7 +38,9 @@ import torch.utils.data as data
 
 class MultiHeadAttention(nn.Module):
     '''
-    This class computes the attention between each pair of positions in a sequence. It consists of  
+    This class computes the attention between each pair of positions in a sequence. 
+    It is able to compare an item of interest to a collection of other items to
+    reveal their relevance in the current context.  It consists of  
     multiple attention heads that capture different aspects of the input sequence.
     
     Attributes:
@@ -135,15 +137,20 @@ class MultiHeadAttention(nn.Module):
 
 class PositionWiseFeedForward(nn.Module):
     '''
-    This feed-forward network is applied to each position separately and identically.
-    It helps in transforming the features learned by the attention mechanisms within 
-    the transformer, acting as an additional processing step for the attention outputs.
+    This class peovides a feed-forward network that is applied to each position separately
+    and identically. It helps in transforming the features learned by the attention mechanisms  
+    within the transformer, acting as an additional processing step for the attention outputs.
+    
+    Attributes:
+        fc1
+        fc2
+        relu
     '''
     def __init__(self, d_model, d_ff):
         '''
         Parameters:
-            d_model
-            d_ff
+            d_model   Number of dimensions for model
+            d_ff      Number of elements in feed forward layer
         '''
         super().__init__()
         self.fc1 = nn.Linear(d_model, d_ff)
@@ -187,28 +194,23 @@ class PositionalEncoding(nn.Module):
 class EncoderLayer(nn.Module):
     '''
     This class defines a single layer of the transformer's encoder. 
-    It encapsulates a multi-head self-attention mechanism followed by the 
-    position-wise feed-forward neural network, with residual connections, l
-    ayer normalization, and dropout applied as appropriate. 
-    Together, these components allow the encoder to capture complex relationships
-    in the input data and transform them into a useful representation for downstream tasks.
-    Typically, multiple such encoder layers are stacked to form the complete
-    encoder part of a transformer model.
     
     Attributes:
-        self_attn
-        feed_forward
-        norm1
-        norm2
-        dropout
+        self_attn     Self attention layer
+        norm1         First normalization layer
+        feed_forward  Feed forward layer
+        norm2         Second normalization layer
+        dropout       Dropout layer
     '''
     def __init__(self, d_model, num_heads, d_ff, dropout):
         '''
+        Initialize Ebcoder
+        
         Parameters:
-            d_model
-            num_heads
-            d_ff
-            dropout
+            d_model     Number of dimensions for model
+            num_heads   Number of attention heads
+            d_ff        Number of elements in feed forward layer
+            dropout     probability of an element to be zeroed
         '''
         super().__init__()
         self.self_attn = MultiHeadAttention(d_model, num_heads)
@@ -221,22 +223,29 @@ class EncoderLayer(nn.Module):
         attn_output = self.self_attn(x, x, x, mask)
         x = self.norm1(x + self.dropout(attn_output))
         ff_output = self.feed_forward(x)
-        x = self.norm2(x + self.dropout(ff_output))
-        return x
-
+        return self.norm2(x + self.dropout(ff_output))
 
 class DecoderLayer(nn.Module):
     '''
     This class defines a single layer of the transformer's decoder. 
-    It consists of a multi-head self-attention mechanism, a multi-head cross-attention 
-    mechanism (that attends to the encoder's output), a position-wise feed-forward neural
-    network, and the corresponding residual connections, layer normalization, and dropout 
-    layers. This combination enables the decoder to generate meaningful outputs based
-    on the encoder's representations, taking into account both the target sequence 
-    and the source sequence. As with the encoder, multiple decoder layers are typically 
-    stacked to form the complete decoder part of a transformer model.
+     
+    Attributes:
+        self_attn     Self attention layer
+        norm1         First normalization layer
+        cross_attn    A second attention layer to attend to the encoder's output
+        norm2         Second normalization layer
+        feed_forward  Feed forward layer
+        norm3         Third normalization layer
+        dropout       Dropout layer
     '''
     def __init__(self, d_model, num_heads, d_ff, dropout):
+        '''
+        Parameters:
+            d_model     Number of dimensions for model
+            num_heads   Number of attention heads
+            d_ff        Number of elements in feed forward layer
+            dropout     probability of an element to be zeroed
+        '''
         super().__init__()
         self.self_attn = MultiHeadAttention(d_model, num_heads)
         self.cross_attn = MultiHeadAttention(d_model, num_heads)
@@ -252,9 +261,7 @@ class DecoderLayer(nn.Module):
         attn_output = self.cross_attn(x, enc_output, enc_output, src_mask)
         x = self.norm2(x + self.dropout(attn_output))
         ff_output = self.feed_forward(x)
-        x = self.norm3(x + self.dropout(ff_output))
-        return x
-
+        return self.norm3(x + self.dropout(ff_output))
 
 class Transformer(nn.Module):
     '''
@@ -275,13 +282,13 @@ class Transformer(nn.Module):
         '''
         Parameters:
             src_vocab_size   Size of vocabulary for source language
-            tgt_vocab_size   Size of vocabulary for source language
+            tgt_vocab_size   Size of vocabulary for target language
             d_model          Number of dimensions for model
             num_heads        Number of heads
             num_layers       Number of encoder and decoder layers
-            d_ff
+            d_ff             Number of elements in each feed forward layer
             max_seq_length   Maximum number of tokens in a sentence
-            dropout
+            dropout          probability of an element to be zeroed
         '''
         super().__init__()
         self.encoder_embedding = nn.Embedding(src_vocab_size, d_model)
@@ -332,11 +339,11 @@ def parse_args():
     parser.add_argument('--num_heads', type=int, default=8, help='Number of heads')
     parser.add_argument('--num_layers', type=int, default=6, help='Number of encoder and decoder layers')
     parser.add_argument('--max_seq_length', type=int, default=100, help='Maximum number of tokens in a sentence')
-    parser.add_argument('--d_ff', type=int, default=2048, help='Number of epochs for training')
-    parser.add_argument('--dropout', type=float, default=0.1, help='Number of epochs for training')
-    parser.add_argument('--lr', type=float, default=0.0001, help='Number of epochs for training')
-    parser.add_argument('--betas', type=float, default=(0.9, 0.98), nargs=2, help='Number of epochs for training')
-    parser.add_argument('--eps', type=float, default=1e-9, help='Number of epochs for training')
+    parser.add_argument('--d_ff', type=int, default=2048, help='Number of elements in feed forward layer')
+    parser.add_argument('--dropout', type=float, default=0.1, help='probability of an element to be zeroed by dropout')
+    parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
+    parser.add_argument('--betas', type=float, default=(0.9, 0.98), nargs=2,
+                        help='Coefficients used by Adam optimizer for computing running averages of gradient and its square.')
     parser.add_argument('--show', default=False, action='store_true', help='Controls whether plots are shown')
     parser.add_argument('--figs', default='./figs', help=f'Path used to store plots')
     parser.add_argument('--output', '-o', default=Path(__file__).name, help=f'File name for output')
@@ -434,6 +441,9 @@ def plot_losses(Losses, validation_loss, figs, output):
 
 
 def main():
+    '''
+    Crerate tarnsformer and data, train, validate, and plot losses.
+    '''
     start = time()
     args = parse_args()
 
@@ -445,7 +455,7 @@ def main():
     tgt_data = torch.randint(1, args.tgt_vocab_size, (64, args.max_seq_length))  # (batch_size, seq_length)
 
     criterion = nn.CrossEntropyLoss(ignore_index=0)
-    optimizer = optim.Adam(transformer.parameters(), lr=args.lr, betas=args.betas, eps=args.eps)
+    optimizer = optim.Adam(transformer.parameters(), lr=args.lr, betas=args.betas, eps=0.01)
 
     Losses = train(transformer, args.N, optimizer, src_data, tgt_data, criterion, args.tgt_vocab_size)
     validation_loss = validate(transformer, args.src_vocab_size, args.tgt_vocab_size, args.max_seq_length, criterion)
