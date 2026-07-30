@@ -444,7 +444,7 @@ class Command(ABC):
     '''
     This class is the parent for all the tasks performed by this program.
     It provides a list of ecceptable commands (used by parse_args(),
-    and its subclasses are each esponsible for one task.
+    and its subclasses are each responsible for one task.
     '''
     choices = {}
 
