@@ -21,7 +21,8 @@
     https://www.datacamp.com/tutorial/building-a-transformer-with-py-torch
     I have also followed  Chapter 9 of 	
     Speech and Language Processing (3rd ed. draft)
-    Dan Jurafsky and James H. Martin .
+    Dan Jurafsky and James H. Martin and 
+    Attentio Is All You Need, Vaswani et al, 2017
 '''
 
 from argparse import ArgumentParser
@@ -46,7 +47,7 @@ class MultiHeadAttention(nn.Module):
     Attributes:
         d_model    Model's dimension
         num_heads  Number of attention heads
-        d_k        Dimension of each head's key, query, and value
+        d_k        Dimension of each head's key, query and value
         W_q        Query transformation weights.
         W_k        Key transformation weights
         W_v        Value transformation weights
@@ -64,7 +65,7 @@ class MultiHeadAttention(nn.Module):
 
         self.d_model = d_model
         self.num_heads = num_heads
-        self.d_k = d_model // num_heads
+        self.d_k = d_model // num_heads   # Vaswani et al 3.2.2
 
         # Linear layers for transforming inputs
         self.W_q = nn.Linear(d_model, d_model)
@@ -74,7 +75,7 @@ class MultiHeadAttention(nn.Module):
 
     def scaled_dot_product_attention(self, Query, Key, Value, mask=None, fill_value=-1e9):
         '''
-        Calculate scaled dot product attention
+        Calculate scaled dot product attention - Vaswani et al 3.2.1
         
         Parameters:
             Query      Used to consier an input embedding as the current focus of attention.
@@ -168,6 +169,9 @@ class PositionalEncoding(nn.Module):
     the model to consider the position of tokens in the sequence. The sinusoidal functions used 
     are chosen to allow the model to easily learn to attend to relative positions,
     as they produce a unique and smooth encoding for each position in the sequence.
+    
+    See Transformer Architecture: The Positional Encoding, Amirhossein Kazemnejad, 
+    https://kazemnejad.com/blog/transformer_architecture_positional_encoding/
     '''
 
     def __init__(self, d_model, max_seq_length):
@@ -270,15 +274,18 @@ class Transformer(nn.Module):
     feed-forward networks, and layer normalization.
     
     Attributes:
-        encoder_embedding 
-        decoder_embedding 
-        positional_encoding
+        encoder_embedding      Embedding layer for input
+        decoder_embedding      Embedding Layer for output
+        positional_encoding    Adds information about the position of tokens within the sequence
         encoder_layers
         decoder_layers
         fc
-        dropout 
+        dropout                Dropout layer
     '''
-    def __init__(self, src_vocab_size, tgt_vocab_size, d_model, num_heads, num_layers, d_ff, max_seq_length, dropout):
+    def __init__(self, 
+                 src_vocab_size=5000, tgt_vocab_size=5000, d_model=512, 
+                 num_heads=8, num_layers=6, d_ff=2048, max_seq_length=100,
+                 dropout=0.01):
         '''
         Parameters:
             src_vocab_size   Size of vocabulary for source language
@@ -340,7 +347,7 @@ def parse_args():
     parser.add_argument('--num_layers', type=int, default=6, help='Number of encoder and decoder layers')
     parser.add_argument('--max_seq_length', type=int, default=100, help='Maximum number of tokens in a sentence')
     parser.add_argument('--d_ff', type=int, default=2048, help='Number of elements in feed forward layer')
-    parser.add_argument('--dropout', type=float, default=0.1, help='probability of an element to be zeroed by dropout')
+    parser.add_argument('--dropout', type=float, default=0.1, help='Probability of an element to be zeroed by dropout')
     parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
     parser.add_argument('--betas', type=float, default=(0.9, 0.98), nargs=2,
                         help='Coefficients used by Adam optimizer for computing running averages of gradient and its square.')
@@ -350,14 +357,15 @@ def parse_args():
     return parser.parse_args()
 
 
-def train(transformer, N, optimizer, src_data, tgt_data, criterion, tgt_vocab_size):
+def train(transformer,src_data,tgt_data,optimizer,
+          N=100,criterion=nn.CrossEntropyLoss(ignore_index=0),tgt_vocab_size=5000):
     '''
     Train transformer
     
     Parameters:
-        transformer
-        N
-        optimizer
+        transformer   The Transformer being trained
+        N             Number of iterations
+        optimizer     Optimizer to be used
         src_data
         tgt_data
         criterion
@@ -384,7 +392,9 @@ def train(transformer, N, optimizer, src_data, tgt_data, criterion, tgt_vocab_si
     return Losses
 
 
-def validate(transformer, src_vocab_size, tgt_vocab_size, max_seq_length, criterion):
+def validate(transformer, 
+             src_vocab_size=5000, tgt_vocab_size=5000, max_seq_length=100,
+             criterion=nn.CrossEntropyLoss(ignore_index=0),batch_size = 64):
     '''
     Validate tansformer against test dataset
     
@@ -401,9 +411,8 @@ def validate(transformer, src_vocab_size, tgt_vocab_size, max_seq_length, criter
     transformer.eval()
 
     # Generate random sample validation data
-    val_src_data = torch.randint(1, src_vocab_size, (64, max_seq_length))  # (batch_size, seq_length)
-    val_tgt_data = torch.randint(1, tgt_vocab_size, (64, max_seq_length))  # (batch_size, seq_length)
-
+    val_src_data = torch.randint(1, src_vocab_size, (batch_size, max_seq_length)) 
+    val_tgt_data = torch.randint(1, tgt_vocab_size, (batch_size, max_seq_length))
     with torch.no_grad():
         val_output = transformer(val_src_data, val_tgt_data[:, :-1])
         val_loss = criterion(
@@ -440,6 +449,14 @@ def plot_losses(Losses, validation_loss, figs, output):
     fig.savefig((Path(figs) / output).with_suffix('.png'))
 
 
+def create_data(src_vocab_size=5000,tgt_vocab_size=5000,batch_size=64, seq_length=100):
+    '''
+    Generate random sample data
+    '''
+    src_data = torch.randint(1, src_vocab_size, (batch_size, seq_length))
+    tgt_data = torch.randint(1, tgt_vocab_size, (batch_size, seq_length))
+    return src_data,tgt_data
+
 def main():
     '''
     Crerate tarnsformer and data, train, validate, and plot losses.
@@ -447,18 +464,21 @@ def main():
     start = time()
     args = parse_args()
 
-    transformer = Transformer(args.src_vocab_size, args.tgt_vocab_size, args.d_model, args.num_heads, args.num_layers,
-                              args.d_ff, args.max_seq_length, args.dropout)
+    transformer = Transformer(src_vocab_size=args.src_vocab_size, tgt_vocab_size=args.tgt_vocab_size,
+                              d_model=args.d_model, num_heads=args.num_heads, num_layers=args.num_layers,
+                              d_ff=args.d_ff, max_seq_length=args.max_seq_length, dropout=args.dropout)
 
-    # Generate random sample data
-    src_data = torch.randint(1, args.src_vocab_size, (64, args.max_seq_length))  # (batch_size, seq_length)
-    tgt_data = torch.randint(1, args.tgt_vocab_size, (64, args.max_seq_length))  # (batch_size, seq_length)
-
+ 
+    src_data,tgt_data = create_data(src_vocab_size=args.src_vocab_size,tgt_vocab_size=args.tgt_vocab_size,
+                                    seq_length=args.max_seq_length)
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     optimizer = optim.Adam(transformer.parameters(), lr=args.lr, betas=args.betas, eps=0.01)
 
-    Losses = train(transformer, args.N, optimizer, src_data, tgt_data, criterion, args.tgt_vocab_size)
-    validation_loss = validate(transformer, args.src_vocab_size, args.tgt_vocab_size, args.max_seq_length, criterion)
+    Losses = train(transformer, src_data, tgt_data, optimizer, N=args.N, criterion=criterion,
+                   tgt_vocab_size=args.tgt_vocab_size)
+    validation_loss = validate(transformer, 
+                               src_vocab_size=args.src_vocab_size, tgt_vocab_size=args.tgt_vocab_size, 
+                               max_seq_length=args.max_seq_length, criterion=criterion)
     plot_losses(Losses, validation_loss, args.figs, args.output)
     
     elapsed = time() - start
