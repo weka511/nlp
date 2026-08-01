@@ -15,17 +15,34 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+__version__ = '1.0'
+__author__ = 'Simon Crase'
+
 from unittest import main, TestCase, skip
 import numpy as np
 
 class Vocabulary:
     '''
     This class maps between words and tokens
+    
+    Attributes:
+        symbols  List of all tokens (including <SOS>/EOS>).
+                 Each token will be represeneted by its index in this table
+        tokens   Map text version of token to index         
+        counts   Number of times each symbol appears
     '''
-    def __init__(self):
+    def __init__(self,sentence_tokens=False):
+        '''
+        Initialize vocabulary
+        Parameters:
+            sentence_tokens   Initialize vocabulary with start and end of sentence tolens
+        '''
         self.symbols = []
         self.token = {}
         self.counts = []
+        if sentence_tokens:
+            self.tokenize('<SOS>')
+            self.tokenize('<EOS>')
         
     def __len__(self):
         '''
@@ -78,20 +95,26 @@ class Vocabulary:
         '''
         return self.counts[token]
     
-    '''
-    Retrieve counts for sll tokens
-    '''
     def get_counts(self):
+        '''
+        Retrieve counts for all tokens
+        '''        
         return np.array(self.counts)
     
     def generate_counts(self):
+        '''
+        Iterate through all tokens, with their counts
+        '''
         for token,count in enumerate(self.counts):
             yield token,count
 
  
-    def parse(self,text,verbose=False):
+    def parse(self,text):
         '''
         Parse a text into a list of indices of tokens
+        
+        Parameters:
+            text     The text to be parsed
         '''
         def is_word(word):
             if word.isalpha(): return True
@@ -108,6 +131,9 @@ class Vocabulary:
         return Result
     
 class TestVocabulary(TestCase):
+    '''
+    Test case for no sentence tokens
+    '''
     def setUp(self):
         self.vocabulary = Vocabulary()
         for word in ['the', 'quick', 'brown','fox', 'jumps', 'over', 'the', 'lazy', 'dog',
@@ -120,7 +146,20 @@ class TestVocabulary(TestCase):
     def test_count(self):                       
         self.assertEqual(3,self.vocabulary.get_count(0))   # Number of 'the's
         self.assertEqual(2,self.vocabulary.get_count(2))   # Number of 'brown's
-        self.assertEqual(1,self.vocabulary.get_count(3))   # Number of 'fox's    
+        self.assertEqual(1,self.vocabulary.get_count(3))   # Number of 'fox's  
+        
+class TestVocabularyWithSOS_EOS(TestCase):
+    '''
+    Test case with sentence tokens
+    '''    
+    def test_SOS_EOS(self):
+        vocabulary = Vocabulary(sentence_tokens=True)
+        self.assertCountEqual('<SOS>',vocabulary[0])
+        self.assertCountEqual('<EOS>',vocabulary[1])
+        for word in ['the', 'quick', 'brown','fox', 'jumps', 'over', 'the', 'lazy', 'dog',
+                          'that', 'guards', 'the', 'brown', 'cow']:
+            vocabulary.tokenize(word)
+        self.assertEqual('cow',vocabulary.get_word(12))        
         
 if __name__ == '__main__':
     main()
