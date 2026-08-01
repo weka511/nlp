@@ -29,8 +29,8 @@ from torch.utils.data import DataLoader, TensorDataset
 from torch.nn.functional import one_hot
 
 class Corpus:
-    def __init__(self):
-        self.text = ['the', 'quick', 'brown', 'fox', 'jumped', 'over', 'the', 'lazy', 'dog']
+    def __init__(self,text = 'the quick brown fox jumped over the lazy dog'):
+        self.text = text.split()
         self.words = list(set(self.text))
         self.indices = {self.words[i]:i for i in range(len(self.words))}
         self.tokenized = np.array([self.indices[word] for word in self.text])
@@ -69,37 +69,40 @@ def parse_args():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('-D','--embedding_dim',type=int,default=300)
     parser.add_argument('-n','--windows_size',type=int,default=4)
-    parser.add_argument('-N','--NIterators',type=int,default=12)
+    parser.add_argument('-N','--NIterators',type=int,default=100)
+    parser.add_argument('--batch',type=int, default=4)
     return parser.parse_args()
-    
+
+def train(model,dataloader,NIterators=100):
+    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.95)
+    loss_fn = nn.CrossEntropyLoss()
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'        
+    for epoch in range(NIterators):
+        train_loss = 0
+        model.train()
+        
+        for feature, label in dataloader:
+            model = model.to(device)
+            y_train_pred = model(feature.to(device))
+            loss = loss_fn(y_train_pred, label.to(device))
+            train_loss = train_loss + loss
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+        mean_train_loss = train_loss / len(dataloader)
+        print(f'Epoch:{epoch} | Mean Training Loss : {mean_train_loss}')  
+        
 def main():
     start  = time()
     args = parse_args()
     corpus = Corpus()
     training_data = WordData(corpus,args.windows_size)
     model = WordEmbeddings(corpus.get_vocabulary_size(),args.embedding_dim,args.windows_size)
-    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.95)
-    loss_fn = nn.CrossEntropyLoss()
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    train_dataloader = DataLoader(training_data, batch_size=1, shuffle=True)
-    for epoch in range(args.NIterators):
-        train_loss = 0
-        model.train()
-        for feature, label in train_dataloader:
-            model = model.to(device)
-            feature = feature.to(device)
-            label = label.to(device)
-        
-            y_train_pred = model(feature)
-        
-            loss = loss_fn(y_train_pred, label)
-            train_loss = train_loss + loss
-        
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-        train_loss = train_loss / len(train_dataloader)
-        print(f"Epoch:{epoch} | Training Loss : {train_loss}")  
+ 
+    train_dataloader = DataLoader(training_data, batch_size=args.batch, shuffle=True)
+    train(model,train_dataloader,NIterators=args.NIterators)
+    
+
         
     elapsed = time() - start
     minutes = int(elapsed/60)
