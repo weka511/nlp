@@ -17,6 +17,9 @@
 
 '''A library for extract tokens from a text'''
 
+__version__ = '1.0'
+__author__ = 'Simon Crase'
+
 from collections.abc import Iterator
 from re import split
 from unittest import TestCase,main
