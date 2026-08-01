@@ -18,6 +18,8 @@
 '''Continuous Bag Of Words'''
 
 from argparse import ArgumentParser
+from glob import glob
+from os.path import join
 from pathlib import Path
 from time import time
 
@@ -28,6 +30,11 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from torch.nn.functional import one_hot
 from matplotlib.pyplot import figure,show
+
+from skipgram2 import Examples
+from vocabulary import Vocabulary
+from tokenizer import generate_sentences, generate_text, generate_tokens, Token
+from shared.utils import Logger, user_has_requested_stop, get_seed
 
 class Corpus:
     def __init__(self,text = 'the quick brown fox jumped over the lazy dog'):
@@ -67,12 +74,23 @@ class WordEmbeddings(nn.Module):
         return self.linear_1(x)
     
 def parse_args():
+    data = './data'
+    logs = './logs'
+    figs = './figs'
+    window = 4
     parser = ArgumentParser(description=__doc__)
+    #parser.add_argument('input', nargs='+', help='List of input files')
+    parser.add_argument('--seed', type=int, default=None, help='Seed for random number generation')
+    parser.add_argument('--data', default=data, help=f'Path to data files [{data}]')    
     parser.add_argument('-D','--embedding_dim',type=int,default=300)
     parser.add_argument('-n','--windows_size',type=int,default=4)
     parser.add_argument('-N','--NIterators',type=int,default=100)
     parser.add_argument('--batch',type=int, default=4)
-    parser.add_argument('--show',default=False,action='store_true')
+    parser.add_argument('--logs', default=logs, help=f'Location for storing log files [{logs}]')
+    parser.add_argument('--show', default=False, action='store_true', help='Controls whether plots are shown')
+    parser.add_argument('--figs', default=figs, help=f'Path used to store plots [{figs}]')
+    parser.add_argument('-w', '--window', type=int, default=window, help=f'Width of window for context [{window}]')
+    
     return parser.parse_args()
 
 def train(model,dataloader,NIterators=100):
@@ -100,23 +118,37 @@ def train(model,dataloader,NIterators=100):
 def main():
     start  = time()
     args = parse_args()
-    corpus = Corpus()
-    training_data = WordData(corpus,args.windows_size)
-    model = WordEmbeddings(corpus.get_vocabulary_size(),args.embedding_dim,args.windows_size)
- 
-    train_dataloader = DataLoader(training_data, batch_size=args.batch, shuffle=True)
-    training_losses = train(model,train_dataloader,NIterators=args.NIterators)
-    fig = figure(figsize=(12,12))
-    ax1 = fig.add_subplot(1,1,1)
-    ax1.plot(training_losses,label=f'Training Losses {training_losses[-1]:.6}')
-    ax1.legend()
+    with Logger(Path(__file__).stem, path=args.logs) as _:
+        seed = get_seed(args.seed,
+                        notify=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()}'
+                                                                   f' Created new seed {s}'))    
+        rng=np.random.default_rng(seed)
+        examples = Examples(window=args.window, k=0, rng=rng)
     
-    elapsed = time() - start
-    minutes = int(elapsed/60)
-    seconds = elapsed - 60*minutes
-    print (f'Elapsed Time {minutes} m {seconds:.2f} s')
-    if args.show:
-        show()
+        examples.build(
+                generate_sentences(
+                    generate_tokens(
+                        generate_text(
+                            file_names=[globbed for name in ['gatsby1.txt'] for globbed in glob(join(args.data, name))]
+                        ))))
+        
+        corpus = Corpus()
+        training_data = WordData(corpus,args.windows_size)
+        model = WordEmbeddings(corpus.get_vocabulary_size(),args.embedding_dim,args.windows_size)
+     
+        train_dataloader = DataLoader(training_data, batch_size=args.batch, shuffle=True)
+        training_losses = train(model,train_dataloader,NIterators=args.NIterators)
+        fig = figure(figsize=(12,12))
+        ax1 = fig.add_subplot(1,1,1)
+        ax1.plot(training_losses,label=f'Training Losses {training_losses[-1]:.6}')
+        ax1.legend()
+        
+        elapsed = time() - start
+        minutes = int(elapsed/60)
+        seconds = elapsed - 60*minutes
+        print (f'Elapsed Time {minutes} m {seconds:.2f} s')
+        if args.show:
+            show()
     
 if __name__=='__main__':
     main()
