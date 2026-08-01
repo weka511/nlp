@@ -45,8 +45,8 @@ class Vocabulary:
         self.token = {}
         self.counts = []
         if sentence_tokens:
-            self.tokenize('<SOS>')
-            self.tokenize('<EOS>')
+            self.SOS = self.tokenize('<SOS>')
+            self.EOS = self.tokenize('<EOS>')
         
     def __len__(self):
         '''

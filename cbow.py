@@ -17,6 +17,9 @@
 
 '''Continuous Bag Of Words'''
 
+__version__ = '0.0'
+__author__ = 'Simon Crase'
+
 from argparse import ArgumentParser
 from glob import glob
 from os.path import join
@@ -31,11 +34,69 @@ from torch.utils.data import DataLoader, TensorDataset
 from torch.nn.functional import one_hot
 from matplotlib.pyplot import figure,show
 
-from skipgram2 import Examples
 from vocabulary import Vocabulary
 from tokenizer import generate_sentences, generate_text, generate_tokens, Token
 from shared.utils import Logger, user_has_requested_stop, get_seed
 
+class Examples:
+    def __init__(self,window=4):
+        self.window = window
+        self.vocabulary = Vocabulary(sentence_tokens=True)
+        self.words = None
+        self.contexts = None
+     
+    def __len__(self):
+        m, = self.words.shape
+        return m
+    
+    def __getitem__(self, idx):
+        #run = self.corpus.tokenized[idx:idx+self.n+1]
+        #context = np.delete(run,self.n//2)
+        #word = int(run[self.n//2])
+        label = torch.Tensor.float(one_hot(torch.tensor(self.words[idx]),num_classes=len(self.vocabulary)))
+        return self.contexts[idx,:],label
+        
+    
+    def build(self, sentence_generator):
+        words = []
+        contexts = []
+
+        for sentence in sentence_generator:
+            try:
+                w,c = self.accumulate(self.tokenize (sentence))
+                words.append(w)
+                contexts.append(c)
+            except ValueError:      # too short
+                pass
+                
+   
+        self.words = np.concatenate(words)
+        self.contexts = np.concatenate(contexts)
+  
+              
+    def tokenize(self,sentence):
+        return (
+            [self.vocabulary.SOS] +
+            [self.vocabulary.tokenize(word) for word in sentence] +
+            [self.vocabulary.EOS]
+        )
+    
+    def accumulate(self,tokens):
+        start = 0
+        end = start + 2*self.window + 1
+        n_entries = len(tokens) - end +1
+        context = np.full((n_entries,2*self.window),-1,dtype=int)
+        words = np.full((n_entries),-1,dtype=int)
+        while end <= len(tokens):
+            run = [tokens[i] for i in range(start,end)]
+            words[start] = run[self.window]
+            context[start,:self.window] = run[:self.window]
+            context[start,self.window:] = run[self.window+1:]
+            start += 1
+            end += 1
+        return words,context
+    
+        
 class Corpus:
     def __init__(self,text = 'the quick brown fox jumped over the lazy dog'):
         self.text = text.split()
@@ -122,8 +183,9 @@ def main():
         seed = get_seed(args.seed,
                         notify=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()}'
                                                                    f' Created new seed {s}'))    
-        rng=np.random.default_rng(seed)
-        examples = Examples(window=args.window, k=0, rng=rng)
+        #rng=np.random.default_rng(seed)
+        torch.manual_seed(seed)
+        examples = Examples(window=args.window)
     
         examples.build(
                 generate_sentences(
@@ -131,12 +193,13 @@ def main():
                         generate_text(
                             file_names=[globbed for name in ['gatsby1.txt'] for globbed in glob(join(args.data, name))]
                         ))))
+        m = len(examples)
         
-        corpus = Corpus()
-        training_data = WordData(corpus,args.windows_size)
-        model = WordEmbeddings(corpus.get_vocabulary_size(),args.embedding_dim,args.windows_size)
+        #corpus = Corpus()
+        #training_data = WordData(corpus,args.windows_size)
+        model = WordEmbeddings(len(examples.vocabulary),args.embedding_dim,args.windows_size)
      
-        train_dataloader = DataLoader(training_data, batch_size=args.batch, shuffle=True)
+        train_dataloader = DataLoader(examples, batch_size=args.batch, shuffle=True)
         training_losses = train(model,train_dataloader,NIterators=args.NIterators)
         fig = figure(figsize=(12,12))
         ax1 = fig.add_subplot(1,1,1)
