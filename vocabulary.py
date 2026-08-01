@@ -15,6 +15,10 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+'''
+This modeuls provides support for Vocabulary,
+a mapping between words and tolkens
+'''
 __version__ = '1.0'
 __author__ = 'Simon Crase'
 
@@ -31,7 +35,7 @@ class Vocabulary:
         tokens   Map text version of token to index         
         counts   Number of times each symbol appears
     '''
-    def __init__(self,sentence_tokens=False):
+    def __init__(self,sentence_tokens : bool = False):
         '''
         Initialize vocabulary
         Parameters:
