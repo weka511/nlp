@@ -28,11 +28,31 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from torch.nn.functional import one_hot
 
+class Corpus:
+    def __init__(self):
+        self.text = ['the', 'quick', 'brown', 'fox', 'jumped', 'over', 'the', 'lazy', 'dog']
+        self.words = list(set(self.text))
+        self.indices = {self.words[i]:i for i in range(len(self.words))}
+        self.tokenized = np.array([self.indices[word] for word in self.text])
+        
+    def get_vocabulary_size(self):
+        return len(self.words)    
+        
 class WordData:
+    def __init__(self,corpus,n):
+        self.corpus = corpus
+        self.n = n
+        
     def __len__(self):
-        return 100
+        return len(self.corpus.text) - self.n
+    
     def __getitem__(self, idx):
-        return np.array([1,2,4,5]),torch.Tensor.float(one_hot(torch.tensor(3),num_classes=1000))
+        run = self.corpus.tokenized[idx:idx+self.n+1]
+        context = np.delete(run,self.n//2)
+        word = int(run[self.n//2])
+        label = torch.Tensor.float(one_hot(torch.tensor(word),num_classes=len(self.corpus.words)))
+        return context,label
+    
     
 class WordEmbeddings(nn.Module):
     def __init__(self,V,D,n):
@@ -55,12 +75,13 @@ def parse_args():
 def main():
     start  = time()
     args = parse_args()
-    model = WordEmbeddings(1000,args.embedding_dim,args.windows_size)
+    corpus = Corpus()
+    training_data = WordData(corpus,args.windows_size)
+    model = WordEmbeddings(corpus.get_vocabulary_size(),args.embedding_dim,args.windows_size)
     optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.95)
     loss_fn = nn.CrossEntropyLoss()
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    training_data = WordData()
-    train_dataloader = DataLoader(training_data, batch_size=2, shuffle=True)
+    train_dataloader = DataLoader(training_data, batch_size=1, shuffle=True)
     for epoch in range(args.NIterators):
         train_loss = 0
         model.train()
