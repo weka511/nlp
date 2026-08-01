@@ -27,6 +27,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from torch.nn.functional import one_hot
+from matplotlib.pyplot import figure,show
 
 class Corpus:
     def __init__(self,text = 'the quick brown fox jumped over the lazy dog'):
@@ -71,26 +72,30 @@ def parse_args():
     parser.add_argument('-n','--windows_size',type=int,default=4)
     parser.add_argument('-N','--NIterators',type=int,default=100)
     parser.add_argument('--batch',type=int, default=4)
+    parser.add_argument('--show',default=False,action='store_true')
     return parser.parse_args()
 
 def train(model,dataloader,NIterators=100):
     optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.95)
     loss_fn = nn.CrossEntropyLoss()
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'        
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'  
+    running_loss=[]
     for epoch in range(NIterators):
-        train_loss = 0
+        train_loss = []
         model.train()
         
         for feature, label in dataloader:
             model = model.to(device)
             y_train_pred = model(feature.to(device))
             loss = loss_fn(y_train_pred, label.to(device))
-            train_loss = train_loss + loss
+            train_loss.append(loss.item())
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-        mean_train_loss = train_loss / len(dataloader)
-        print(f'Epoch:{epoch} | Mean Training Loss : {mean_train_loss}')  
+        mean_train_loss = np.average(train_loss)
+        print(f'Epoch:{epoch} | Mean Training Loss : {mean_train_loss}') 
+        running_loss.append(mean_train_loss)
+    return running_loss
         
 def main():
     start  = time()
@@ -100,14 +105,18 @@ def main():
     model = WordEmbeddings(corpus.get_vocabulary_size(),args.embedding_dim,args.windows_size)
  
     train_dataloader = DataLoader(training_data, batch_size=args.batch, shuffle=True)
-    train(model,train_dataloader,NIterators=args.NIterators)
+    training_losses = train(model,train_dataloader,NIterators=args.NIterators)
+    fig = figure(figsize=(12,12))
+    ax1 = fig.add_subplot(1,1,1)
+    ax1.plot(training_losses,label=f'Training Losses {training_losses[-1]:.6}')
+    ax1.legend()
     
-
-        
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
     print (f'Elapsed Time {minutes} m {seconds:.2f} s')
+    if args.show:
+        show()
     
 if __name__=='__main__':
     main()
