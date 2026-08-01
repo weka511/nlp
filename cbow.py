@@ -42,21 +42,17 @@ class Examples:
     def __init__(self,window=4):
         self.window = window
         self.vocabulary = Vocabulary(sentence_tokens=True)
-        self.words = None
-        self.contexts = None
+        context = np.full((0,2*self.window),-1,dtype=int)
+        words = np.full((0),-1,dtype=int)
      
     def __len__(self):
         m, = self.words.shape
         return m
     
     def __getitem__(self, idx):
-        #run = self.corpus.tokenized[idx:idx+self.n+1]
-        #context = np.delete(run,self.n//2)
-        #word = int(run[self.n//2])
         label = torch.Tensor.float(one_hot(torch.tensor(self.words[idx]),num_classes=len(self.vocabulary)))
         return self.contexts[idx,:],label
         
-    
     def build(self, sentence_generator):
         words = []
         contexts = []
@@ -66,10 +62,9 @@ class Examples:
                 w,c = self.accumulate(self.tokenize (sentence))
                 words.append(w)
                 contexts.append(c)
-            except ValueError:      # too short
+            except ValueError:      # Some sentences are too short: ignore them
                 pass
                 
-   
         self.words = np.concatenate(words)
         self.contexts = np.concatenate(contexts)
   
@@ -97,33 +92,11 @@ class Examples:
         return words,context
     
         
-class Corpus:
-    def __init__(self,text = 'the quick brown fox jumped over the lazy dog'):
-        self.text = text.split()
-        self.words = list(set(self.text))
-        self.indices = {self.words[i]:i for i in range(len(self.words))}
-        self.tokenized = np.array([self.indices[word] for word in self.text])
-        
-    def get_vocabulary_size(self):
-        return len(self.words)    
-        
-class WordData:
-    def __init__(self,corpus,n):
-        self.corpus = corpus
-        self.n = n
-        
-    def __len__(self):
-        return len(self.corpus.text) - self.n
-    
-    def __getitem__(self, idx):
-        run = self.corpus.tokenized[idx:idx+self.n+1]
-        context = np.delete(run,self.n//2)
-        word = int(run[self.n//2])
-        label = torch.Tensor.float(one_hot(torch.tensor(word),num_classes=len(self.corpus.words)))
-        return context,label
-    
-    
+
 class WordEmbeddings(nn.Module):
+    '''
+    Thic class represengts the CBOW Network frm Mikolov et al 2013
+    '''
     def __init__(self,V,D,n):
         super().__init__()
         self.embeddings = nn.Embedding(num_embeddings=V*n, embedding_dim=D)
@@ -140,7 +113,7 @@ def parse_args():
     figs = './figs'
     window = 4
     parser = ArgumentParser(description=__doc__)
-    #parser.add_argument('input', nargs='+', help='List of input files')
+    parser.add_argument('input', nargs='+', help='List of input files')
     parser.add_argument('--seed', type=int, default=None, help='Seed for random number generation')
     parser.add_argument('--data', default=data, help=f'Path to data files [{data}]')    
     parser.add_argument('-D','--embedding_dim',type=int,default=300)
@@ -151,6 +124,7 @@ def parse_args():
     parser.add_argument('--show', default=False, action='store_true', help='Controls whether plots are shown')
     parser.add_argument('--figs', default=figs, help=f'Path used to store plots [{figs}]')
     parser.add_argument('-w', '--window', type=int, default=window, help=f'Width of window for context [{window}]')
+    parser.add_argument('-o', '--output', default=None, required=True, help='File name for storing results')
     
     return parser.parse_args()
 
@@ -183,7 +157,6 @@ def main():
         seed = get_seed(args.seed,
                         notify=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()}'
                                                                    f' Created new seed {s}'))    
-        #rng=np.random.default_rng(seed)
         torch.manual_seed(seed)
         examples = Examples(window=args.window)
     
@@ -191,20 +164,20 @@ def main():
                 generate_sentences(
                     generate_tokens(
                         generate_text(
-                            file_names=[globbed for name in ['gatsby1.txt'] for globbed in glob(join(args.data, name))]
+                            file_names=[globbed for name in args.input for globbed in glob(join(args.data, name))]
                         ))))
         m = len(examples)
         
-        #corpus = Corpus()
-        #training_data = WordData(corpus,args.windows_size)
         model = WordEmbeddings(len(examples.vocabulary),args.embedding_dim,args.windows_size)
      
         train_dataloader = DataLoader(examples, batch_size=args.batch, shuffle=True)
         training_losses = train(model,train_dataloader,NIterators=args.NIterators)
+        
         fig = figure(figsize=(12,12))
         ax1 = fig.add_subplot(1,1,1)
         ax1.plot(training_losses,label=f'Training Losses {training_losses[-1]:.6}')
         ax1.legend()
+        fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))
         
         elapsed = time() - start
         minutes = int(elapsed/60)
