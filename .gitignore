@@ -133,3 +133,5 @@ dmypy.json
 *.npz
 *.pkl
 *.pkl~
+*.pth
+*.zip
