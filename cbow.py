@@ -32,8 +32,9 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from torch.nn.functional import one_hot
-from matplotlib.pyplot import figure,show
+from matplotlib.pyplot import figure, show
 from matplotlib import rc
+from matplotlib.ticker import MaxNLocator
 
 from command import Command
 from vocabulary import Vocabulary
@@ -41,6 +42,19 @@ from tokenizer import generate_sentences, generate_text, generate_tokens, Token
 from shared.utils import Logger, user_has_requested_stop, get_seed
 
 class Examples:
+    @staticmethod
+    def create(file_name:str) -> 'Examples':
+        '''
+        A factory method to instantiate a set of Examples from a saved file
+        
+        Parameters:
+            file_name    Name of file where examples have been stored
+        '''
+        with open(file_name, 'rb') as inp:
+            product = load(inp)
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} Loaded examples from {file_name.resolve()}')
+            return product
+        
     def __init__(self,window=4):
         self.window = window
         self.vocabulary = Vocabulary(sentence_tokens=True)
@@ -117,7 +131,8 @@ class WordEmbeddings(nn.Module):
         x = self.embeddings(x)
         x = x.mean(axis=1)
         return self.linear_1(x)
- 
+
+    
 class CreateExamples(Command):
     '''
     Build examples for training CBOW
@@ -144,12 +159,37 @@ class CreateExamples(Command):
         
         examples.save((Path(args.data) / args.output).with_suffix('.pkl'),
                       report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))    
+
+class TrainWordEmbeddings(Command):
+    def __init__(self):
+        super().__init__('train')
         
+    def _execute(self, args, rng=np.random.default_rng()):
+        examples = Examples.create((Path(args.data) / args.input[0]).with_suffix('.pkl'))
+        model = WordEmbeddings(len(examples.vocabulary),args.embedding_dim,args.windows_size)
+    
+        train_dataloader = DataLoader(examples, batch_size=args.batch, shuffle=True)
+        training_losses = train(model,train_dataloader,NIterations=args.NIterations)
+        self._plot_losses(training_losses,args.figs,args.output,args.NIterations)
+        
+    def _plot_losses(self,training_losses,figs,output,NIterations):
+        fig = figure(figsize=(12,12))
+        ax1 = fig.add_subplot(1,1,1)
+        ax1.plot(list(range(1,NIterations+1)),training_losses,label=f'Training Losses {training_losses[-1]:.6}')
+        ax1.xaxis.set_major_locator(MaxNLocator(integer=True))
+        _,ymax = ax1.get_ylim()
+        ax1.set_ylim(0,ymax)
+        ax1.set_xlabel('Epoch')
+        ax1.set_ylabel('Loss')
+        ax1.legend()
+        fig.savefig((Path(figs) / output).with_suffix('.png'))   
+    
 def parse_args(choices : [str]):
     data = './data'
     logs = './logs'
     figs = './figs'
     window = 4
+    batch = 64
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=choices, help='Selects the function that is to be executed')
     parser.add_argument('input', nargs='+', help='List of input files')
@@ -157,8 +197,8 @@ def parse_args(choices : [str]):
     parser.add_argument('--data', default=data, help=f'Path to data files [{data}]')    
     parser.add_argument('-D','--embedding_dim',type=int,default=300)
     parser.add_argument('-n','--windows_size',type=int,default=4)
-    parser.add_argument('-N','--NIterators',type=int,default=100)
-    parser.add_argument('--batch',type=int, default=4)
+    parser.add_argument('-N','--NIterations',type=int,default=100)
+    parser.add_argument('--batch',type=int, default=batch)
     parser.add_argument('--logs', default=logs, help=f'Location for storing log files [{logs}]')
     parser.add_argument('--show', default=False, action='store_true', help='Controls whether plots are shown')
     parser.add_argument('--figs', default=figs, help=f'Path used to store plots [{figs}]')
@@ -167,12 +207,12 @@ def parse_args(choices : [str]):
     
     return parser.parse_args()
 
-def train(model,dataloader,NIterators=100):
+def train(model,dataloader,NIterations=100):
     optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.95)
     loss_fn = nn.CrossEntropyLoss()
     device = 'cuda' if torch.cuda.is_available() else 'cpu'  
     running_loss=[]
-    for epoch in range(NIterators):
+    for epoch in range(NIterations):
         train_loss = []
         model.train()
         
@@ -196,47 +236,15 @@ def main():
     rc('text', usetex=True)
 
     Command.append([
-        CreateExamples()
+        CreateExamples(),
+        TrainWordEmbeddings()
     ])
+    
     args = parse_args(Command.get_choices())
     Command.get_command(args.command).execute(args)
 
     if args.show:
         show()    
-    #start  = time()
-    #args = parse_args()
-    #with Logger(Path(__file__).stem, path=args.logs) as _:
-        #seed = get_seed(args.seed,
-                        #notify=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()}'
-                                                                   #f' Created new seed {s}'))    
-        #torch.manual_seed(seed)
-        #examples = Examples(window=args.window)
-    
-        #examples.build(
-                #generate_sentences(
-                    #generate_tokens(
-                        #generate_text(
-                            #file_names=[globbed for name in args.input for globbed in glob(join(args.data, name))]
-                        #))))
-        #m = len(examples)
-        
-        #model = WordEmbeddings(len(examples.vocabulary),args.embedding_dim,args.windows_size)
-     
-        #train_dataloader = DataLoader(examples, batch_size=args.batch, shuffle=True)
-        #training_losses = train(model,train_dataloader,NIterators=args.NIterators)
-        
-        #fig = figure(figsize=(12,12))
-        #ax1 = fig.add_subplot(1,1,1)
-        #ax1.plot(training_losses,label=f'Training Losses {training_losses[-1]:.6}')
-        #ax1.legend()
-        #fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))
-        
-        #elapsed = time() - start
-        #minutes = int(elapsed/60)
-        #seconds = elapsed - 60*minutes
-        #print (f'Elapsed Time {minutes} m {seconds:.2f} s')
-        #if args.show:
-            #show()
     
 if __name__=='__main__':
     main()

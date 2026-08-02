@@ -40,7 +40,10 @@ class Command(ABC):
     @staticmethod
     def append(commands):
         '''
-        List of Mommands that are availavle to user
+        Prepare one of more commands
+        
+        Parameters:
+            cpmmands   List of Commands that are available to user
         '''
         for command in commands:
             Command.choices[command.key] = command
@@ -91,7 +94,7 @@ class Command(ABC):
             elapsed = time() - start
             minutes = int(elapsed / 60)
             seconds = elapsed - 60 * minutes
-            Logger.get_instance().log(f'{__file__} {Logger.get_line()} Elapsed Time {minutes} m {seconds:.2f} s')
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} Elapsed Time {minutes} m {seconds:.2f} s')         
 
     @abstractmethod
     def _execute(self, args, rng=np.random.default_rng()):
