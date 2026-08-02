@@ -42,6 +42,9 @@ from tokenizer import generate_sentences, generate_text, generate_tokens, Token
 from shared.utils import Logger, user_has_requested_stop, get_seed
 
 class Examples:
+    '''
+    This class represents a set of training examples for CBOW
+    '''
     @staticmethod
     def create(file_name:str) -> 'Examples':
         '''
@@ -55,7 +58,7 @@ class Examples:
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} Loaded examples from {file_name.resolve()}')
             return product
         
-    def __init__(self,window=4):
+    def __init__(self,window : int=4):
         self.window = window
         self.vocabulary = Vocabulary(sentence_tokens=True)
         context = np.full((0,2*self.window),-1,dtype=int)
@@ -120,7 +123,7 @@ class Examples:
 
 class WordEmbeddings(nn.Module):
     '''
-    Thic class represengts the CBOW Network frm Mikolov et al 2013
+    Thic class represengts the CBOW Network from Mikolov et al 2013
     '''
     def __init__(self,V,D,n):
         super().__init__()
@@ -167,9 +170,16 @@ class TrainWordEmbeddings(Command):
     def _execute(self, args, rng=np.random.default_rng()):
         examples = Examples.create((Path(args.data) / args.input[0]).with_suffix('.pkl'))
         model = WordEmbeddings(len(examples.vocabulary),args.embedding_dim,args.windows_size)
-    
+        if args.reload != None:
+            load_file = (Path(args.data) / args.reload).with_suffix('.pth')
+            model.load_state_dict(torch.load(load_file, weights_only=True))
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} Reloaded weights from {load_file}')
+            model.eval()    
         train_dataloader = DataLoader(examples, batch_size=args.batch, shuffle=True)
         training_losses = train(model,train_dataloader,NIterations=args.NIterations)
+        save_file = (Path(args.data) / args.output).with_suffix('.pth')
+        torch.save(model.state_dict(), save_file)
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Saved weights to {save_file}')
         self._plot_losses(training_losses,args.figs,args.output,args.NIterations)
         
     def _plot_losses(self,training_losses,figs,output,NIterations):
@@ -204,6 +214,7 @@ def parse_args(choices : [str]):
     parser.add_argument('--figs', default=figs, help=f'Path used to store plots [{figs}]')
     parser.add_argument('-w', '--window', type=int, default=window, help=f'Width of window for context [{window}]')
     parser.add_argument('-o', '--output', default=None, required=True, help='File name for storing results')
+    parser.add_argument('--reload', default=None)  
     
     return parser.parse_args()
 
@@ -227,6 +238,7 @@ def train(model,dataloader,NIterations=100):
         mean_train_loss = np.average(train_loss)
         print(f'Epoch:{epoch} | Mean Training Loss : {mean_train_loss}') 
         running_loss.append(mean_train_loss)
+    
     return running_loss
         
 def main():
