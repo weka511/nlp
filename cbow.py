@@ -119,6 +119,9 @@ class Examples:
         
         Parameters:
             sentence
+            
+        Returns:
+           List of tokens
         '''
         return (
             [self.vocabulary.SOS] +
@@ -316,6 +319,8 @@ def train(
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+        mean_train_loss = np.sum(train_loss)/len(train_dataloader)
+        running_train_loss.append(mean_train_loss)
         
         test_loss = []    
         model.eval()
@@ -325,13 +330,11 @@ def train(
                 loss = loss_fn(y_train_pred, label.to(device))
                 test_loss.append(loss.item() * feature.size(0))
                 
-        mean_train_loss = np.sum(train_loss)/len(train_dataloader)
         mean_test_loss = np.sum(test_loss)/len(test_dataloader)
-        
-        print(f'Epoch:{epoch} | Mean Training Loss : {mean_train_loss} Mean Test Loss : {mean_test_loss}') 
-        running_train_loss.append(mean_train_loss)
         running_test_loss.append(mean_test_loss)
         
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Epoch: {epoch}, Mean Training Loss = {mean_train_loss}, Mean Test Loss = {mean_test_loss}') 
+      
     return running_train_loss,running_test_loss
         
 def main():
