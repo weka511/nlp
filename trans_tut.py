@@ -138,7 +138,7 @@ class MultiHeadAttention(nn.Module):
 
 class PositionWiseFeedForward(nn.Module):
     '''
-    This class peovides a feed-forward network that is applied to each position separately
+    This class provides a feed-forward network that is applied to each position separately
     and identically. It helps in transforming the features learned by the attention mechanisms  
     within the transformer, acting as an additional processing step for the attention outputs.
     
@@ -177,7 +177,7 @@ class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_seq_length):
         '''
         Parameters:
-            d_model          Number of encoder and decoder layers
+            d_model          Number of dimensions for model
             max_seq_length   Maximum number of tokens in a sentence
         '''
         super().__init__()
@@ -410,9 +410,9 @@ def validate(transformer,
     '''
     transformer.eval()
 
-    # Generate random sample validation data
-    val_src_data = torch.randint(1, src_vocab_size, (batch_size, max_seq_length)) 
-    val_tgt_data = torch.randint(1, tgt_vocab_size, (batch_size, max_seq_length))
+    val_src_data,val_tgt_data = create_data(src_vocab_size=args.src_vocab_size,tgt_vocab_size=args.tgt_vocab_size,
+                                    seq_length=args.max_seq_length)
+ 
     with torch.no_grad():
         val_output = transformer(val_src_data, val_tgt_data[:, :-1])
         val_loss = criterion(
@@ -452,6 +452,12 @@ def plot_losses(Losses, validation_loss, figs, output):
 def create_data(src_vocab_size=5000,tgt_vocab_size=5000,batch_size=64, seq_length=100):
     '''
     Generate random sample data
+    
+    Parameters:
+        src_vocab_size
+        tgt_vocab_size
+        batch_size
+        seq_length
     '''
     src_data = torch.randint(1, src_vocab_size, (batch_size, seq_length))
     tgt_data = torch.randint(1, tgt_vocab_size, (batch_size, seq_length))
