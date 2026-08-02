@@ -17,14 +17,14 @@
 
 '''Continuous Bag Of Words'''
 
-__version__ = '0.0'
+__version__ = '0.1'
 __author__ = 'Simon Crase'
 
 from argparse import ArgumentParser
 from glob import glob
 from os.path import join
 from pathlib import Path
-from time import time
+from pickle import dump, HIGHEST_PROTOCOL, load
 
 import numpy as np
 import torch
@@ -33,7 +33,9 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from torch.nn.functional import one_hot
 from matplotlib.pyplot import figure,show
+from matplotlib import rc
 
+from command import Command
 from vocabulary import Vocabulary
 from tokenizer import generate_sentences, generate_text, generate_tokens, Token
 from shared.utils import Logger, user_has_requested_stop, get_seed
@@ -91,7 +93,16 @@ class Examples:
             end += 1
         return words,context
     
+    def save(self, file, report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}')):
+        '''
+        Save Examples using pickle.
         
+        Parameters:
+            file     Name of file where tables will be saved
+        '''
+        with open(file, 'wb') as out:
+            dump(self, out, HIGHEST_PROTOCOL)
+            report(f'Saved examples in {file.resolve()}')        
 
 class WordEmbeddings(nn.Module):
     '''
@@ -106,13 +117,41 @@ class WordEmbeddings(nn.Module):
         x = self.embeddings(x)
         x = x.mean(axis=1)
         return self.linear_1(x)
+ 
+class CreateExamples(Command):
+    '''
+    Build examples for training CBOW
+    '''
+    def __init__(self):
+        super().__init__('examples')
+        
+    def _execute(self, args, rng=np.random.default_rng()):
+        '''
+        Parse text into tokens, then build examples
+        
+        Parameters:
+            args       Command line parameters as parsed by parse_args()
+            rng        Random number generator
+        '''
+        examples = Examples(window=args.window)
     
-def parse_args():
+        examples.build(
+                generate_sentences(
+                    generate_tokens(
+                        generate_text(
+                            file_names=[globbed for name in args.input for globbed in glob(join(args.data, name))]
+                        ))))  
+        
+        examples.save((Path(args.data) / args.output).with_suffix('.pkl'),
+                      report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))    
+        
+def parse_args(choices : [str]):
     data = './data'
     logs = './logs'
     figs = './figs'
     window = 4
     parser = ArgumentParser(description=__doc__)
+    parser.add_argument('command', choices=choices, help='Selects the function that is to be executed')
     parser.add_argument('input', nargs='+', help='List of input files')
     parser.add_argument('--seed', type=int, default=None, help='Seed for random number generation')
     parser.add_argument('--data', default=data, help=f'Path to data files [{data}]')    
@@ -151,40 +190,53 @@ def train(model,dataloader,NIterators=100):
     return running_loss
         
 def main():
-    start  = time()
-    args = parse_args()
-    with Logger(Path(__file__).stem, path=args.logs) as _:
-        seed = get_seed(args.seed,
-                        notify=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()}'
-                                                                   f' Created new seed {s}'))    
-        torch.manual_seed(seed)
-        examples = Examples(window=args.window)
+    rc('font', **{'family': 'serif',
+                  'serif': ['Palatino'],
+                  'size': 8})
+    rc('text', usetex=True)
+
+    Command.append([
+        CreateExamples()
+    ])
+    args = parse_args(Command.get_choices())
+    Command.get_command(args.command).execute(args)
+
+    if args.show:
+        show()    
+    #start  = time()
+    #args = parse_args()
+    #with Logger(Path(__file__).stem, path=args.logs) as _:
+        #seed = get_seed(args.seed,
+                        #notify=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()}'
+                                                                   #f' Created new seed {s}'))    
+        #torch.manual_seed(seed)
+        #examples = Examples(window=args.window)
     
-        examples.build(
-                generate_sentences(
-                    generate_tokens(
-                        generate_text(
-                            file_names=[globbed for name in args.input for globbed in glob(join(args.data, name))]
-                        ))))
-        m = len(examples)
+        #examples.build(
+                #generate_sentences(
+                    #generate_tokens(
+                        #generate_text(
+                            #file_names=[globbed for name in args.input for globbed in glob(join(args.data, name))]
+                        #))))
+        #m = len(examples)
         
-        model = WordEmbeddings(len(examples.vocabulary),args.embedding_dim,args.windows_size)
+        #model = WordEmbeddings(len(examples.vocabulary),args.embedding_dim,args.windows_size)
      
-        train_dataloader = DataLoader(examples, batch_size=args.batch, shuffle=True)
-        training_losses = train(model,train_dataloader,NIterators=args.NIterators)
+        #train_dataloader = DataLoader(examples, batch_size=args.batch, shuffle=True)
+        #training_losses = train(model,train_dataloader,NIterators=args.NIterators)
         
-        fig = figure(figsize=(12,12))
-        ax1 = fig.add_subplot(1,1,1)
-        ax1.plot(training_losses,label=f'Training Losses {training_losses[-1]:.6}')
-        ax1.legend()
-        fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))
+        #fig = figure(figsize=(12,12))
+        #ax1 = fig.add_subplot(1,1,1)
+        #ax1.plot(training_losses,label=f'Training Losses {training_losses[-1]:.6}')
+        #ax1.legend()
+        #fig.savefig((Path(args.figs) / args.output).with_suffix('.png'))
         
-        elapsed = time() - start
-        minutes = int(elapsed/60)
-        seconds = elapsed - 60*minutes
-        print (f'Elapsed Time {minutes} m {seconds:.2f} s')
-        if args.show:
-            show()
+        #elapsed = time() - start
+        #minutes = int(elapsed/60)
+        #seconds = elapsed - 60*minutes
+        #print (f'Elapsed Time {minutes} m {seconds:.2f} s')
+        #if args.show:
+            #show()
     
 if __name__=='__main__':
     main()
