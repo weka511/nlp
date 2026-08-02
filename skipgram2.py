@@ -34,7 +34,6 @@ from os.path import join
 from pathlib import Path
 from pickle import dump, HIGHEST_PROTOCOL, load
 from shutil import copyfile
-from time import time
 
 import numpy as np
 from matplotlib.pyplot import figure, show
@@ -43,10 +42,11 @@ from scipy.special import expit
 from scipy.cluster.hierarchy import dendrogram
 from sklearn.cluster import AgglomerativeClustering
 
+from command import Command
 from crp import ChineseRestaurantProcess, DistanceDependentChooser
 from vocabulary import Vocabulary
 from tokenizer import generate_sentences, generate_text, generate_tokens, Token
-from shared.utils import Logger, user_has_requested_stop, get_seed
+from shared.utils import Logger, user_has_requested_stop
 
 
 class Examples:
@@ -438,81 +438,6 @@ class LossCalculator:
         Once we have calculated loss, need to reset the list of changes
         '''
         self.ToCalculate = []
-
-
-class Command(ABC):
-    '''
-    This class is the parent for all the tasks performed by this program.
-    It provides a list of ecceptable commands (used by parse_args(),
-    and its subclasses are each responsible for one task.
-    '''
-    choices = {}
-
-    @staticmethod
-    def append(commands):
-        '''
-        List of Mommands that are availavle to user
-        '''
-        for command in commands:
-            Command.choices[command.key] = command
-
-    @staticmethod
-    def get_choices():
-        '''
-        Get list of available Commands
-        '''
-        return [key for key in Command.choices.keys()]
-
-    @staticmethod
-    def get_command(key):
-        '''
-        Get Command given the user's specification
-        
-        Parameters:
-            key      Command name specified by user
-        '''
-        return Command.choices[key]
-
-    def __init__(self, key):
-        '''
-        Used when command is created to set the name that the user specifies
-        
-        Parameters:
-            key      The name that the user specifies for this command
-        '''
-        self.key = key
-
-    def execute(self, args):
-        '''
-        Set up parameters needed by Command, then execute it
-        
-        Parameters:
-            args    Command line parameters as parsed by parse_args()
-        '''
-        with Logger(Path(__file__).stem, path=args.logs) as _:
-            start = time()
-            for key, value in vars(args).items():
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {key} = {value}')
-
-            seed = get_seed(args.seed,
-                            notify=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()}'
-                                                                       f' Created new seed {s}'))
-            self._execute(args, rng=np.random.default_rng(seed))
-
-            elapsed = time() - start
-            minutes = int(elapsed / 60)
-            seconds = elapsed - 60 * minutes
-            Logger.get_instance().log(f'{__file__} {Logger.get_line()} Elapsed Time {minutes} m {seconds:.2f} s')
-
-    @abstractmethod
-    def _execute(self, args, rng=np.random.default_rng()):
-        '''
-        Perform command
-        
-        Parameters:
-            args       Command line parameters as parsed by parse_args()
-            rng        Random number generator
-        '''
 
 
 class CreateExamples(Command):
