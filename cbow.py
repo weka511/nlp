@@ -21,6 +21,7 @@ __version__ = '0.1'
 __author__ = 'Simon Crase'
 
 from argparse import ArgumentParser
+from collections.abc import Iterator, Callable
 from glob import glob
 from os.path import join
 from pathlib import Path
@@ -43,7 +44,15 @@ from shared.utils import Logger, user_has_requested_stop, get_seed
 
 class Examples:
     '''
-    This class represents a set of training examples for CBOW
+    This class represents a set of training examples for Continuous Bag of Words,
+    as described in Efficient Estimation of Word Representations in Vector Space
+    by Mikolov et al, 2013, https://arxiv.org/abs/1301.3781
+    
+    Attributes:
+        window
+        vocabulary
+        context
+        words
     '''
     @staticmethod
     def create(file_name:str) -> 'Examples':
@@ -61,24 +70,39 @@ class Examples:
     def __init__(self,window : int=4):
         self.window = window
         self.vocabulary = Vocabulary(sentence_tokens=True)
-        context = np.full((0,2*self.window),-1,dtype=int)
-        words = np.full((0),-1,dtype=int)
+        self.context = np.full((0,2*self.window),-1,dtype=int)
+        self.words = np.full((0),-1,dtype=int)
      
     def __len__(self):
+        '''
+        Find number of examples stored
+        '''
         m, = self.words.shape
         return m
     
-    def __getitem__(self, idx):
+    def __getitem__(self, idx : int):
+        '''
+        Retrieve one example 
+        
+        Parameters:
+            idx     Index of example in dataset
+        '''
         label = torch.Tensor.float(one_hot(torch.tensor(self.words[idx]),num_classes=len(self.vocabulary)))
         return self.contexts[idx,:],label
         
-    def build(self, sentence_generator):
+    def build(self, sentences : Iterator[str]):
+        '''
+        Construct tables of words and contextx
+        
+        Parameters:
+            sentences
+        '''
         words = []
         contexts = []
 
-        for sentence in sentence_generator:
+        for sentence in sentences:
             try:
-                w,c = self.accumulate(self.tokenize (sentence))
+                w,c = self.__accumulate__(self.__tokenize__(sentence))
                 words.append(w)
                 contexts.append(c)
             except ValueError:      # Some sentences are too short: ignore them
@@ -88,14 +112,27 @@ class Examples:
         self.contexts = np.concatenate(contexts)
   
               
-    def tokenize(self,sentence):
+    def __tokenize__(self,sentence : Iterator[str]) -> [int]:
+        '''
+        Convert a sentence to tokens
+        
+        Parameters:
+            sentence
+        '''
         return (
             [self.vocabulary.SOS] +
             [self.vocabulary.tokenize(word) for word in sentence] +
             [self.vocabulary.EOS]
         )
     
-    def accumulate(self,tokens):
+    def __accumulate__(self,tokens : [int]):
+        '''
+        Convert a sequence of tokens, representing one setence, to 
+        words and contextx
+        
+        Parameters:
+            tokens
+        '''
         start = 0
         end = start + 2*self.window + 1
         n_entries = len(tokens) - end +1
@@ -110,12 +147,13 @@ class Examples:
             end += 1
         return words,context
     
-    def save(self, file, report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}')):
+    def save(self, file:str, report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}')):
         '''
         Save Examples using pickle.
         
         Parameters:
             file     Name of file where tables will be saved
+            report
         '''
         with open(file, 'wb') as out:
             dump(self, out, HIGHEST_PROTOCOL)
@@ -123,7 +161,7 @@ class Examples:
 
 class WordEmbeddings(nn.Module):
     '''
-    Thic class represengts the CBOW Network from Mikolov et al 2013
+    Thic class represents the CBOW Network from Mikolov et al 2013
     '''
     def __init__(self,V,D,n):
         super().__init__()
@@ -164,10 +202,16 @@ class CreateExamples(Command):
                       report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))    
 
 class TrainWordEmbeddings(Command):
+    '''
+    Caoomand to train model
+    '''
     def __init__(self):
         super().__init__('train')
         
     def _execute(self, args, rng=np.random.default_rng()):
+        '''
+        Train model and plot losses
+        '''
         examples = Examples.create((Path(args.data) / args.input[0]).with_suffix('.pkl'))
         model = WordEmbeddings(len(examples.vocabulary),args.embedding_dim,args.windows_size)
         if args.reload != None:
@@ -182,7 +226,16 @@ class TrainWordEmbeddings(Command):
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Saved weights to {save_file}')
         self._plot_losses(training_losses,args.figs,args.output,args.NIterations)
         
-    def _plot_losses(self,training_losses,figs,output,NIterations):
+    def _plot_losses(self,training_losses :[float],figs:str,output:str,NIterations:int):
+        '''
+        Plot training losses
+        
+        Parameters:
+            training_losses
+            figs
+            output
+            NIterations
+        '''
         fig = figure(figsize=(12,12))
         ax1 = fig.add_subplot(1,1,1)
         ax1.plot(list(range(1,NIterations+1)),training_losses,label=f'Training Losses {training_losses[-1]:.6}')
@@ -218,7 +271,15 @@ def parse_args(choices : [str]):
     
     return parser.parse_args()
 
-def train(model,dataloader,NIterations=100):
+def train(model:'WordEmbeddings',dataloader:'DataLoader',NIterationsIint=100)->[float]:
+    '''
+    Train model
+    
+    Parameters:
+        model
+        dataloader
+        NIterations
+    '''
     optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.95)
     loss_fn = nn.CrossEntropyLoss()
     device = 'cuda' if torch.cuda.is_available() else 'cpu'  
