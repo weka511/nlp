@@ -15,7 +15,10 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-'''Continuous Bag Of Words'''
+'''Continuous Bag Of Words as described in 
+   Efficient Estimation of Word Representations in Vector Space
+   by Mikolov et al, 2013, https://arxiv.org/abs/1301.3781
+'''
 
 __version__ = '0.1'
 __author__ = 'Simon Crase'
@@ -31,7 +34,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, random_split
 from torch.nn.functional import one_hot
 from matplotlib.pyplot import figure, show
 from matplotlib import rc
@@ -45,8 +48,6 @@ from shared.utils import Logger, user_has_requested_stop, get_seed
 class Examples:
     '''
     This class represents a set of training examples for Continuous Bag of Words,
-    as described in Efficient Estimation of Word Representations in Vector Space
-    by Mikolov et al, 2013, https://arxiv.org/abs/1301.3781
     
     Attributes:
         window
@@ -127,8 +128,8 @@ class Examples:
     
     def __accumulate__(self,tokens : [int]):
         '''
-        Convert a sequence of tokens, representing one setence, to 
-        words and contextx
+        Convert a sequence of tokens, representing one sentence, to 
+        words and contexts
         
         Parameters:
             tokens
@@ -203,7 +204,7 @@ class CreateExamples(Command):
 
 class TrainWordEmbeddings(Command):
     '''
-    Caoomand to train model
+    Command to train model
     '''
     def __init__(self):
         super().__init__('train')
@@ -213,32 +214,38 @@ class TrainWordEmbeddings(Command):
         Train model and plot losses
         '''
         examples = Examples.create((Path(args.data) / args.input[0]).with_suffix('.pkl'))
+ 
         model = WordEmbeddings(len(examples.vocabulary),args.embedding_dim,args.windows_size)
         if args.reload != None:
             load_file = (Path(args.data) / args.reload).with_suffix('.pth')
             model.load_state_dict(torch.load(load_file, weights_only=True))
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} Reloaded weights from {load_file}')
-            model.eval()    
-        train_dataloader = DataLoader(examples, batch_size=args.batch, shuffle=True)
-        training_losses = train(model,train_dataloader,NIterations=args.NIterations)
+            model.eval()
+            
+        train_set,test_set = random_split(examples,[0.9,0.1])
+        train_dataloader = DataLoader(train_set, batch_size=args.batch, shuffle=True)
+        test_dataloader = DataLoader(test_set, batch_size=args.batch, shuffle=True)
+        train_loss,test_loss = train(model,train_dataloader,test_dataloader,NIterations=args.NIterations)
         save_file = (Path(args.data) / args.output).with_suffix('.pth')
         torch.save(model.state_dict(), save_file)
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Saved weights to {save_file}')
-        self._plot_losses(training_losses,args.figs,args.output,args.NIterations)
+        self._plot_losses(train_loss,test_loss,args.figs,args.output,args.NIterations)
         
-    def _plot_losses(self,training_losses :[float],figs:str,output:str,NIterations:int):
+    def _plot_losses(self,training_losses:[float],test_losses :[float],figs:str,output:str,NIterations:int):
         '''
         Plot training losses
         
         Parameters:
             training_losses
+            test_losses
             figs
             output
             NIterations
         '''
         fig = figure(figsize=(12,12))
         ax1 = fig.add_subplot(1,1,1)
-        ax1.plot(list(range(1,NIterations+1)),training_losses,label=f'Training Losses {training_losses[-1]:.6}')
+        ax1.plot(list(range(1,NIterations+1)),training_losses,label=f'Training Losses {training_losses[-1]:.6}',c='xkcd:blue')
+        ax1.plot(list(range(1,NIterations+1)),test_losses,label=f'Test Losses {test_losses[-1]:.6}',c='xkcd:red')
         ax1.xaxis.set_major_locator(MaxNLocator(integer=True))
         _,ymax = ax1.get_ylim()
         ax1.set_ylim(0,ymax)
@@ -271,36 +278,61 @@ def parse_args(choices : [str]):
     
     return parser.parse_args()
 
-def train(model:'WordEmbeddings',dataloader:'DataLoader',NIterationsIint=100)->[float]:
+def train(
+        model:'WordEmbeddings',
+        train_dataloader:'DataLoader',
+        test_dataloader:'DataLoader',
+        NIterations:int=100
+        )->[float]:
     '''
-    Train model
+    Train model and compute tarining and test losses
     
     Parameters:
         model
-        dataloader
+        train_dataloader
+        test_dataloader
         NIterations
+        
+    Returns:
+       Training losses for each epoch
+       Test Losses for each epoch
     '''
+
     optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.95)
     loss_fn = nn.CrossEntropyLoss()
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'  
-    running_loss=[]
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model = model.to(device)
+    running_train_loss = []
+    running_test_loss = []
+    
     for epoch in range(NIterations):
         train_loss = []
         model.train()
         
-        for feature, label in dataloader:
-            model = model.to(device)
+        for feature, label in train_dataloader:
             y_train_pred = model(feature.to(device))
             loss = loss_fn(y_train_pred, label.to(device))
-            train_loss.append(loss.item())
+            train_loss.append(loss.item() * feature.size(0)) # Scale by batch size
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-        mean_train_loss = np.average(train_loss)
-        print(f'Epoch:{epoch} | Mean Training Loss : {mean_train_loss}') 
-        running_loss.append(mean_train_loss)
-    
-    return running_loss
+        
+        test_loss = []    
+        model.eval()
+        with torch.no_grad():
+            for feature, label in test_dataloader:
+                y_train_pred = model(feature.to(device))
+                loss = loss_fn(y_train_pred, label.to(device))
+                test_loss.append(loss.item() * feature.size(0))
+                
+        mean_train_loss = np.sum(train_loss)/len(train_dataloader)
+        mean_test_loss = np.sum(test_loss)/len(test_dataloader)
+        
+        print(f'Epoch:{epoch} | Mean Training Loss : {mean_train_loss} Mean Test Loss : {mean_test_loss}') 
+        running_train_loss.append(mean_train_loss)
+        running_test_loss.append(mean_test_loss)
+        
+    return running_train_loss,running_test_loss
         
 def main():
     rc('font', **{'family': 'serif',
