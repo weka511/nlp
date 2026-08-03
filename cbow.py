@@ -256,7 +256,7 @@ class TrainWordEmbeddings(Command):
         torch.save(model.state_dict(), save_file)
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Saved weights to {save_file}')
         self._plot_losses(train_loss, test_loss, args.figs, args.output, args.NIterations,
-                          title=f'Half window size={args.window_size}, embedding dimension={args.embedding_dim}')
+                          title=f'Half window size={examples.window}, embedding dimension={args.embedding_dim}')
 
     def _plot_losses(self, training_losses: [float], test_losses: [float], figs: str, output: str, NIterations: int,title=None):
         '''
@@ -296,17 +296,23 @@ def parse_args(choices: [str]):
     parser.add_argument('input', nargs='+', help='List of input files')
     parser.add_argument('--seed', type=int, default=None, help='Seed for random number generation')
     parser.add_argument('--data', default=data, help=f'Path to data files [{data}]')
-    parser.add_argument('-D', '--embedding_dim', type=int, default=300,help='Dimenionality of Embedding vectors')
-    parser.add_argument('-n', '--window_size', type=int, default=window_size, 
-                        help=f'Half size of window (context extends left and right) [{window_size}]')
-    parser.add_argument('-N', '--NIterations', type=int, default=100,help='Number of epochs for training')
-    parser.add_argument('--batch', type=int, default=batch,help='Batch size for training')
     parser.add_argument('--logs', default=logs, help=f'Location for storing log files [{logs}]')
-    parser.add_argument('--show', default=False, action='store_true', help='Controls whether plots are shown')
-    parser.add_argument('--figs', default=figs, help=f'Path used to store plots [{figs}]')
     parser.add_argument('-o', '--output', default=None, required=True, help='File name for storing results')
-    parser.add_argument('--reload', default=None,help='Indicates that weights are to be reloaded from file before training')
-
+    
+    group_create_examples = parser.add_argument_group('examples','Options for creating training examples')
+    group_create_examples.add_argument('-n', '--window_size', type=int, default=window_size, 
+                                    help=f'Half size of window (context extends left and right) [{window_size}]')
+    
+    group_train_embeddings = parser.add_argument_group('train','Options for Training')
+    group_train_embeddings.add_argument('-D', '--embedding_dim', type=int, default=300,help='Dimenionality of Embedding vectors')
+    group_train_embeddings.add_argument('-N', '--NIterations', type=int, default=100,help='Number of epochs for training')
+    group_train_embeddings.add_argument('--batch', type=int, default=batch,help='Batch size for training')
+    group_train_embeddings.add_argument('--reload', default=None,
+                                        help='Indicates that weights are to be reloaded from file before training')
+    group_train_embeddings.add_argument('--show', default=False, action='store_true', help='Controls whether plots are shown')
+    group_train_embeddings.add_argument('--figs', default=figs, help=f'Path used to store plots [{figs}]')    
+    
+    
     return parser.parse_args()
 
 
