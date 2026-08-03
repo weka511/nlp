@@ -52,7 +52,7 @@ class Examples:
     This class represents a set of training examples for Continuous Bag of Words,
     
     Attributes:
-        window      Half size of window (context extends left and right)
+        window_size      Half size of window (context extends left and right)
         vocabulary  Mapping between words and tokens
         context     Array of contexts (left and right) for eac h word
         words       Array of words that occue in each context
@@ -70,15 +70,17 @@ class Examples:
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} Loaded examples from {file_name.resolve()}')
             return product
 
-    def __init__(self, window: int = 4):
+    def __init__(self, window_size: int = 4):
         '''
         Parameters:
-            window      Half size of window (context extends left and right)
+            window_size      Half size of window (context extends left and right)
         '''
-        self.window = window
+        self.window_size = window_size
         self.vocabulary = Vocabulary(sentence_tokens=True)
-        self.context = np.full((0, 2 * self.window), -1, dtype=int)
-        self.words = np.full((0), -1, dtype=int)
+        self.context_train = np.full((0, 2 * self.window_size), -1, dtype=int)
+        self.words_train = np.full((0), -1, dtype=int)
+        self.context_test = np.full((0, 2 * self.window_size), -1, dtype=int)
+        self.words_test = np.full((0), -1, dtype=int)        
 
     def __len__(self):
         '''
@@ -103,26 +105,41 @@ class Examples:
                     num_classes=len(self.vocabulary)))
         return self.contexts[idx, :], word
 
-    def build(self, sentences: Iterator[str]):
+    def build(self, sentences: Iterator[str],
+              test_set_size:float = 0.1, 
+              rng=np.random.default_rng()):
         '''
         Construct tables of words and contextx
         
         Parameters:
-            sentences   A generator that returns a senetence at a time
+            sentences   A generator that returns a sentence at a time
+            test_set_size
         '''
-        words = []
-        contexts = []
-
+        words_train = []
+        contexts_train = []
+        words_test = []
+        contexts_test = []
+        
         for sentence in sentences:
             try:
                 w, c = self.__accumulate__(self.__tokenize__(sentence))
-                words.append(w)
-                contexts.append(c)
+                if rng.uniform() < test_set_size:
+                    words_test.append(w)
+                    contexts_test.append(c)
+                else:
+                    words_train.append(w)
+                    contexts_train.append(c)                    
             except ValueError:      # Some sentences are too short: ignore them
                 pass
 
-        self.words = np.concatenate(words)
-        self.contexts = np.concatenate(contexts)
+        self.words_test = np.concatenate(words_test)
+        self.contexts_test = np.concatenate(contexts_test)
+        self.words_train = np.concatenate(words_train)
+        self.contexts_train = np.concatenate(contexts_train)
+        m1,_ = self.contexts_train.shape
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Created {m1} training examples')
+        m2,_ = self.contexts_test.shape
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Created {m2} test examples')        
 
     def __tokenize__(self, sentence: Iterator[str]) -> [int]:
         '''
@@ -149,15 +166,15 @@ class Examples:
             tokens
         '''
         start = 0
-        end = start + 2 * self.window + 1
+        end = start + 2 * self.window_size + 1
         n_entries = len(tokens) - end + 1
-        context = np.full((n_entries, 2 * self.window), -1, dtype=int)
+        context = np.full((n_entries, 2 * self.window_size), -1, dtype=int)
         words = np.full((n_entries), -1, dtype=int)
         while end <= len(tokens):
             run = [tokens[i] for i in range(start, end)]
-            words[start] = run[self.window]
-            context[start, :self.window] = run[:self.window]
-            context[start, self.window:] = run[self.window + 1:]
+            words[start] = run[self.window_size]
+            context[start, :self.window_size] = run[:self.window_size]
+            context[start, self.window_size:] = run[self.window_size + 1:]
             start += 1
             end += 1
         return words, context
@@ -207,14 +224,17 @@ class CreateExamples(Command):
             args       Command line parameters as parsed by parse_args()
             rng        Random number generator
         '''
-        examples = Examples(window=args.window_size)
+        examples = Examples(window_size=args.window_size)
 
         examples.build(
             generate_sentences(
                 generate_tokens(
                     generate_text(
                         file_names=[globbed for name in args.input for globbed in glob(join(args.data, name))]
-                    ))))
+                    ))),
+            test_set_size=args.test_set_size,
+            rng=rng
+        )
 
         examples.save((Path(args.data) / args.output).with_suffix('.pkl'),
                       report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
@@ -256,7 +276,7 @@ class TrainWordEmbeddings(Command):
         torch.save(model.state_dict(), save_file)
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Saved weights to {save_file}')
         self._plot_losses(train_loss, test_loss, args.figs, args.output, args.NIterations,
-                          title=f'Half window size={examples.window}, embedding dimension={args.embedding_dim}')
+                          title=f'Half window size={examples.window_size}, embedding dimension={args.embedding_dim}')
 
     def _plot_losses(self, training_losses: [float], test_losses: [float], figs: str, output: str, NIterations: int,title=None):
         '''
@@ -302,6 +322,7 @@ def parse_args(choices: [str]):
     group_create_examples = parser.add_argument_group('examples','Options for creating training examples')
     group_create_examples.add_argument('-n', '--window_size', type=int, default=window_size, 
                                     help=f'Half size of window (context extends left and right) [{window_size}]')
+    group_create_examples.add_argument('--test_set_size',type=float,default=0.1)
     
     group_train_embeddings = parser.add_argument_group('train','Options for Training')
     group_train_embeddings.add_argument('-D', '--embedding_dim', type=int, default=300,help='Dimenionality of Embedding vectors')
