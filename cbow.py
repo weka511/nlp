@@ -21,7 +21,7 @@
     by Mikolov et al, 2013, https://arxiv.org/abs/1301.3781
 '''
 
-__version__ = '0.1'
+__version__ = '1.0'
 __author__ = 'Simon Crase'
 
 from argparse import ArgumentParser
@@ -46,7 +46,15 @@ from vocabulary import Vocabulary
 from tokenizer import generate_sentences, generate_text, generate_tokens, Token
 from shared.utils import Logger, user_has_requested_stop, get_seed
 
-class ExampleData:
+class ExampleDataSet:
+    '''
+    This class wraps one set of data, training or test
+    
+    Attributes:
+        contexts
+        words
+        vocabulary
+    '''
     def __init__(self,contexts,words,vocabulary):
         self.contexts = contexts
         self.words = words
@@ -70,10 +78,12 @@ class ExampleData:
             context
             word 
         '''
-        word = torch.Tensor.float(
-            one_hot(torch.tensor(self.words[idx]),
-                    num_classes=len(self.vocabulary)))
-        return self.contexts[idx, :], word
+        
+        return (self.contexts[idx, :], 
+                torch.Tensor.float(
+                                one_hot(torch.tensor(self.words[idx]),
+                                        num_classes=len(self.vocabulary)))
+                )
 
 class Examples:
     '''
@@ -109,8 +119,6 @@ class Examples:
         self.words_train = np.full((0), -1, dtype=int)
         self.context_test = np.full((0, 2 * self.window_size), -1, dtype=int)
         self.words_test = np.full((0), -1, dtype=int)        
-
-
 
     def build(self, sentences: Iterator[str],
               test_set_size:float = 0.1, 
@@ -148,6 +156,13 @@ class Examples:
         m2,_ = self.contexts_test.shape
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Created {m2} test examples')        
 
+    def create_datasets(self):
+        '''
+        Used to extract training and test datasets
+        '''
+        return (ExampleDataSet(self.contexts_train,self.words_train,self.vocabulary),
+                ExampleDataSet(self.contexts_test,self.words_test,self.vocabulary))
+        
     def __tokenize__(self, sentence: Iterator[str]) -> [int]:
         '''
         Convert a sentence to tokens
@@ -274,27 +289,24 @@ class TrainWordEmbeddings(Command):
             model.load_state_dict(torch.load(load_file, weights_only=True))
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} Reloaded weights from {load_file}')
             model.eval()
+            
+        training_dataset,test_dataset = examples.create_datasets()
 
-        train_dataloader = DataLoader(
-                                ExampleData(examples.contexts_train,examples.words_train,examples.vocabulary),
-                                batch_size=args.batch, 
-                                shuffle=True
+        train_loss,test_loss = train(
+                                    model, 
+                                    train_dataloader=DataLoader(training_dataset,batch_size=args.batch,shuffle=True), 
+                                    test_dataloader=DataLoader(test_dataset,batch_size=args.batch,shuffle=True),
+                                    NIterations=args.NIterations
                                 )
-        test_dataloader = DataLoader(
-                                ExampleData(examples.contexts_test,examples.words_test,examples.vocabulary),
-                                batch_size=args.batch,
-                                shuffle=True
-                                )
-        train_loss, test_loss = train(model, train_dataloader, test_dataloader, NIterations=args.NIterations)
         save_file = (Path(args.data) / args.output).with_suffix('.pth')
         torch.save(model.state_dict(), save_file)
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Saved weights to {save_file}')
         self._plot_losses(train_loss, test_loss, args.figs, args.output, args.NIterations,
-                          title=f'Half window size={examples.window_size}, embedding dimension={args.embedding_dim}')
+                          title=f'{args.input[0]}: half window size={examples.window_size}, embedding dimension={args.embedding_dim}')
 
     def _plot_losses(self, training_losses: [float], test_losses: [float], figs: str, output: str, NIterations: int,title=None):
         '''
-        Plot training losses
+        Plot training and test losses
         
         Parameters:
             training_losses
@@ -318,13 +330,30 @@ class TrainWordEmbeddings(Command):
             
         fig.savefig((Path(figs) / output).with_suffix('.png'))
 
-
+def probability(s):
+    '''
+    Function used to validate input
+    
+    Returns:
+       Value, converted to float, provided it is within range
+    '''
+    p = float(s)
+    if 0.0 < p and p < 1.0:
+        return p
+    else:
+        raise ValueError(f'Probability is {p}, should be in range (0,1)')
+        
 def parse_args(choices: [str]):
+    '''
+    Parse command line arguments
+    '''
     data = './data'
     logs = './logs'
     figs = './figs'
     window_size = 4
     batch = 64
+    test_set_size = 0.1
+    
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=choices, help='Selects the function that is to be executed')
     parser.add_argument('input', nargs='+', help='List of input files')
@@ -336,10 +365,11 @@ def parse_args(choices: [str]):
     group_create_examples = parser.add_argument_group('examples','Options for creating training examples')
     group_create_examples.add_argument('-n', '--window_size', type=int, default=window_size, 
                                     help=f'Half size of window (context extends left and right) [{window_size}]')
-    group_create_examples.add_argument('--test_set_size',type=float,default=0.1)
+    group_create_examples.add_argument('--test_set_size',type=probability,default=test_set_size,
+                                       help='Fraction of dataset that becomes test set')
     
     group_train_embeddings = parser.add_argument_group('train','Options for Training')
-    group_train_embeddings.add_argument('-D', '--embedding_dim', type=int, default=300,help='Dimenionality of Embedding vectors')
+    group_train_embeddings.add_argument('-D', '--embedding_dim', type=int, default=300,help='Dimensionality of Embedding vectors')
     group_train_embeddings.add_argument('-N', '--NIterations', type=int, default=100,help='Number of epochs for training')
     group_train_embeddings.add_argument('--batch', type=int, default=batch,help='Batch size for training')
     group_train_embeddings.add_argument('--reload', default=None,
@@ -347,14 +377,13 @@ def parse_args(choices: [str]):
     group_train_embeddings.add_argument('--show', default=False, action='store_true', help='Controls whether plots are shown')
     group_train_embeddings.add_argument('--figs', default=figs, help=f'Path used to store plots [{figs}]')    
     
-    
     return parser.parse_args()
 
 
 def train(
         model: 'WordEmbeddings',
-        train_dataloader: 'DataLoader',
-        test_dataloader: 'DataLoader',
+        train_dataloader: 'DataLoader' = None,
+        test_dataloader: 'DataLoader' = None,
         NIterations: int = 100
     ) -> [float]:
     '''
