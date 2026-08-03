@@ -8,6 +8,7 @@ File | Description
 ------------------|------------------------------------------------------------
 cbow.py|Continuous Bag of Words
 command.py|Allow a program to be structured as a set of Command objects
+corpus.py|Read data from BNC corpus
 crp.py|Implementation of distance dependent Chinese Restaurant Process
 ngram.py|Exercise 3.8 from Jurafsky and Martin: build ngram table from corpus
 ngram_generate.py|Exercise 3.10 from Jurafsky and Martin: use ngrams to generate random sequences
