@@ -89,6 +89,9 @@ class Command(ABC):
             seed = get_seed(args.seed,
                             notify=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()}'
                                                                        f' Created new seed {s}'))
+            
+            self.seed_hook(seed)
+            
             self._execute(args, rng=np.random.default_rng(seed))
 
             elapsed = time() - start
@@ -105,3 +108,10 @@ class Command(ABC):
             args       Command line parameters as parsed by parse_args()
             rng        Random number generator
         '''
+        
+    def seed_hook(self,seed):
+        '''
+        Allow subclass to use changed seed (e.g. pass to pytorch)
+        '''
+        pass
+    

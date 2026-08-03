@@ -227,6 +227,13 @@ class TrainWordEmbeddings(Command):
 
     def __init__(self):
         super().__init__('train')
+        
+    def seed_hook(self,seed):
+        '''
+        Pass seed into torch
+        '''
+        super().seed_hook(seed)
+        torch.manual_seed(seed)
 
     def _execute(self, args, rng=np.random.default_rng()):
         '''
