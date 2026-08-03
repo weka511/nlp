@@ -46,6 +46,34 @@ from vocabulary import Vocabulary
 from tokenizer import generate_sentences, generate_text, generate_tokens, Token
 from shared.utils import Logger, user_has_requested_stop, get_seed
 
+class ExampleData:
+    def __init__(self,contexts,words,vocabulary):
+        self.contexts = contexts
+        self.words = words
+        self.vocabulary = vocabulary
+        
+    def __len__(self):
+        '''
+        Find number of examples stored
+        '''
+        m, = self.words.shape
+        return m
+
+    def __getitem__(self, idx: int):
+        '''
+        Retrieve one example 
+        
+        Parameters:
+            idx     Index of example in dataset
+            
+        Returns:
+            context
+            word 
+        '''
+        word = torch.Tensor.float(
+            one_hot(torch.tensor(self.words[idx]),
+                    num_classes=len(self.vocabulary)))
+        return self.contexts[idx, :], word
 
 class Examples:
     '''
@@ -82,28 +110,7 @@ class Examples:
         self.context_test = np.full((0, 2 * self.window_size), -1, dtype=int)
         self.words_test = np.full((0), -1, dtype=int)        
 
-    def __len__(self):
-        '''
-        Find number of examples stored
-        '''
-        m, = self.words.shape
-        return m
 
-    def __getitem__(self, idx: int):
-        '''
-        Retrieve one example 
-        
-        Parameters:
-            idx     Index of example in dataset
-            
-        Returns:
-            context
-            word 
-        '''
-        word = torch.Tensor.float(
-            one_hot(torch.tensor(self.words[idx]),
-                    num_classes=len(self.vocabulary)))
-        return self.contexts[idx, :], word
 
     def build(self, sentences: Iterator[str],
               test_set_size:float = 0.1, 
@@ -268,9 +275,16 @@ class TrainWordEmbeddings(Command):
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} Reloaded weights from {load_file}')
             model.eval()
 
-        train_set, test_set = random_split(examples, [0.9, 0.1])
-        train_dataloader = DataLoader(train_set, batch_size=args.batch, shuffle=True)
-        test_dataloader = DataLoader(test_set, batch_size=args.batch, shuffle=True)
+        train_dataloader = DataLoader(
+                                ExampleData(examples.contexts_train,examples.words_train,examples.vocabulary),
+                                batch_size=args.batch, 
+                                shuffle=True
+                                )
+        test_dataloader = DataLoader(
+                                ExampleData(examples.contexts_test,examples.words_test,examples.vocabulary),
+                                batch_size=args.batch,
+                                shuffle=True
+                                )
         train_loss, test_loss = train(model, train_dataloader, test_dataloader, NIterations=args.NIterations)
         save_file = (Path(args.data) / args.output).with_suffix('.pth')
         torch.save(model.state_dict(), save_file)
