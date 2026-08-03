@@ -292,19 +292,22 @@ class TrainWordEmbeddings(Command):
             
         training_dataset,test_dataset = examples.create_datasets()
 
-        train_loss,test_loss = train(
+        train_loss,test_loss,best_epoch = train(
                                     model, 
                                     train_dataloader=DataLoader(training_dataset,batch_size=args.batch,shuffle=True), 
                                     test_dataloader=DataLoader(test_dataset,batch_size=args.batch,shuffle=True),
-                                    NIterations=args.NIterations
+                                    NIterations=args.NIterations,
+                                    burn=args.burn,
+                                    file_for_best=(Path(args.data) / (args.output.split('.')[0]+'_best')).with_suffix('.pth')
                                 )
         save_file = (Path(args.data) / args.output).with_suffix('.pth')
         torch.save(model.state_dict(), save_file)
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Saved weights to {save_file}')
-        self._plot_losses(train_loss, test_loss, args.figs, args.output, args.NIterations,
+        self._plot_losses(train_loss, test_loss, args.figs, args.output, args.NIterations,best_epoch,
                           title=f'{args.input[0]}: half window size={examples.window_size}, embedding dimension={args.embedding_dim}')
 
-    def _plot_losses(self, training_losses: [float], test_losses: [float], figs: str, output: str, NIterations: int,title=None):
+    def _plot_losses(self, training_losses: [float], test_losses: [float], figs: str, output: str, NIterations: int,best_epoch:int,
+                     title=None):
         '''
         Plot training and test losses
         
@@ -317,11 +320,12 @@ class TrainWordEmbeddings(Command):
         '''
         fig = figure(figsize=(12, 12))
         ax1 = fig.add_subplot(1, 1, 1)
-        ax1.plot(list(range(1, NIterations + 1)), training_losses, label=f'Training {training_losses[-1]:.6}', c='xkcd:blue')
-        ax1.plot(list(range(1, NIterations + 1)), test_losses, label=f'Test {test_losses[-1]:.6}', c='xkcd:red')
+        ax1.plot(list(range(1, len(training_losses) + 1)), training_losses, label=f'Training {training_losses[-1]:.6}', c='xkcd:blue')
+        ax1.plot(list(range(1, len(training_losses) + 1)), test_losses, label=f'Test {test_losses[-1]:.6}', c='xkcd:red')
         ax1.xaxis.set_major_locator(MaxNLocator(integer=True))
         _, ymax = ax1.get_ylim()
         ax1.set_ylim(0, ymax)
+        ax1.vlines(best_epoch,0,ymax,colors='xkcd:red',linestyles='dashed',label='Best')
         ax1.set_xlabel('Epoch')
         ax1.set_ylabel('Loss')
         ax1.legend(title='Losses')
@@ -370,7 +374,9 @@ def parse_args(choices: [str]):
     
     group_train_embeddings = parser.add_argument_group('train','Options for Training')
     group_train_embeddings.add_argument('-D', '--embedding_dim', type=int, default=300,help='Dimensionality of Embedding vectors')
-    group_train_embeddings.add_argument('-N', '--NIterations', type=int, default=100,help='Number of epochs for training')
+    group_train_embeddings.add_argument('-N', '--NIterations', type=int, default=100,
+                                        help='Number of epochs for training')
+    group_train_embeddings.add_argument('--burn',type=int,default=5,help='Burn in')
     group_train_embeddings.add_argument('--batch', type=int, default=batch,help='Batch size for training')
     group_train_embeddings.add_argument('--reload', default=None,
                                         help='Indicates that weights are to be reloaded from file before training')
@@ -384,7 +390,9 @@ def train(
         model: 'WordEmbeddings',
         train_dataloader: 'DataLoader' = None,
         test_dataloader: 'DataLoader' = None,
-        NIterations: int = 100
+        NIterations: int = 100,
+        burn: int=5,
+        file_for_best:str = 'best'
     ) -> [float]:
     '''
     Train model and compute tarining and test losses
@@ -406,8 +414,8 @@ def train(
     model = model.to(device)
     running_train_loss = []
     running_test_loss = []
-
-    for epoch in range(NIterations):
+    best_epoch = -1
+    for epoch in range(NIterations):       
         train_loss = []
         model.train()
 
@@ -433,8 +441,17 @@ def train(
         running_test_loss.append(mean_test_loss)
 
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Epoch: {epoch}, Mean Training Loss = {mean_train_loss}, Mean Test Loss = {mean_test_loss}')
-
-    return running_train_loss, running_test_loss
+   
+       
+        if len(running_test_loss) > burn and running_test_loss[-1] < np.average(running_test_loss[-burn:-1]):
+            torch.save(model.state_dict(), file_for_best)
+            best_epoch = epoch
+            
+        if user_has_requested_stop():
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} Stopping')
+            break 
+ 
+    return running_train_loss, running_test_loss,best_epoch
 
 
 def main():
