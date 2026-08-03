@@ -16,8 +16,8 @@
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 '''
-This modeuls provides support for Vocabulary,
-a mapping between words and tolkens
+    This module provides support for Vocabulary,
+    a mapping between words and tolkens
 '''
 __version__ = '1.0'
 __author__ = 'Simon Crase'
