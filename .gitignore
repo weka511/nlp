@@ -135,3 +135,6 @@ dmypy.json
 *.pkl~
 *.pth
 *.zip
+
+data/2554/
+
