@@ -44,11 +44,12 @@ class BNC:
             yield word
             
     def sentences(self,filename='A/A0/A00.xml'):
-        for sentence in bnc.sents(filename):
+        for sentence in self.bnc.sents(filename):
             yield sentence
     
 def parse_args():
     parser = ArgumentParser(description=__doc__)
+    parser.add_argument('-n','--n',type=int,default=12)
     return parser.parse_args()
     
 def main():
@@ -56,18 +57,17 @@ def main():
     args = parse_args()
  
     bnc = BNC()
-    for file in bnc.filenames():
+    for i,file in enumerate(bnc.filenames()):
         print (file)
+        if i > args.n: break
   
-    for word in bnc.words():
+    for i,word in enumerate(bnc.words()):
         print (word)
+        if i > args.n: break
  
-    for sentence in bnc.sentences():
+    for i,sentence in enumerate(bnc.sentences()):
         print (sentence)
-    #sentences = bnc.sents(fileids='A/A0/A00.xml')
-    #print (len(sentences))
-    #for i in range(10):
-        #print(sentences[i])    
+        if i > args.n: break
     
     elapsed = time() - start
     minutes = int(elapsed/60)
