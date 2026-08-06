@@ -310,7 +310,8 @@ class TrainWordEmbeddings(Command):
         torch.save(model.state_dict(), save_file)
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Saved weights to {save_file}')
         self._plot_losses(train_loss, test_loss, args.figs, args.output, args.NIterations,best_epoch,
-                          title=f'{args.input[0]}: half window size={examples.window_size}, embedding dimension={args.embedding_dim}')
+                          title=f'{args.input[0]}: half window size={examples.window_size},'
+                          f' embedding dimension={args.embedding_dim}, lr={args.lr}, momentum={args.momentum}')
 
     def _plot_losses(self, training_losses: [float], test_losses: [float], figs: str, output: str, NIterations: int,best_epoch:int,
                      title=None):
@@ -364,6 +365,8 @@ def parse_args(choices: [str]):
     batch = 64
     test_set_size = 0.1
     number_of_sentences = 100000
+    lr=0.01
+    momentum=0.95
     
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=choices, help='Selects the function that is to be executed')
@@ -386,6 +389,8 @@ def parse_args(choices: [str]):
     group_train_embeddings.add_argument('-N', '--NIterations', type=int, default=100,
                                         help='Number of epochs for training')
     group_train_embeddings.add_argument('--burn',type=int,default=5,help='Burn in')
+    group_train_embeddings.add_argument('--lr',type=float,default=lr,help=f'Learning rate [{lr}]')
+    group_train_embeddings.add_argument('--momentum',type=float,default=momentum,help=f'Momentum = [{momentum}]')
     group_train_embeddings.add_argument('--batch', type=int, default=batch,help='Batch size for training')
     group_train_embeddings.add_argument('--reload', default=None,
                                         help='Indicates that weights are to be reloaded from file before training')
@@ -401,7 +406,9 @@ def train(
         test_dataloader: 'DataLoader' = None,
         NIterations: int = 100,
         burn: int=5,
-        file_for_best:str = 'best'
+        file_for_best:str = 'best',
+        lr:float=0.01, 
+        momentum:float=0.95
     ) -> [float]:
     '''
     Train model and compute tarining and test losses
@@ -417,7 +424,7 @@ def train(
        Test Losses for each epoch
     '''
 
-    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.95)
+    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum)
     loss_fn = nn.CrossEntropyLoss()
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = model.to(device)
