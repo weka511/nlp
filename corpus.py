@@ -16,16 +16,20 @@
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 '''
-    Read from BNC corpus
+    Read from a corpus
 '''
 
 from argparse import ArgumentParser
+from glob import glob
+from os.path import join
 from pathlib import Path
 from time import time
 
 import numpy as np
 import nltk
 from nltk.corpus.reader.bnc import BNCCorpusReader
+
+from tokenizer import generate_sentences, generate_text, generate_tokens, Token
 
 class BNC:
     '''
@@ -46,7 +50,19 @@ class BNC:
     def sentences(self,filename='A/A0/A00.xml'):
         for sentence in self.bnc.sents(filename):
             yield sentence
-    
+
+def create_sentence_generator(file_pattern,data):
+    match file_pattern[0]:
+        case '*BNC*':
+            bnc = BNC()
+            return bnc.sentences()
+        case _:
+            return generate_sentences(
+                generate_tokens(
+                    generate_text(
+                        file_names=[globbed for name in file_pattern for globbed in glob(join(data, name))]
+                    )))   
+
 def parse_args():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('-n','--n',type=int,default=12)

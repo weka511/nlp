@@ -26,8 +26,7 @@ __author__ = 'Simon Crase'
 
 from argparse import ArgumentParser
 from collections.abc import Iterator, Callable
-from glob import glob
-from os.path import join
+
 from pathlib import Path
 from pickle import dump, HIGHEST_PROTOCOL, load
 
@@ -42,8 +41,8 @@ from matplotlib import rc
 from matplotlib.ticker import MaxNLocator
 
 from command import Command
+from corpus import create_sentence_generator
 from vocabulary import Vocabulary
-from tokenizer import generate_sentences, generate_text, generate_tokens, Token
 from shared.utils import Logger, user_has_requested_stop, get_seed
 
 class ExampleDataSet:
@@ -90,7 +89,7 @@ class Examples:
     This class represents a set of training examples for Continuous Bag of Words,
     
     Attributes:
-        window_size      Half size of window (context extends left and right)
+        window_size Half size of window (context extends left and right)
         vocabulary  Mapping between words and tokens
         context     Array of contexts (left and right) for eac h word
         words       Array of words that occue in each context
@@ -247,13 +246,9 @@ class CreateExamples(Command):
             rng        Random number generator
         '''
         examples = Examples(window_size=args.window_size)
-
+ 
         examples.build(
-            generate_sentences(
-                generate_tokens(
-                    generate_text(
-                        file_names=[globbed for name in args.input for globbed in glob(join(args.data, name))]
-                    ))),
+            create_sentence_generator(args.input,args.data),
             test_set_size=args.test_set_size,
             rng=rng
         )
