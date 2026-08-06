@@ -121,20 +121,26 @@ class Examples:
 
     def build(self, sentences: Iterator[str],
               test_set_size:float = 0.1, 
-              rng=np.random.default_rng()):
+              rng=np.random.default_rng(),
+              number_of_sentences = 1000000,
+              freq = 1000):
         '''
         Construct tables of words and contextx
         
         Parameters:
-            sentences   A generator that returns a sentence at a time
-            test_set_size
+            sentences             A generator that returns a sentence at a time
+            test_set_size         Propoerttion of sentences to be stored in test dataset
+            rng                   Random number generator
+            number_of_sentences   Maximum number of sentences to be processed
+            freq                  Controls reporting: report every freq setences
         '''
         words_train = []
         contexts_train = []
         words_test = []
         contexts_test = []
-        
-        for sentence in sentences:
+
+        for i,sentence in enumerate(sentences):
+            if i > number_of_sentences: break
             try:
                 w, c = self.__accumulate__(self.__tokenize__(sentence))
                 if rng.uniform() < test_set_size:
@@ -145,11 +151,15 @@ class Examples:
                     contexts_train.append(c)                    
             except ValueError:      # Some sentences are too short: ignore them
                 pass
+            
+            if i > 0 and i%freq == 0:
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Processed {i} sentences')
 
         self.words_test = np.concatenate(words_test)
         self.contexts_test = np.concatenate(contexts_test)
         self.words_train = np.concatenate(words_train)
         self.contexts_train = np.concatenate(contexts_train)
+        
         m1,_ = self.contexts_train.shape
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Created {m1} training examples')
         m2,_ = self.contexts_test.shape
@@ -250,7 +260,8 @@ class CreateExamples(Command):
         examples.build(
             create_sentence_generator(args.input,args.data),
             test_set_size=args.test_set_size,
-            rng=rng
+            rng=rng,
+            number_of_sentences=args.number_of_sentences
         )
 
         examples.save((Path(args.data) / args.output).with_suffix('.pkl'),
@@ -352,6 +363,7 @@ def parse_args(choices: [str]):
     window_size = 4
     batch = 64
     test_set_size = 0.1
+    number_of_sentences = 100000
     
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=choices, help='Selects the function that is to be executed')
@@ -362,8 +374,10 @@ def parse_args(choices: [str]):
     parser.add_argument('-o', '--output', default=None, required=True, help='File name for storing results')
     
     group_create_examples = parser.add_argument_group('examples','Options for creating training examples')
-    group_create_examples.add_argument('-n', '--window_size', type=int, default=window_size, 
+    group_create_examples.add_argument('-m', '--window_size', type=int, default=window_size, 
                                     help=f'Half size of window (context extends left and right) [{window_size}]')
+    group_create_examples.add_argument('-number_of_sentences', '--number_of_sentences', type=int, default=number_of_sentences, 
+                                    help=f'Maximum number of sentences [{number_of_sentences}]')    
     group_create_examples.add_argument('--test_set_size',type=probability,default=test_set_size,
                                        help='Fraction of dataset that becomes test set')
     

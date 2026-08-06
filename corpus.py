@@ -16,7 +16,7 @@
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 '''
-    Read from a corpus
+    Read senetennes from a corpus
 '''
 
 from argparse import ArgumentParser
@@ -33,7 +33,7 @@ from tokenizer import generate_sentences, generate_text, generate_tokens, Token
 
 class BNC:
     '''
-        Read from BNC corpus
+    Read sentences from BNC corpus
     '''    
     def __init__(self,root = r'C:\Users\weka5\nlp\data\2554\download\Texts'):
         nltk.data.path.append(r'C:\Users\weka5\nlp\data\2554\download')
@@ -48,10 +48,17 @@ class BNC:
             yield word
             
     def sentences(self,filename='A/A0/A00.xml'):
-        for sentence in self.bnc.sents(filename):
+        for sentence in self.bnc.sents(): #filename):
             yield sentence
 
 def create_sentence_generator(file_pattern,data):
+    '''
+    This factory method creates a generator to read sentences from the selected corpus.
+    
+    Parameters:
+        file_pattern
+        data
+    '''
     match file_pattern[0]:
         case '*BNC*':
             bnc = BNC()
