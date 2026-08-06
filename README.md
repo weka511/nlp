@@ -1,13 +1,13 @@
 # NLP
 
-My experiments with Natural Language Processing
+My experiments with Natural Language Processing, mostly concerned with exploring word vectors and transformers.
 
 ## Code
 
 File | Description
 ------------------|------------------------------------------------------------
 cbow.py|Continuous Bag of Words
-command.py|Allow a program to be structured as a set of Command objects
+command.py|Allow a program to be structured as a set of Command objects. A command can be invoked by specifying its name as the first command line parameter.
 corpus.py|Read data from BNC corpus
 crp.py|Implementation of distance dependent Chinese Restaurant Process
 ngram.py|Exercise 3.8 from Jurafsky and Martin: build ngram table from corpus
