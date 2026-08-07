@@ -163,7 +163,8 @@ class Examples:
         m1,_ = self.contexts_train.shape
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Created {m1} training examples')
         m2,_ = self.contexts_test.shape
-        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Created {m2} test examples')        
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Created {m2} test examples')
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Vocabulary contains {len(self.vocabulary)} words')
 
     def create_datasets(self):
         '''
@@ -365,8 +366,8 @@ def parse_args(choices: [str]):
     batch = 64
     test_set_size = 0.1
     number_of_sentences = 100000
-    lr=0.01
-    momentum=0.95
+    lr = 0.01
+    momentum = 0.95
     
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=choices, help='Selects the function that is to be executed')
