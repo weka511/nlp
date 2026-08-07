@@ -122,7 +122,7 @@ class Examples:
     def build(self, sentences: Iterator[str],
               test_set_size:float = 0.1, 
               rng=np.random.default_rng(),
-              number_of_sentences = 1000000,
+              number_of_sentences = None,
               freq = 1000):
         '''
         Construct tables of words and contextx
@@ -140,7 +140,7 @@ class Examples:
         contexts_test = []
 
         for i,sentence in enumerate(sentences):
-            if i > number_of_sentences: break
+            if number_of_sentences != None and i > number_of_sentences: break
             try:
                 w, c = self.__accumulate__(self.__tokenize__(sentence))
                 if rng.uniform() < test_set_size:
@@ -365,7 +365,6 @@ def parse_args(choices: [str]):
     window_size = 4
     batch = 64
     test_set_size = 0.1
-    number_of_sentences = 100000
     lr = 0.01
     momentum = 0.95
     
@@ -380,8 +379,8 @@ def parse_args(choices: [str]):
     group_create_examples = parser.add_argument_group('examples','Options for creating training examples')
     group_create_examples.add_argument('-m', '--window_size', type=int, default=window_size, 
                                     help=f'Half size of window (context extends left and right) [{window_size}]')
-    group_create_examples.add_argument('-number_of_sentences', '--number_of_sentences', type=int, default=number_of_sentences, 
-                                    help=f'Maximum number of sentences [{number_of_sentences}]')    
+    group_create_examples.add_argument('-n', '--number_of_sentences', type=int, default=None, 
+                                    help=f'Maximum number of sentences')    
     group_create_examples.add_argument('--test_set_size',type=probability,default=test_set_size,
                                        help='Fraction of dataset that becomes test set')
     
