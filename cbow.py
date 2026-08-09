@@ -70,6 +70,8 @@ class ExampleDataSet(IterableDataset):
                 
             yield (self.contexts[self.seq, :], self.get_one_hot(self.words[self.seq]))
             self.seq += 1
+            if self.seq%10000 == 0:
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()}  {self.seq} {self.length}')
     
     def get_one_hot(self,word):
         return torch.Tensor.float(
