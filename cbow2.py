@@ -35,8 +35,8 @@ class BNC:
     '''
     Read text from BNC corpus
     '''    
-    def __init__(self,root = r'C:\Users\weka5\nlp\data\2554\download\Texts'):
-        nltk.data.path.append(r'C:\Users\weka5\nlp\data\2554\download')
+    def __init__(self,root = r'./data/2554/download\Texts'):
+        nltk.data.path.append(r'./data\2554\download')
         self.bnc = BNCCorpusReader(root=root,fileids= r'[A-K]/\w*/\w*\.xml')        
     
     def filenames(self):
@@ -50,34 +50,22 @@ class BNC:
         for word in self.bnc.words():
             yield word
             
-    def sentences(self,filename):
+    def sentences(self,path):
         '''
-        This generator is used to iterate through sentence in a specified file
+        This generator is used to iterate through sentences in a specified file
         
         Parameters:
             filename
         '''
-        for sentence in self.bnc.sents(fileids=filename):
+        for sentence in self.bnc.sents(fileids=path):
             yield sentence
 
-def create_sentence_generator(file_pattern,data):
-    '''
-    This factory method creates a generator to read sentences from the selected corpus.
-    
-    Parameters:
-        file_pattern
-        data
-    '''
-    match file_pattern[0]:
-        case '*BNC*':
-            bnc = BNC()
-            return bnc.sentences()
-        case _:
-            return generate_sentences(
-                generate_tokens(
-                    generate_text(
-                        file_names=[globbed for name in file_pattern for globbed in glob(join(data, name))]
-                    )))   
+class ExampleSet:
+    def build(self,sentence):
+        pass
+
+    def save(filename):
+        pass
 
 def parse_args():
     parser = ArgumentParser(description=__doc__)
@@ -89,21 +77,12 @@ def main():
     args = parse_args()
  
     bnc = BNC()
-    for i,file in enumerate(bnc.filenames()):
-        print (file)
-        for j,sentence in enumerate(bnc.sentences(filename=file)):
-            print (sentence)
-            if j > args.n: break
-        if i > args.n: break
+    for path in bnc.filenames():
+        print (path)
+        examples = ExampleSet()
+        for sentence in bnc.sentences(filename=file):
+            examples.build(sentence)
   
-    #for i,word in enumerate(bnc.words()):
-        #print (word)
-        #if i > args.n: break
- 
-    #for i,sentence in enumerate(bnc.sentences()):
-        #print (sentence)
-        #if i > args.n: break
-    
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
