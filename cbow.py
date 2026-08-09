@@ -34,7 +34,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, random_split, IterableDataset
 from torch.nn.functional import one_hot
 from matplotlib.pyplot import figure, show
 from matplotlib import rc
@@ -45,44 +45,48 @@ from corpus import create_sentence_generator
 from vocabulary import Vocabulary
 from shared.utils import Logger, user_has_requested_stop, get_seed
 
-class ExampleDataSet:
-    '''
-    This class wraps one set of data, training or test
-    
-    Attributes:
-        contexts
-        words
-        vocabulary
-    '''
-    def __init__(self,contexts,words,vocabulary):
-        self.contexts = contexts
-        self.words = words
-        self.vocabulary = vocabulary
-        
-    def __len__(self):
-        '''
-        Find number of examples stored
-        '''
-        m, = self.words.shape
-        return m
 
-    def __getitem__(self, idx: int):
-        '''
-        Retrieve one example 
+class ExampleDataSet(IterableDataset):
+    def __init__(self,base,nwords=-1,maxseq=-1,data='./data'):
+        self.base = base
+        self.data = data
+        self.maxseq = maxseq
+        self.file_seq = -1
+        self.seq = 1
+        self.length = -1
+        self.words = np.zeros((0),dtype=int)
+        self.contexts = np.zeros((0,4),dtype=int)
+        self.nwords = nwords
         
-        Parameters:
-            idx     Index of example in dataset
-            
-        Returns:
-            context
-            word 
-        '''
+    def generate(self):
+        while True:
+            if self.seq > self.length:
+                self.file_seq += 1
+                if self.file_seq > self.maxseq: return
+                file_name = (Path(self.data) / f'{self.base}-{self.file_seq:03d}').with_suffix('.pkl')
+                self.load(file_name)
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Loaded {file_name}')
+                self.seq = 0
+                
+            yield (self.contexts[self.seq, :], self.get_one_hot(self.words[self.seq]))
+            self.seq += 1
+    
+    def get_one_hot(self,word):
+        return torch.Tensor.float(
+                                one_hot(
+                                    torch.tensor(word),
+                                    num_classes=self.nwords))
         
-        return (self.contexts[idx, :], 
-                torch.Tensor.float(
-                                one_hot(torch.tensor(self.words[idx]),
-                                        num_classes=len(self.vocabulary)))
-                )
+    def load(self,file_name):
+        with open(file_name, 'rb') as inp:
+            params = load(inp)
+            self.words = params['words']
+            self.contexts = params['contexts']
+            self.length = len(self.words)
+        
+    def __iter__(self):
+        return iter(self.generate())   
+
 
 class Examples:
     '''
@@ -91,7 +95,7 @@ class Examples:
     Attributes:
         window_size Half size of window (context extends left and right)
         vocabulary  Mapping between words and tokens
-        context     Array of contexts (left and right) for eac h word
+        contexts    Array of contexts (left and right) for each word
         words       Array of words that occue in each context
     '''
     @staticmethod
@@ -101,76 +105,77 @@ class Examples:
         
         Parameters:
             file_name    Name of file where examples have been stored
-        '''
+        '''      
         with open(file_name, 'rb') as inp:
-            product = load(inp)
+            params = load(inp)
+            product = Examples(params['window_size'],
+                               vocabulary=params['vocabulary'],
+                               maxseq=params['maxseq'])
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} Loaded examples from {file_name.resolve()}')
             return product
 
-    def __init__(self, window_size: int = 4):
+    def __init__(self,
+                 window_size: int = 4,
+                 vocabulary = Vocabulary(sentence_tokens=True),
+                 maxseq = -1):
         '''
         Parameters:
             window_size      Half size of window (context extends left and right)
         '''
         self.window_size = window_size
-        self.vocabulary = Vocabulary(sentence_tokens=True)
-        self.context_train = np.full((0, 2 * self.window_size), -1, dtype=int)
-        self.words_train = np.full((0), -1, dtype=int)
-        self.context_test = np.full((0, 2 * self.window_size), -1, dtype=int)
-        self.words_test = np.full((0), -1, dtype=int)        
+        self.vocabulary = vocabulary
+        self.contexts = np.full((0, 2 * self.window_size), -1, dtype=int)
+        self.words = np.full((0), -1, dtype=int)
+        self.maxseq = maxseq
 
     def build(self, sentences: Iterator[str],
-              test_set_size:float = 0.1, 
               rng=np.random.default_rng(),
-              number_of_sentences = None,
-              freq = 1000):
+              max_sentences=None,
+              freq=1000,
+              segment_size=100000):
         '''
         Construct tables of words and contextx
         
         Parameters:
-            sentences             A generator that returns a sentence at a time
-            test_set_size         Propoerttion of sentences to be stored in test dataset
-            rng                   Random number generator
-            number_of_sentences   Maximum number of sentences to be processed
-            freq                  Controls reporting: report every freq setences
+            sentences       A generator that returns a sentence at a time
+            rng             Random number generator
+            max_sentences   Maximum number of sentences to be processed
+            freq            Controls reporting: report every freq setences
         '''
-        words_train = []
-        contexts_train = []
-        words_test = []
-        contexts_test = []
-
+        words = []
+        contexts = []
+        n_training_examples = 0
+        
         for i,sentence in enumerate(sentences):
-            if number_of_sentences != None and i > number_of_sentences: break
+            if max_sentences != None and i > max_sentences: break
             try:
                 w, c = self.__accumulate__(self.__tokenize__(sentence))
-                if rng.uniform() < test_set_size:
-                    words_test.append(w)
-                    contexts_test.append(c)
-                else:
-                    words_train.append(w)
-                    contexts_train.append(c)                    
+                words.append(w)
+                contexts.append(c)                    
             except ValueError:      # Some sentences are too short: ignore them
                 pass
             
             if i > 0 and i%freq == 0:
                 Logger.get_instance().log(f'{__file__} {Logger.get_line()} Processed {i} sentences')
-
-        self.words_test = np.concatenate(words_test)
-        self.contexts_test = np.concatenate(contexts_test)
-        self.words_train = np.concatenate(words_train)
-        self.contexts_train = np.concatenate(contexts_train)
-        
-        m1,_ = self.contexts_train.shape
-        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Created {m1} training examples')
-        m2,_ = self.contexts_test.shape
-        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Created {m2} test examples')
-        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Vocabulary contains {len(self.vocabulary)} words')
+                
+            if len(words) > segment_size:
+                n_training_examples += len(words)
+                yield np.concatenate(words), np.concatenate(contexts)
+                words = []
+                contexts = []
+                
+        if len(words) > 0:
+            n_training_examples += len(words)
+            yield np.concatenate(words), np.concatenate(contexts)
+    
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Created {n_training_examples} training examples')
+            
 
     def create_datasets(self):
         '''
         Used to extract training and test datasets
         '''
-        return (ExampleDataSet(self.contexts_train,self.words_train,self.vocabulary),
+        return (ExampleDataSet(self.contexts,self.words,self.vocabulary),
                 ExampleDataSet(self.contexts_test,self.words_test,self.vocabulary))
         
     def __tokenize__(self, sentence: Iterator[str]) -> [int]:
@@ -211,7 +216,7 @@ class Examples:
             end += 1
         return words, context
 
-    def save(self, file: str, report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}')):
+    def save(self, output:str, maxseq=-1, data: str = './data'):
         '''
         Save Examples using pickle.
         
@@ -219,10 +224,23 @@ class Examples:
             file     Name of file where tables will be saved
             report
         '''
+        file = (Path(data) / output).with_suffix('.pkl')
         with open(file, 'wb') as out:
-            dump(self, out, HIGHEST_PROTOCOL)
-            report(f'Saved examples in {file.resolve()}')
+            dump({
+                'window_size' : self.window_size,
+                'vocabulary' : self.vocabulary,
+                'maxseq' : maxseq
+                }, out, HIGHEST_PROTOCOL)
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Saved examples in {file.resolve()}')
 
+    def save_word_context(self,seq,words,contexts,output:str, data: str = './data'):
+        file = (Path(data) / f'{output}-{seq:03d}').with_suffix('.pkl')
+        with open(file, 'wb') as out:
+            dump({
+                'words' : words,
+                'contexts' : contexts
+            }, out, HIGHEST_PROTOCOL)
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Saved words and contexts in {file.resolve()}')        
 
 class WordEmbeddings(nn.Module):
     '''
@@ -231,7 +249,7 @@ class WordEmbeddings(nn.Module):
 
     def __init__(self, V, D, n):
         super().__init__()
-        self.embeddings = nn.Embedding(num_embeddings=V * n, embedding_dim=D)
+        self.embeddings = nn.Embedding(num_embeddings=V*n, embedding_dim=D)
         self.linear_1 = nn.Linear(in_features=D, out_features=V)
 
     def forward(self, x):
@@ -258,15 +276,13 @@ class CreateExamples(Command):
         '''
         examples = Examples(window_size=args.window_size)
  
-        examples.build(
-            create_sentence_generator(args.input,args.data),
-            test_set_size=args.test_set_size,
-            rng=rng,
-            number_of_sentences=args.number_of_sentences
-        )
+        for seq,(words,contexts) in enumerate(examples.build(
+                                create_sentence_generator(args.input,args.data),
+                                rng=rng,
+                                max_sentences=args.max_sentences)):
+            examples.save_word_context(seq,words,contexts,args.output,data=args.data)
 
-        examples.save((Path(args.data) / args.output).with_suffix('.pkl'),
-                      report=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()} {s}'))
+        examples.save(args.output,maxseq=seq,data=args.data)
 
 
 class TrainWordEmbeddings(Command):
@@ -297,24 +313,23 @@ class TrainWordEmbeddings(Command):
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} Reloaded weights from {load_file}')
             model.eval()
             
-        training_dataset,test_dataset = examples.create_datasets()
-
-        train_loss,test_loss,best_epoch = train(
-                                    model, 
-                                    train_dataloader=DataLoader(training_dataset,batch_size=args.batch,shuffle=True), 
-                                    test_dataloader=DataLoader(test_dataset,batch_size=args.batch,shuffle=True),
-                                    NIterations=args.NIterations,
-                                    burn=args.burn,
-                                    file_for_best=(Path(args.data) / (args.output.split('.')[0]+'_best')).with_suffix('.pth')
-                                )
+        train_loss = train(model, 
+                           dataloader=DataLoader(
+                                            ExampleDataSet(args.input[0],
+                                                           nwords=len(examples.vocabulary),
+                                                           maxseq=examples.maxseq,
+                                                           data=args.data),
+                                            batch_size=args.batch),
+                           NIterations=args.NIterations
+                        )
         save_file = (Path(args.data) / args.output).with_suffix('.pth')
         torch.save(model.state_dict(), save_file)
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Saved weights to {save_file}')
-        self._plot_losses(train_loss, test_loss, args.figs, args.output, args.NIterations,best_epoch,
+        self._plot_losses(train_loss,  args.figs, args.output, args.NIterations,
                           title=f'{args.input[0]}: half window size={examples.window_size},'
                           f' embedding dimension={args.embedding_dim}, lr={args.lr}, momentum={args.momentum}')
 
-    def _plot_losses(self, training_losses: [float], test_losses: [float], figs: str, output: str, NIterations: int,best_epoch:int,
+    def _plot_losses(self, training_losses: [float],  figs: str, output: str, NIterations: int,
                      title=None):
         '''
         Plot training and test losses
@@ -329,11 +344,11 @@ class TrainWordEmbeddings(Command):
         fig = figure(figsize=(12, 12))
         ax1 = fig.add_subplot(1, 1, 1)
         ax1.plot(list(range(1, len(training_losses) + 1)), training_losses, label=f'Training {training_losses[-1]:.6}', c='xkcd:blue')
-        ax1.plot(list(range(1, len(training_losses) + 1)), test_losses, label=f'Test {test_losses[-1]:.6}', c='xkcd:red')
+        #ax1.plot(list(range(1, len(training_losses) + 1)), test_losses, label=f'Test {test_losses[-1]:.6}', c='xkcd:red')
         ax1.xaxis.set_major_locator(MaxNLocator(integer=True))
         _, ymax = ax1.get_ylim()
         ax1.set_ylim(0, ymax)
-        ax1.vlines(best_epoch,0,ymax,colors='xkcd:red',linestyles='dashed',label='Best')
+        #ax1.vlines(best_epoch,0,ymax,colors='xkcd:red',linestyles='dashed',label='Best')
         ax1.set_xlabel('Epoch')
         ax1.set_ylabel('Loss')
         ax1.legend(title='Losses')
@@ -341,19 +356,6 @@ class TrainWordEmbeddings(Command):
             ax1.set_title(title)
             
         fig.savefig((Path(figs) / output).with_suffix('.png'))
-
-def probability(s):
-    '''
-    Function used to validate input
-    
-    Returns:
-       Value, converted to float, provided it is within range
-    '''
-    p = float(s)
-    if 0.0 < p and p < 1.0:
-        return p
-    else:
-        raise ValueError(f'Probability is {p}, should be in range (0,1)')
         
 def parse_args(choices: [str]):
     '''
@@ -379,16 +381,13 @@ def parse_args(choices: [str]):
     group_create_examples = parser.add_argument_group('examples','Options for creating training examples')
     group_create_examples.add_argument('-m', '--window_size', type=int, default=window_size, 
                                     help=f'Half size of window (context extends left and right) [{window_size}]')
-    group_create_examples.add_argument('-n', '--number_of_sentences', type=int, default=None, 
+    group_create_examples.add_argument('-n', '--max_sentences', type=int, default=None, 
                                     help=f'Maximum number of sentences')    
-    group_create_examples.add_argument('--test_set_size',type=probability,default=test_set_size,
-                                       help='Fraction of dataset that becomes test set')
     
     group_train_embeddings = parser.add_argument_group('train','Options for Training')
     group_train_embeddings.add_argument('-D', '--embedding_dim', type=int, default=300,help='Dimensionality of Embedding vectors')
     group_train_embeddings.add_argument('-N', '--NIterations', type=int, default=100,
                                         help='Number of epochs for training')
-    group_train_embeddings.add_argument('--burn',type=int,default=5,help='Burn in')
     group_train_embeddings.add_argument('--lr',type=float,default=lr,help=f'Learning rate [{lr}]')
     group_train_embeddings.add_argument('--momentum',type=float,default=momentum,help=f'Momentum = [{momentum}]')
     group_train_embeddings.add_argument('--batch', type=int, default=batch,help='Batch size for training')
@@ -402,16 +401,13 @@ def parse_args(choices: [str]):
 
 def train(
         model: 'WordEmbeddings',
-        train_dataloader: 'DataLoader' = None,
-        test_dataloader: 'DataLoader' = None,
+        dataloader: 'DataLoader' = None,
         NIterations: int = 100,
-        burn: int=5,
-        file_for_best:str = 'best',
         lr:float=0.01, 
         momentum:float=0.95
     ) -> [float]:
     '''
-    Train model and compute tarining and test losses
+    Train model and compute training losses
     
     Parameters:
         model
@@ -423,51 +419,33 @@ def train(
        Training losses for each epoch
        Test Losses for each epoch
     '''
-
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum)
     loss_fn = nn.CrossEntropyLoss()
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = model.to(device)
     running_train_loss = []
-    running_test_loss = []
-    best_epoch = -1
+  
     for epoch in range(NIterations):       
         train_loss = []
         model.train()
 
-        for feature, label in train_dataloader:
+        for feature, label in dataloader:
             y_train_pred = model(feature.to(device))
             loss = loss_fn(y_train_pred, label.to(device))
             train_loss.append(loss.item() * feature.size(0)) # Scale by batch size
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-        mean_train_loss = np.sum(train_loss) / len(train_dataloader)
+        mean_train_loss = np.sum(train_loss) #/ len(dataloader)
         running_train_loss.append(mean_train_loss)
 
-        test_loss = []
-        model.eval()
-        with torch.no_grad():
-            for feature, label in test_dataloader:
-                y_train_pred = model(feature.to(device))
-                loss = loss_fn(y_train_pred, label.to(device))
-                test_loss.append(loss.item() * feature.size(0))
-
-        mean_test_loss = np.sum(test_loss) / len(test_dataloader)
-        running_test_loss.append(mean_test_loss)
-
-        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Epoch: {epoch}, Mean Training Loss = {mean_train_loss}, Mean Test Loss = {mean_test_loss}')
-   
-       
-        if len(running_test_loss) > burn and running_test_loss[-1] < np.average(running_test_loss[-burn:-1]):
-            torch.save(model.state_dict(), file_for_best)
-            best_epoch = epoch
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Epoch: {epoch}, Mean Training Loss = {mean_train_loss}')
             
         if user_has_requested_stop():
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} Stopping')
             break 
  
-    return running_train_loss, running_test_loss,best_epoch
+    return running_train_loss
 
 
 def main():
