@@ -7,7 +7,8 @@ My experiments with Natural Language Processing, mostly concerned with exploring
 File | Description
 ------------------|------------------------------------------------------------
 cbow.py|Continuous Bag of Words
-cbow-examples.py|CConstruct examples for Continuous Bag of Words
+cbow-examples.py|Construct examples for Continuous Bag of Words
+cbow-train.py|Train model for Continuous Bag of Words
 command.py|Allow a program to be structured as a set of Command objects. A command can be invoked by specifying its name as the first command line parameter.
 corpus.py|Read data from BNC corpus
 crp.py|Implementation of distance dependent Chinese Restaurant Process
