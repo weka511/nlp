@@ -20,7 +20,7 @@
 '''
 
 from argparse import ArgumentParser
-from glob import glob
+import csv
 from os.path import join
 from pathlib import Path
 from time import time
@@ -29,6 +29,8 @@ import numpy as np
 import nltk
 from nltk.corpus.reader.bnc import BNCCorpusReader
 
+from vocabulary import Vocabulary
+from shared.utils import Logger, user_has_requested_stop, get_seed
 from tokenizer import generate_sentences, generate_text, generate_tokens, Token
 
 class BNC:
@@ -61,32 +63,75 @@ class BNC:
             yield sentence
 
 class ExampleSet:
-    def build(self,sentence):
-        pass
+    def __init__(self,window_size=2):
+        self.vocabulary = Vocabulary()
+        self.SOS = self.vocabulary.tokenize('<SOS>')
+        self.EOS = self.vocabulary.tokenize('<EOS>')
+        self.window_size = window_size
+        
+    def build(self,sentence,out_file):      
+        self.__accumulate__((
+                            [self.SOS] +
+                            [self.vocabulary.tokenize(word) for word in sentence] +
+                            [self.EOS]   
+                            ),out_file)
 
-    def save(filename):
-        pass
+
+        
+    def __accumulate__(self, tokens: [int],out_file):
+        '''
+        Convert a sequence of tokens, representing one sentence, to 
+        words and contexts
+        
+        Parameters:
+            tokens
+        '''
+        writer = csv.writer(out_file, delimiter=',',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)          
+        start = 0
+        end = start + 2 * self.window_size + 1
+        n_entries = len(tokens) - end + 1
+        while end <= len(tokens):
+            run = [tokens[i] for i in range(start, end)]
+            words = run[self.window_size]
+            context = run[:self.window_size] + run[self.window_size + 1:]
+            writer.writerow([words]+context)
+            start += 1
+            end += 1
+    
 
 def parse_args():
+    data = './data'
+    logs = './logs'
+    window_size = 4    
     parser = ArgumentParser(description=__doc__)
-    parser.add_argument('-n','--n',type=int,default=12)
+    parser.add_argument('--data', default=data, help=f'Path to data files [{data}]')
+    parser.add_argument('--logs', default=logs, help=f'Location for storing log files [{logs}]')
+    parser.add_argument('-o', '--output', default=None, required=True, help='File name for storing results')
+    parser.add_argument('-m', '--window_size', type=int, default=window_size, 
+                                help=f'Half size of window (context extends left and right) [{window_size}]')    
     return parser.parse_args()
     
 def main():
     start  = time()
     args = parse_args()
- 
-    bnc = BNC()
-    for path in bnc.filenames():
-        print (path)
-        examples = ExampleSet()
-        for sentence in bnc.sentences(filename=file):
-            examples.build(sentence)
-  
-    elapsed = time() - start
-    minutes = int(elapsed/60)
-    seconds = elapsed - 60*minutes
-    print (f'Elapsed Time {minutes} m {seconds:.2f} s')
+    with Logger(Path(__file__).stem, path=args.logs) as _:
+        out = Path(f'{args.data}/{args.output}')
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Writing reults to {out}')
+        bnc = BNC()
+        for path in bnc.filenames():
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} Opened {path}')
+            out_file_path = (out / path).with_suffix('.csv')
+            out_file_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(out_file_path,'w',newline='') as out_file:
+                examples = ExampleSet(window_size=args.window_size)
+                for sentence in bnc.sentences(path=path):
+                    examples.build(sentence,out_file)
+      
+        elapsed = time() - start
+        minutes = int(elapsed/60)
+        seconds = elapsed - 60*minutes
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Elapsed Time {minutes} m {seconds:.2f} s')
     
 if __name__=='__main__':
     main()
