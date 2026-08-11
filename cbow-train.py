@@ -15,7 +15,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-'''Template for python script'''
+'''Train CBOW'''
 
 from argparse import ArgumentParser
 from pathlib import Path
@@ -24,36 +24,19 @@ from time import time
 import numpy as np
 from shared.utils import Logger, user_has_requested_stop, get_seed
 
-class Encoder:
-    '''
-    Encodes tokens as 1-hot vectors for use in neural network
-    '''
-    def __init__(self,n:int = 19):
-        self.n = n
-        
-    def encode(self,token:int):
-        one_hot = np.zeros((self.n))
-        one_hot[token] = 1.0
-        return one_hot
-    
-class Model:
-    '''
-    CBOW neural network
-    '''
-    def __init__(self,m=19,n=300,rng = np.random.default_rng()):
-        self.P = rng.uniform(low=-1,high=+1,size=(m,n))
-        self.H = rng.uniform(low=-1,high=+1,size=(n,m))
-        
-    def forward(self,X):
-        Projected = np.dot(X,self.P)
-    
+from cbow2 import Model,OneHotFactory,LogSoftmax
+       
 def parse_args():
     data = './data'
     logs = './logs'  
+    m = 31
+    n = 300
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--seed', type=int, default=None, help='Seed for random number generation')
     parser.add_argument('--data', default=data, help=f'Path to data files [{data}]')
-    parser.add_argument('--logs', default=logs, help=f'Location for storing log files [{logs}]')    
+    parser.add_argument('--logs', default=logs, help=f'Location for storing log files [{logs}]')  
+    parser.add_argument('-m', type=int,default=m)
+    parser.add_argument('-n', type=int,default=n)
     return parser.parse_args()
     
 def main():
@@ -68,12 +51,12 @@ def main():
                                                                    f' Created new seed {s}')) 
         rng = np.random.default_rng(seed=seed)
         
-        encoder = Encoder()
-        model = Model()
-        
-        X = encoder.encode(3)
-        model.forward(X)
-        
+        model = Model(m=args.m,
+                      n=args.n,
+                      encoder=OneHotFactory(n=args.m),
+                      rng=rng)
+        prediction = model([1,2,3,4])
+          
     elapsed = time() - start
     minutes = int(elapsed/60)
     seconds = elapsed - 60*minutes
