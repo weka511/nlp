@@ -59,12 +59,33 @@
 \hyphenpenalty=10000
 \hbadness=10000
 
+\makeglossaries
+
 %opening
 \title{NLP}
 \author{Simon Crase}
 
 \begin{document}
+\newabbreviation{gls:cbow}{CBOW}{Continuous Bag of Words}
 
+\newglossaryentry{gls:softmax}{
+	name={Softmax},
+	description={
+		A function used to convert a tuple of real numbers, positive or negative, to probabilities\cite[Section 6.2.2.3]{goodfellow2016deep}.
+		\begin{align*}
+			\sigma(\vec{z})_k =& \frac{e^{z_k}}{\sum_{k^{\prime}} e^{z_{k^{\prime}}}} \numberthis \label{eq:glossary:softmax}
+		\end{align*}
+}}
+
+\newglossaryentry{gls:crossentropy}{
+	name={Cross Entropy},
+	description={The cross-entropy of the distribution $q$ relative to a distribution $p$  over a given set is defined as follows:\cite[Section 3.13]{goodfellow2016deep}
+	\begin{align*}
+		H(p,q) =& \mathbb{E}_p[\log{q}]
+	\end{align*}
+	}
+}
+	
 \maketitle
 
 \begin{abstract}
@@ -75,7 +96,7 @@
 \listoffigures
 
 \section{Continuous Bag of Words}
-In this section I derive the equations needed to implement Continuous Bag of Words\cite{mikolov2013efficient}.
+In this section I derive the equations needed to implement \gls{gls:cbow}\cite{mikolov2013efficient}.
 
 \subsection{Model}
 
@@ -100,10 +121,10 @@ In this section I derive the equations needed to implement Continuous Bag of Wor
 \begin{align*}
 	y_j =& \sum_i P_{ji} x_i  \numberthis \label{eq:def:y}\\
 	z_k =& \sum_j H_{kj} y_j \numberthis \label{eq:def:z}\\\
-	\Lambda[P,H,Label] =& -\sum_k  \log {p_k} Label_k \text {, the Cross Entropy\cite{goodfellow2016deep}}\\
+	\Lambda[P,H,Label] =& -\sum_k  \log {p_k} Label_k \text {, the \gls{gls:crossentropy}\cite{goodfellow2016deep}}\\
 	=& -\log {p_m} \text{, if the label is a one-hot vector $e_m$}
 \end{align*}
-where the $p_k$ are calculated using the Softmax\cite{goodfellow2016deep}.
+where the $p_k=\sigma(\vec{z})_k$ are calculated using the \gls{gls:softmax} function \eqref{eq:glossary:softmax}.
 
 \begin{align*}
 	p_k =& \frac{e^{z_k}}{\sum_{k^{\prime}} e^{z_{k^{\prime}}}} \text{, whence}\\
@@ -145,6 +166,9 @@ From \eqref{eq:Lambda:P}, \eqref{eq:Lambda:z}, \eqref{eq:def:z}, and \eqref{eq:d
 	\frac{\partial{\Lambda}}{\partial P_{ij}} =&\sum_{k,j^{\prime}} [\delta_{mk} + \frac{e^{z_k}}{\sum_{k^{\prime}} e^{z_{k^{\prime}}}}] H_{k{j^{\prime}}} \delta_{ij^{\prime}} x_j\\
 	=&\sum_{k,} [\delta_{mk} + \frac{e^{z_k}}{\sum_{k^{\prime}} e^{z_{k^{\prime}}}}] H_{ki}  x_j \numberthis \label{eq:Lambda:PP}
 \end{align*}
+
+
+\printglossaries
 
 % bibliography goes here
 

@@ -146,4 +146,8 @@ data/examples/
 *.synctex.gz
 *.lof
 *.toc
+*.glg
+*.glo
+*.gls
+*.ist
 
