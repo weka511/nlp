@@ -79,9 +79,10 @@
 
 \newglossaryentry{gls:crossentropy}{
 	name={Cross Entropy},
-	description={The cross-entropy of the distribution $q$ relative to a distribution $p$  over a given set is defined as follows:\cite[Section 3.13]{goodfellow2016deep}
+	description={The cross-entropy of the distribution $p$ relative to a distribution $q$  over a given set is defined as follows:\cite[Section 3.13]{goodfellow2016deep}
 	\begin{align*}
-		H(p,q) =& \mathbb{E}_p[\log{q}]
+		H(q,p) =& \mathbb{E}_q[\log{p}]\\
+		=& \sum_k p_k \log{q_k} \numberthis \label{eq:glossary:crossentropy}
 	\end{align*}
 	}
 }
@@ -101,18 +102,21 @@ In this section I derive the equations needed to implement \gls{gls:cbow}\cite{m
 \subsection{Model}
 
 \begin{figure}[H]
-	\caption[Continuous Bag of Words]{This figure depicts the layers of the network to implement Continuous Bag of Words. $P$ is the matrix used to project the input, $H$ is the matrix that creates the hidden layer, and $Lambda$ is the loss function.}
+	\caption[Continuous Bag of Words]{This figure depicts the layers of the network to implement Continuous Bag of Words. $P$ is the matrix used to project the input, $H$ is the matrix that creates the hidden layer, and $Lambda$ is the loss function, the \gls{gls:crossentropy} of the \gls{gls:softmax} relative to the labels $w$.}
 	\begin{center}
 		\begin{tikzpicture}
 			\node[draw,minimum width=2em, minimum height=1em] (x) {$x_i$};
 			\node[draw,minimum width=2em, minimum height=1em, right=1.5em] (y) at (x.east) {$y_j$};
 			\node[draw,minimum width=2em, minimum height=1em, right=1.5em] (z) at (y.east) {$z_k$};
 			\node[draw,minimum width=2em, minimum height=1em, right=1.5em] (Loss) at (z.east) {Loss};
+			\node[draw,minimum width=2em, minimum height=1em, right=1.5em] (w) at (Loss.east) {$w$};
 			\draw[-Triangle] ($(x.east)!0.5!(x.east)$) -- ($(y.west)!0.5!(y.west)$)
 			node[midway,above,font=\tiny, inner sep=0pt] {$P$};
 			\draw[-Triangle] ($(y.east)!0.5!(y.east)$) -- ($(z.west)!0.5!(z.west)$)
 			node[midway,above,font=\tiny, inner sep=0pt] {$H$};
 			\draw[-Triangle] ($(z.east)!0.5!(z.east)$) -- ($(Loss.west)!0.5!(Loss.west)$)
+			node[midway,above,font=\tiny, inner sep=0pt] {$\Lambda$};
+			\draw[-Triangle] ($(w.west)!0.5!(w.west)$) -- ($(Loss.east)!0.5!(Loss.east)$)
 			node[midway,above,font=\tiny, inner sep=0pt] {$\Lambda$};
 		\end{tikzpicture}
 	\end{center}

@@ -15,7 +15,9 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-'''Train CBOW'''
+'''
+This module contains classes needed to train CBOW, such as the model and the loss
+'''
 
 from unittest import main,TestCase
 import numpy as np
@@ -29,14 +31,9 @@ class OneHotFactory:
         self.n = n
         
     def create(self,tokens:[int]):
-        try:
-            m = len(tokens)       
-            one_hot = np.zeros((m,self.n))
-            for i in range(m):
-                one_hot[i,tokens[i]] = 1.0
-        except TypeError:
-            one_hot = np.zeros((self.n))
-            one_hot[tokens] = 1.0
+        one_hot = np.zeros(tokens.shape + (self.n,))
+        for i in range(len(tokens)):
+            one_hot[i,tokens[i]] = 1
         return one_hot            
 
 class Model:
@@ -49,11 +46,11 @@ class Model:
         self.encoder = encoder
         
     def forward(self,X):
-        Projected = np.dot(X,self.P)
-        Hidden = np.dot(Projected,self.H)
-        return Hidden
+        y = np.dot(X,self.P)
+        z = np.dot(Projected,self.H)
+        return z
     
-    def __call__(self,feature=[2,3,5,7]):
+    def __call__(self,feature=np.array([2,3,5,7])):
         X = self.encoder.encode(feature)
         return self.forward(X)
     
@@ -84,6 +81,28 @@ class CrossEntropyLoss:
         '''
         return self._cross_entropy(self.log_softmax(prediction),label)
 
+
+  
+        
+class TestOneHotFactory(TestCase):
+    def setUp(self):
+        self.factory = OneHotFactory(n=7)  
+        
+    def test_factory(self):
+        assert_array_equal(np.array([[0,1,0,0,0,0,0],
+                                     [0,0,1,0,0,0,0],
+                                     [0,0,0,0,1,0,0],
+                                     [0,0,0,0,0,1,0]]),
+                           self.factory.create(np.array([1,2,4,5])))
+        
+class TestModel(TestCase):
+    def setUp(self):
+        self.factory = OneHotFactory(n=7)
+        self.model = Model(m=7,n=11)
+        
+    def test1(self):
+        features = self.factory.create(np.array([1,2,4,5])
+                                    
 class TestCrossEntropy(TestCase):
     '''
     Tests for the CrossEntropyLoss class
