@@ -139,3 +139,8 @@ dmypy.json
 data/2554/
 data/examples/
 
+*.aux
+*.bbl
+*.blg
+*.pdf
+*.synctex.gz

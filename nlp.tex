@@ -1,0 +1,82 @@
+\documentclass[]{article}
+% This document collects my derivations of equations relevant to NLP
+
+% Copyright (c) 2026 Simon Crase
+
+% This script is free software: you can redistribute it and/or modify
+% it under the terms of the GNU General Public License as published by
+% the Free Software Foundation, either version 3 of the License, or
+% (at your option) any later version.
+
+% This script is distributed in the hope that it will be useful,
+% but WITHOUT ANY WARRANTY; without even the implied warranty of
+% MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+% GNU General Public License for more details.
+
+% You should have received a copy of the GNU General Public License
+% along with this script.  If not, see <https://www.gnu.org/licenses/>.
+
+
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage[toc,page]{appendix}
+\usepackage{cancel}
+\usepackage{caption}
+\usepackage{chronology}
+\usepackage{float}
+\usepackage[toc,nonumberlist]{glossaries}
+\usepackage{glossaries-extra}
+\usepackage{graphicx}
+\usepackage{mathrsfs}
+\usepackage{mathtools}
+\usepackage{subcaption}
+\usepackage{thmtools}
+\usepackage{tocloft}
+\usepackage{url}
+
+\newcommand{\defeq}{\vcentcolon=}
+\newcommand\numberthis{\addtocounter{equation}{1}\tag{\theequation}}
+\newcommand{\stcomp}[1]{\widetilde{#1}}
+\DeclarePairedDelimiterX{\infdivx}[2]{(}{)}{%
+	#1\;\delimsize\|\;#2%
+}
+\newcommand{\infdiv}{D_{KL}\infdivx}
+\DeclarePairedDelimiter{\norm}{\lVert}{\rVert}
+\newtheorem{defn}{Definition}
+\newtheorem{thm}{Theorem}
+\newtheorem{lemma}[thm]{Lemma}
+\newtheorem{cor}[thm]{Corollary}
+\graphicspath{{figs/}}
+
+\widowpenalty=10000
+\clubpenalty=10000
+\tolerance=1
+\emergencystretch=\maxdimen
+\hyphenpenalty=10000
+\hbadness=10000
+
+%opening
+\title{NLP}
+\author{Simon Crase}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+
+\end{abstract}
+
+\section{CBOW}
+\cite{mikolov2013efficient}
+\cite{goodfellow2016deep}
+
+% bibliography goes here
+
+\bibliographystyle{unsrt}
+\addcontentsline{toc}{section}{Bibliography}
+\bibliography{nlp}
+
+\end{document}
