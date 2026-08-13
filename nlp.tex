@@ -35,6 +35,8 @@
 \usepackage{thmtools}
 \usepackage{tocloft}
 \usepackage{url}
+\usepackage{tikz}
+\usetikzlibrary{calc,arrows.meta}
 
 \newcommand{\defeq}{\vcentcolon=}
 \newcommand\numberthis{\addtocounter{equation}{1}\tag{\theequation}}
@@ -69,9 +71,80 @@
 
 \end{abstract}
 
-\section{CBOW}
-\cite{mikolov2013efficient}
-\cite{goodfellow2016deep}
+\tableofcontents
+\listoffigures
+
+\section{Continuous Bag of Words}
+In this section I derive the equations needed to implement Continuous Bag of Words\cite{mikolov2013efficient}.
+
+\subsection{Model}
+
+\begin{figure}[H]
+	\caption[Continuous Bag of Words]{This figure depicts the layers of the network to implement Continuous Bag of Words. $P$ is the matrix used to project the input, $H$ is the matrix that creates the hidden layer, and $Lambda$ is the loss function.}
+	\begin{center}
+		\begin{tikzpicture}
+			\node[draw,minimum width=2em, minimum height=1em] (x) {$x_i$};
+			\node[draw,minimum width=2em, minimum height=1em, right=1.5em] (y) at (x.east) {$y_j$};
+			\node[draw,minimum width=2em, minimum height=1em, right=1.5em] (z) at (y.east) {$z_k$};
+			\node[draw,minimum width=2em, minimum height=1em, right=1.5em] (Loss) at (z.east) {Loss};
+			\draw[-Triangle] ($(x.east)!0.5!(x.east)$) -- ($(y.west)!0.5!(y.west)$)
+			node[midway,above,font=\tiny, inner sep=0pt] {$P$};
+			\draw[-Triangle] ($(y.east)!0.5!(y.east)$) -- ($(z.west)!0.5!(z.west)$)
+			node[midway,above,font=\tiny, inner sep=0pt] {$H$};
+			\draw[-Triangle] ($(z.east)!0.5!(z.east)$) -- ($(Loss.west)!0.5!(Loss.west)$)
+			node[midway,above,font=\tiny, inner sep=0pt] {$\Lambda$};
+		\end{tikzpicture}
+	\end{center}
+\end{figure}
+
+\begin{align*}
+	y_j =& \sum_i P_{ji} x_i  \numberthis \label{eq:def:y}\\
+	z_k =& \sum_j H_{kj} y_j \numberthis \label{eq:def:z}\\\
+	\Lambda[P,H,Label] =& -\sum_k  \log {p_k} Label_k \text {, the Cross Entropy\cite{goodfellow2016deep}}\\
+	=& -\log {p_m} \text{, if the label is a one-hot vector $e_m$}
+\end{align*}
+where the $p_k$ are calculated using the Softmax\cite{goodfellow2016deep}.
+
+\begin{align*}
+	p_k =& \frac{e^{z_k}}{\sum_{k^{\prime}} e^{z_{k^{\prime}}}} \text{, whence}\\
+	\log{p_k} =& z_k - \ln \sum_{k^{\prime}} e^{z_{k^{\prime}}} \text{, and}\\
+	\Lambda[P,H,e_m] =& -z_m +  \ln \sum_{k} e^{z_{k}}  \numberthis \label{eq:def:lambda}\
+\end{align*}
+
+\subsection{Calculating the Gradient}
+
+We will use the chain rule to calculate $\frac{\partial{\Lambda}}{\partial H_{ij}}$ and $\frac{\partial{\Lambda}}{\partial P_{ij}}$.
+\begin{align*}
+	\frac{\partial{\Lambda}}{\partial H_{ij}} =& \sum_k \frac{\partial{\Lambda}}{\partial z_k}\frac{\partial z_k}{\partial H_{ij}} \numberthis \label{eq:Lambda:H}\\
+	\frac{\partial{\Lambda}}{\partial P_{ij}} =&\sum_{k,j^{\prime}} \frac{\partial{\Lambda}}{\partial z_k} \frac{\partial z_k}{\partial y_{j^{\prime}}} \frac{\partial y_{j^{\prime}}}{\partial P_{ij}} \numberthis \label{eq:Lambda:P}
+\end{align*}
+
+Differentiating \eqref{eq:def:lambda} and \eqref{eq:def:z}:
+\begin{align*}
+	\frac{\partial \Lambda}{\partial z_k} =& \frac{\partial [-z_m +  \ln \sum_{k^{\prime}} e^{z_{k^{\prime}}}]}{\partial z_k}\\
+	=& \delta_{mk} + \frac{\partial [\ln \sum_{k^{\prime}} e^{z_{k^{\prime}}}]}{\partial z_k}\\
+	=& \delta_{mk} + \frac{e^{z_k}}{\sum_{k^{\prime}} e^{z_{k^{\prime}}}} \numberthis \label{eq:Lambda:z}\\
+	\frac{\partial z_k}{\partial H_{ij}} =& \frac{ \partial \sum_{j^{\prime}} H_{k{j^{\prime}}} y_{j^{\prime}}}{\partial H_{ij}}\\
+	=& \delta_{ik}\delta_{j{j^{\prime}}} y_{j^{\prime}}\\
+	=& \delta_{ik} y_j \numberthis \label{eq:z:H}\\
+\end{align*}
+
+Combining \eqref{eq:Lambda:H}, \eqref{eq:Lambda:z}, and \eqref{eq:z:H}:
+\begin{align*}
+	\frac{\partial{\Lambda}}{\partial H_{ij}} =& \sum_k  [\delta_{mk} + \frac{e^{z_k}}{\sum_{k^{\prime}} e^{z_{k^{\prime}}}} ] \delta_{ik} y_j \numberthis \label{eq:Lambda:HH}
+\end{align*}
+Differentiating \eqref{eq:def:y} :
+\begin{align*}
+	\frac{\partial y_k}{\partial P_{ij}} =&\frac{\partial \sum_{i^{\prime}} P_{k{i^{\prime}}} x_{i^{\prime}}}{\partial P_{ij}}\\
+	=& \delta_{ik} \delta_{j{i^{\prime}}} x_{{i^{\prime}}}\\
+	=& \delta_{ik} x_j
+\end{align*}
+
+From \eqref{eq:Lambda:P}, \eqref{eq:Lambda:z}, \eqref{eq:def:z}, and \eqref{eq:def:y}.
+\begin{align*}
+	\frac{\partial{\Lambda}}{\partial P_{ij}} =&\sum_{k,j^{\prime}} [\delta_{mk} + \frac{e^{z_k}}{\sum_{k^{\prime}} e^{z_{k^{\prime}}}}] H_{k{j^{\prime}}} \delta_{ij^{\prime}} x_j\\
+	=&\sum_{k,} [\delta_{mk} + \frac{e^{z_k}}{\sum_{k^{\prime}} e^{z_{k^{\prime}}}}] H_{ki}  x_j \numberthis \label{eq:Lambda:PP}
+\end{align*}
 
 % bibliography goes here
 

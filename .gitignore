@@ -144,3 +144,6 @@ data/examples/
 *.blg
 *.pdf
 *.synctex.gz
+*.lof
+*.toc
+
