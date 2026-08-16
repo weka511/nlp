@@ -55,6 +55,7 @@ class Model:
         return np.average(w,axis=0)
         
     def forward(self,X):
+        self.X = X
         self.y = np.dot(X,self.P)
         z = np.dot(self.y,self.H)
         return z
@@ -101,8 +102,8 @@ class CrossEntropyLoss:
     
     def backward(self):
         dLoss_dz = -self.label + self.exp_z
-        dLoss_dH = np.outer(dLoss_dz,self.model.y) 
-        dLoss_dP = 0
+        self.dLoss_dH = np.outer(dLoss_dz,self.model.y).T
+        self.dLoss_dP = np.outer(np.matmul(self.model.H,dLoss_dz),self.model.X).T
 
 class DataLoader(ABC):
     @abstractmethod
@@ -110,12 +111,14 @@ class DataLoader(ABC):
         ...
 
 class GradientDescent:
-    def __init__(self,model,lr=0.01):
+    def __init__(self,model,loss_fn,lr=0.01):
         self.model = model
+        self.loss_fn = loss_fn
         self.lr = lr
         
     def step(self):
-        pass
+        self.model.H -= self.lr*self.loss_fn.dLoss_dH
+        self.model.P -= self.lr*self.loss_fn.dLoss_dP
 
 class NanoCorpus:
     def __init__(self):

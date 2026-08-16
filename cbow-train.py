@@ -31,7 +31,7 @@ def parse_args():
     logs = './logs'
     m = 31
     n = 300
-    N = 2
+    N = 50
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--seed', type=int, default=None, help='Seed for random number generation')
     parser.add_argument('--data', default=data, help=f'Path to data files [{data}]')
@@ -61,13 +61,13 @@ def main():
 
         loss_fn = CrossEntropyLoss(model)
 
-        optimizer = GradientDescent([model.P, model.H],
-                                    lr=0.01)
+        optimizer = GradientDescent(model,loss_fn,lr=0.01)
         for i in range(args.N):
             feature = [0, 2, 4, 5]
             label = encoder.create(3)
             prediction = model(feature)
             loss = loss_fn(prediction,label)
+            print (loss)
             loss_fn.backward()
             optimizer.step()
 
