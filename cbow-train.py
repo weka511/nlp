@@ -24,21 +24,24 @@ from time import time
 import numpy as np
 from shared.utils import Logger, user_has_requested_stop, get_seed
 
-from cbow2 import Model,OneHotFactory,LogSoftmax
-       
+from cbow2 import Model, OneHotFactory, GradientDescent, CrossEntropyLoss
+
 def parse_args():
     data = './data'
-    logs = './logs'  
+    logs = './logs'
     m = 31
     n = 300
+    N = 2
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--seed', type=int, default=None, help='Seed for random number generation')
     parser.add_argument('--data', default=data, help=f'Path to data files [{data}]')
-    parser.add_argument('--logs', default=logs, help=f'Location for storing log files [{logs}]')  
-    parser.add_argument('-m', type=int,default=m)
-    parser.add_argument('-n', type=int,default=n)
+    parser.add_argument('--logs', default=logs, help=f'Location for storing log files [{logs}]')
+    parser.add_argument('-m', type=int, default=m)
+    parser.add_argument('-n', type=int, default=n)
+    parser.add_argument('-N', type=int, default=N)
     return parser.parse_args()
-    
+
+
 def main():
     args = parse_args()
     with Logger(Path(__file__).stem, path=args.logs) as _:
@@ -48,19 +51,31 @@ def main():
 
         seed = get_seed(args.seed,
                         notify=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()}'
-                                                                   f' Created new seed {s}')) 
+                                                                   f' Created new seed {s}'))
         rng = np.random.default_rng(seed=seed)
-        
+        encoder = OneHotFactory(n=args.m)
         model = Model(m=args.m,
                       n=args.n,
-                      encoder=OneHotFactory(n=args.m),
+                      encoder=encoder,
                       rng=rng)
-        prediction = model([1,2,3,4])
-          
+
+        loss_fn = CrossEntropyLoss(model)
+
+        optimizer = GradientDescent([model.P, model.H],
+                                    lr=0.01)
+        for i in range(args.N):
+            feature = [0, 2, 4, 5]
+            label = encoder.create(3)
+            prediction = model(feature)
+            loss = loss_fn(prediction,label)
+            loss_fn.backward()
+            optimizer.step()
+
     elapsed = time() - start
-    minutes = int(elapsed/60)
-    seconds = elapsed - 60*minutes
-    print (f'Elapsed Time {minutes} m {seconds:.2f} s')
-    
-if __name__=='__main__':
+    minutes = int(elapsed / 60)
+    seconds = elapsed - 60 * minutes
+    print(f'Elapsed Time {minutes} m {seconds:.2f} s')
+
+
+if __name__ == '__main__':
     main()

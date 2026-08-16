@@ -123,6 +123,7 @@ In this section I derive the equations needed to implement \gls{gls:cbow}\cite{m
 \end{figure}
 
 \begin{align*}
+	x_i =& \frac{1} {m} \sum_j w_i^{(j)} \numberthis \label{eq:def:x}\\
 	y_j =& \sum_i P_{ji} x_i  \numberthis \label{eq:def:y}\\
 	z_k =& \sum_j H_{kj} y_j \numberthis \label{eq:def:z}\\\
 	\Lambda[P,H,Label] =& -\sum_k  \log {p_k} Label_k \text {, the \gls{gls:crossentropy}\cite{goodfellow2016deep}}\\
@@ -138,7 +139,7 @@ where the $p_k=\sigma(\vec{z})_k$ are calculated using the \gls{gls:softmax} fun
 
 \subsection{Calculating the Gradient}
 
-We will use the chain rule to calculate $\frac{\partial{\Lambda}}{\partial H_{ij}}$ and $\frac{\partial{\Lambda}}{\partial P_{ij}}$.
+I will use the chain rule to calculate $\frac{\partial{\Lambda}}{\partial H_{ij}}$ and $\frac{\partial{\Lambda}}{\partial P_{ij}}$.
 \begin{align*}
 	\frac{\partial{\Lambda}}{\partial H_{ij}} =& \sum_k \frac{\partial{\Lambda}}{\partial z_k}\frac{\partial z_k}{\partial H_{ij}} \numberthis \label{eq:Lambda:H}\\
 	\frac{\partial{\Lambda}}{\partial P_{ij}} =&\sum_{k,j^{\prime}} \frac{\partial{\Lambda}}{\partial z_k} \frac{\partial z_k}{\partial y_{j^{\prime}}} \frac{\partial y_{j^{\prime}}}{\partial P_{ij}} \numberthis \label{eq:Lambda:P}
@@ -147,16 +148,17 @@ We will use the chain rule to calculate $\frac{\partial{\Lambda}}{\partial H_{ij
 Differentiating \eqref{eq:def:lambda} and \eqref{eq:def:z}:
 \begin{align*}
 	\frac{\partial \Lambda}{\partial z_k} =& \frac{\partial [-z_m +  \ln \sum_{k^{\prime}} e^{z_{k^{\prime}}}]}{\partial z_k}\\
-	=& \delta_{mk} + \frac{\partial [\ln \sum_{k^{\prime}} e^{z_{k^{\prime}}}]}{\partial z_k}\\
-	=& \delta_{mk} + \frac{e^{z_k}}{\sum_{k^{\prime}} e^{z_{k^{\prime}}}} \numberthis \label{eq:Lambda:z}\\
+	=& - \delta_{mk} + \frac{\partial [\ln \sum_{k^{\prime}} e^{z_{k^{\prime}}}]}{\partial z_k}\\
+	=& - \delta_{mk} + \frac{e^{z_k}}{\sum_{k^{\prime}} e^{z_{k^{\prime}}}} \numberthis \label{eq:Lambda:z}\\
 	\frac{\partial z_k}{\partial H_{ij}} =& \frac{ \partial \sum_{j^{\prime}} H_{k{j^{\prime}}} y_{j^{\prime}}}{\partial H_{ij}}\\
-	=& \delta_{ik}\delta_{j{j^{\prime}}} y_{j^{\prime}}\\
+	=& \delta_{ik} \sum_{j^{\prime}} \delta_{j{j^{\prime}}} y_{j^{\prime}}\\
 	=& \delta_{ik} y_j \numberthis \label{eq:z:H}\\
 \end{align*}
 
 Combining \eqref{eq:Lambda:H}, \eqref{eq:Lambda:z}, and \eqref{eq:z:H}:
 \begin{align*}
-	\frac{\partial{\Lambda}}{\partial H_{ij}} =& \sum_k  [\delta_{mk} + \frac{e^{z_k}}{\sum_{k^{\prime}} e^{z_{k^{\prime}}}} ] \delta_{ik} y_j \numberthis \label{eq:Lambda:HH}
+	\frac{\partial{\Lambda}}{\partial H_{ij}} =& \sum_k  [-\delta_{mk} + \frac{e^{z_k}}{\sum_{k^{\prime}} e^{z_{k^{\prime}}}} ] \delta_{ik} y_j\\
+	=& [-\delta_{mi} + \frac{e^{z_i}}{\sum_{k^{\prime}} e^{z_{k^{\prime}}}} ]  y_j   \numberthis \label{eq:Lambda:HH}
 \end{align*}
 Differentiating \eqref{eq:def:y} :
 \begin{align*}
