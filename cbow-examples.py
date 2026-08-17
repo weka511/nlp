@@ -35,6 +35,8 @@ from vocabulary import Vocabulary
 from shared.utils import Logger, user_has_requested_stop, get_seed
 from tokenizer import generate_sentences, generate_text, generate_tokens, Token
 
+__version__ = '1.1'
+__author__ = 'Simon Crase'
 
 class BNC:
     '''
@@ -52,20 +54,21 @@ class BNC:
         for filename in self.bnc.fileids():
             yield filename
 
-    def sentences(self, path):
+    def sentences(self, path, stem=False):
         '''
         This generator is used to iterate through sentences in a specified file
         
         Parameters:
-            filename
+            filename   Full pathname for file
+            stem       If true, then use word stems instead of word strings.
         '''
-        for sentence in self.bnc.sents(fileids=path):
+        for sentence in self.bnc.sents(fileids=path,stem=stem):
             yield sentence
 
 
 class ExampleSet:
     '''
-    This class holds the words and contexts for one senetnce
+    This class holds the words and contexts for one sentence
     '''
 
     def __init__(self, window_size : int =4, vocabulary:Vocabulary=Vocabulary()):
@@ -120,6 +123,7 @@ def parse_args():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--data', default=data, help=f'Path to data files [{data}]')
     parser.add_argument('--logs', default=logs, help=f'Location for storing log files [{logs}]')
+    parser.add_argument('--stem', default=False,action='store_true',help='Set this to use stems instead of full words')
     parser.add_argument('-o', '--output', default=None, required=True, help='File name for storing results')
     parser.add_argument('-m', '--window_size', type=int, default=window_size,
                         help=f'Half size of window (context extends left and right) [{window_size}]')
@@ -127,6 +131,10 @@ def parse_args():
 
 
 def main():
+    '''
+    Read sentences from a corpus and generate words 
+    and contexts to we can train CBOW
+    '''    
     start = time()
     args = parse_args()
     with Logger(Path(__file__).stem, path=args.logs) as _:
@@ -140,9 +148,13 @@ def main():
             out_file_path.parent.mkdir(parents=True, exist_ok=True)
             examples = ExampleSet(window_size=args.window_size, vocabulary=vocabulary)
             with open(out_file_path, 'w', newline='') as out_file:
-                for sentence in bnc.sentences(path=path):
+                for sentence in bnc.sentences(path=path,stem=args.stem):
                     examples.build(sentence, out_file)
-
+         
+        vocabulary_path = (out_root_path / 'vocabulary').with_suffix('.pkl')           
+        vocabulary.save(vocabulary_path)
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Saved vocabulary in {vocabulary_path}')
+        
         elapsed = time() - start
         minutes = int(elapsed / 60)
         seconds = elapsed - 60 * minutes
