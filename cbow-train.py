@@ -25,24 +25,33 @@ from time import time
 from threading import Thread
 
 import numpy as np
-from shared.utils import Logger, user_has_requested_stop, get_seed
 
+from shared.utils import Logger, user_has_requested_stop, get_seed
+from vocabulary import Vocabulary
 from cbow2 import Model, OneHotFactory, GradientDescent, CrossEntropyLoss
- 
+
+__version__ = '1.0'
+__author__ = 'Simon Crase'
+
 class DataLoader:
     Sentinel = -1
     
-    def __init__(self,maxsize=64,data='data'):
+    def __init__(self,maxsize=64,data='data',examples='examples'):
         self.pipeline = Queue(maxsize=maxsize)
-        self.data = data
+        self.root_dir = Path(data) / examples
+        self.vocabulary = Vocabulary.create((self.root_dir / 'vocabulary').with_suffix('.pkl'))
         
+    def __len__(self):
+        return len(self.vocabulary)
+
     def load(self,thread):
-        file_name = 'examples/A/A0/A00'
-        with open((Path(self.data) / f'{file_name}').with_suffix('.csv'),
-                  newline='') as in_file:
-            for row in reader(in_file,delimiter=','):
-                tokens = [int(w) for w in row]
-                self.pipeline.put(tokens)
+        for path in self.root_dir.rglob("*.csv"):
+            if path.is_file():
+                print(f'File: {path}')       
+                with open(path,newline='') as in_file:
+                    for row in reader(in_file,delimiter=','):
+                        tokens = [int(w) for w in row]
+                        self.pipeline.put(tokens)
    
         self.pipeline.put([DataLoader.Sentinel])   
         Logger.get_instance().log(f'{__file__} {Logger.get_line()}')
@@ -61,16 +70,16 @@ class DataLoader:
 def parse_args():
     data = './data'
     logs = './logs'
-    m = 31
+    examples = 'examples'
     n = 300
     N = 50
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--seed', type=int, default=None, help='Seed for random number generation')
     parser.add_argument('--data', default=data, help=f'Path to data files [{data}]')
     parser.add_argument('--logs', default=logs, help=f'Location for storing log files [{logs}]')
-    parser.add_argument('-m', type=int, default=m)
     parser.add_argument('-n', type=int, default=n)
     parser.add_argument('-N', type=int, default=N)
+    parser.add_argument('--examples', default=examples, help=f'Path to examples files [{examples}]')
     return parser.parse_args()
 
 def worker(dataloader,encoder,model,loss_fn,optimizer):
@@ -93,11 +102,12 @@ def main():
                         notify=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()}'
                                                                    f' Created new seed {s}'))
         rng = np.random.default_rng(seed=seed)
-        encoder = OneHotFactory(n=args.m)
-        model = Model(m=args.m, n=args.n,encoder=encoder,rng=rng)
+       
+        dataloader = DataLoader(examples=args.examples)
+        encoder = OneHotFactory(n=len(dataloader))
+        model = Model(m=len(dataloader), n=args.n,encoder=encoder,rng=rng)
         loss_fn = CrossEntropyLoss(model)
         optimizer = GradientDescent(model,loss_fn,lr=0.01)      
-        dataloader = DataLoader()
         thread = Thread(target=worker, args=[dataloader,encoder,model,loss_fn,optimizer],daemon=True)
         thread.start()
         dataloader.load(thread)
