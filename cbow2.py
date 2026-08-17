@@ -98,7 +98,7 @@ class CrossEntropyLoss:
             label        A int
         '''
         self.label = label
-        return self._cross_entropy(self.log_softmax(prediction),label)
+        return self._cross_entropy(self.log_safe_softmax(prediction),label)
     
     def backward(self):
         dLoss_dz = -self.label + self.exp_z
