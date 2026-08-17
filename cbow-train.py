@@ -18,14 +18,39 @@
 '''Train CBOW'''
 
 from argparse import ArgumentParser
+from csv import reader
 from pathlib import Path
+from queue import Queue
 from time import time
+from threading import Thread
 
 import numpy as np
 from shared.utils import Logger, user_has_requested_stop, get_seed
 
 from cbow2 import Model, OneHotFactory, GradientDescent, CrossEntropyLoss
-
+class DataLoader:
+    def __init__(self,maxsize=2):
+        self.pipeline = Queue(maxsize=2)
+        self.there_is_data = True
+        
+    def load(self):
+        with open(r'C:\Users\weka5\nlp\data\examples\A\A0\A00.csv',newline='') as in_file:
+            for row in reader(in_file,delimiter=','):
+                tokens = [int(w) for w in row]
+                self.pipeline.put(tokens)
+                
+    def consume(self):
+        while self.there_is_data:
+            tokens = self.pipeline.get()
+            mid_point = len(tokens) // 2
+            yield tokens[:mid_point] + tokens[mid_point+1:], tokens[mid_point]        
+            self.pipeline.task_done()
+        
+    def join(self):
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()}')
+        self.pipeline.join()
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()}')
+        
 def parse_args():
     data = './data'
     logs = './logs'
@@ -41,6 +66,14 @@ def parse_args():
     parser.add_argument('-N', type=int, default=N)
     return parser.parse_args()
 
+def worker(dataloader,encoder,model,loss_fn,optimizer):
+    for feature,label in dataloader.consume():
+        label = encoder.create(label)
+        prediction = model(feature)
+        loss = loss_fn(prediction,label)
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Loss={loss}')
+        loss_fn.backward()
+        optimizer.step()
 
 def main():
     args = parse_args()
@@ -62,15 +95,13 @@ def main():
         loss_fn = CrossEntropyLoss(model)
 
         optimizer = GradientDescent(model,loss_fn,lr=0.01)
-        for i in range(args.N):
-            feature = [0, 2, 4, 5]
-            label = encoder.create(3)
-            prediction = model(feature)
-            loss = loss_fn(prediction,label)
-            print (loss)
-            loss_fn.backward()
-            optimizer.step()
-
+        
+        dataloader = DataLoader()
+        Thread(target=worker, args=[dataloader,encoder,model,loss_fn,optimizer],daemon=True).start()
+        dataloader.load()
+        dataloader.join()
+        
+ 
     elapsed = time() - start
     minutes = int(elapsed / 60)
     seconds = elapsed - 60 * minutes
