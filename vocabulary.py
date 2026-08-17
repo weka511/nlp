@@ -19,9 +19,10 @@
     This module provides support for Vocabulary,
     a mapping between words and tolkens
 '''
-__version__ = '1.0'
+__version__ = '1.1'
 __author__ = 'Simon Crase'
 
+from pickle import dump,load
 from unittest import main, TestCase, skip
 import numpy as np
 
@@ -35,18 +36,40 @@ class Vocabulary:
         tokens   Map text version of token to index         
         counts   Number of times each symbol appears
     '''
-    def __init__(self,sentence_tokens : bool = False):
+    @staticmethod
+    def create(file_name):
+        '''
+        Load a vocabulary that has previously been saved
+        
+        Parameters:
+            file_name    Path to file 
+        '''
+        with open(file_name, "rb") as file:
+            loaded_data = load(file)
+            return Vocabulary(symbols=loaded_data['symbols'],
+                              token=loaded_data['token'],
+                              counts=loaded_data['counts'])
+        
+    def __init__(self,
+                 sentence_tokens : bool = False,
+                 symbols = [],
+                 token = {},
+                 counts = []):
         '''
         Initialize vocabulary
         Parameters:
             sentence_tokens   Initialize vocabulary with start and end of sentence tolens
         '''
-        self.symbols = []
-        self.token = {}
-        self.counts = []
         if sentence_tokens:
+            self.symbols = [] # This appeara redundant, but test fails 
+            self.token = {}   # if I ue defaults.
+            self.counts = []            
             self.SOS = self.tokenize('<SOS>')
             self.EOS = self.tokenize('<EOS>')
+        else:
+            self.symbols = symbols
+            self.token = token
+            self.counts = counts            
         
     def __len__(self):
         '''
@@ -134,6 +157,21 @@ class Vocabulary:
     
         return Result
     
+    def save(self,file_name):
+        '''
+        Save vocabulary in a file
+        
+        Parameters:
+            file_name    Path to file 
+        '''
+        with open(file_name,'wb') as out:
+            dump({
+                'symbols':self.symbols,
+                'token':self.token,
+                'counts':self.counts
+                },
+                 out)     
+    
 class TestVocabulary(TestCase):
     '''
     Test case for no sentence tokens
@@ -163,7 +201,10 @@ class TestVocabularyWithSOS_EOS(TestCase):
         for word in ['the', 'quick', 'brown','fox', 'jumps', 'over', 'the', 'lazy', 'dog',
                           'that', 'guards', 'the', 'brown', 'cow']:
             vocabulary.tokenize(word)
-        self.assertEqual('cow',vocabulary.get_word(12))        
+        self.assertEqual('cow',vocabulary.get_word(12))   
+        vocabulary.save('foo.pkl')
+        v2 = Vocabulary.create('foo.pkl')
+        self.assertEqual(13,len(v2))
         
 if __name__ == '__main__':
     main()
