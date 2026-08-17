@@ -28,28 +28,35 @@ import numpy as np
 from shared.utils import Logger, user_has_requested_stop, get_seed
 
 from cbow2 import Model, OneHotFactory, GradientDescent, CrossEntropyLoss
+ 
 class DataLoader:
-    def __init__(self,maxsize=2):
-        self.pipeline = Queue(maxsize=2)
-        self.there_is_data = True
+    Sentinel = -1
+    
+    def __init__(self,maxsize=64,data='data'):
+        self.pipeline = Queue(maxsize=maxsize)
+        self.data = data
         
-    def load(self):
-        with open(r'C:\Users\weka5\nlp\data\examples\A\A0\A00.csv',newline='') as in_file:
+    def load(self,thread):
+        file_name = 'examples/A/A0/A00'
+        with open((Path(self.data) / f'{file_name}').with_suffix('.csv'),
+                  newline='') as in_file:
             for row in reader(in_file,delimiter=','):
                 tokens = [int(w) for w in row]
                 self.pipeline.put(tokens)
-                
+   
+        self.pipeline.put([DataLoader.Sentinel])   
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()}')
+        thread.join()
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()}')    
+        
     def consume(self):
-        while self.there_is_data:
+        while True:
             tokens = self.pipeline.get()
+            if tokens[0] == DataLoader.Sentinel: return
             mid_point = len(tokens) // 2
             yield tokens[:mid_point] + tokens[mid_point+1:], tokens[mid_point]        
             self.pipeline.task_done()
-        
-    def join(self):
-        Logger.get_instance().log(f'{__file__} {Logger.get_line()}')
-        self.pipeline.join()
-        Logger.get_instance().log(f'{__file__} {Logger.get_line()}')
+ 
         
 def parse_args():
     data = './data'
@@ -87,20 +94,13 @@ def main():
                                                                    f' Created new seed {s}'))
         rng = np.random.default_rng(seed=seed)
         encoder = OneHotFactory(n=args.m)
-        model = Model(m=args.m,
-                      n=args.n,
-                      encoder=encoder,
-                      rng=rng)
-
+        model = Model(m=args.m, n=args.n,encoder=encoder,rng=rng)
         loss_fn = CrossEntropyLoss(model)
-
-        optimizer = GradientDescent(model,loss_fn,lr=0.01)
-        
+        optimizer = GradientDescent(model,loss_fn,lr=0.01)      
         dataloader = DataLoader()
-        Thread(target=worker, args=[dataloader,encoder,model,loss_fn,optimizer],daemon=True).start()
-        dataloader.load()
-        dataloader.join()
-        
+        thread = Thread(target=worker, args=[dataloader,encoder,model,loss_fn,optimizer],daemon=True)
+        thread.start()
+        dataloader.load(thread)
  
     elapsed = time() - start
     minutes = int(elapsed / 60)
