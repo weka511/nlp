@@ -89,10 +89,10 @@ class ExampleSet:
 
     def __tokenize__(self,sentence : [str]) -> [int]:
         '''
-        Convert senetce fro a list of words to a list of tokens
+        Convert sentence from a list of words to a list of tokens
         '''
         return ([self.SOS] +
-                [self.vocabulary.tokenize(word) for word in sentence] +
+                [self.vocabulary.tokenize(word.lower()) for word in sentence if word.isalpha()] +
                 [self.EOS])
     
     def __accumulate__(self, tokens: [int], out_file:TextIO):
@@ -150,7 +150,9 @@ def main():
             with open(out_file_path, 'w', newline='') as out_file:
                 for sentence in bnc.sentences(path=path,stem=args.stem):
                     examples.build(sentence, out_file)
-         
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} Vocabulary contains {len(vocabulary)} words')
+            if user_has_requested_stop():
+                break
         vocabulary_path = (out_root_path / 'vocabulary').with_suffix('.pkl')           
         vocabulary.save(vocabulary_path)
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Saved vocabulary in {vocabulary_path}')
