@@ -92,7 +92,7 @@ class ExampleSet:
         Convert sentence from a list of words to a list of tokens
         '''
         return ([self.SOS] +
-                [self.vocabulary.tokenize(word.lower()) for word in sentence if word.isalpha()] +
+                [self.vocabulary.tokenize(word.lower() if word.isalpha() else '<UNK>') for word in sentence] +
                 [self.EOS])
     
     def __accumulate__(self, tokens: [int], out_file:TextIO):

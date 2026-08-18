@@ -62,10 +62,11 @@ class Vocabulary:
         '''
         if sentence_tokens:
             self.symbols = [] # This appeara redundant, but test fails 
-            self.token = {}   # if I ue defaults.
+            self.token = {}   # if I use defaults.
             self.counts = []            
             self.SOS = self.tokenize('<SOS>')
             self.EOS = self.tokenize('<EOS>')
+            self.UNK = self.tokenize('<UNK>')
         else:
             self.symbols = symbols
             self.token = token
@@ -201,10 +202,10 @@ class TestVocabularyWithSOS_EOS(TestCase):
         for word in ['the', 'quick', 'brown','fox', 'jumps', 'over', 'the', 'lazy', 'dog',
                           'that', 'guards', 'the', 'brown', 'cow']:
             vocabulary.tokenize(word)
-        self.assertEqual('cow',vocabulary.get_word(12))   
+        self.assertEqual('cow',vocabulary.get_word(13))   
         vocabulary.save('foo.pkl')
         v2 = Vocabulary.create('foo.pkl')
-        self.assertEqual(13,len(v2))
+        self.assertEqual(14,len(v2))
         
 if __name__ == '__main__':
     main()
