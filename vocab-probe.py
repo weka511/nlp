@@ -20,21 +20,36 @@
 from argparse import ArgumentParser
 from pathlib import Path
 from time import time
-
 import numpy as np
+from shared.utils import Logger, user_has_requested_stop, get_seed
+from vocabulary import Vocabulary
 
 def parse_args():
     parser = ArgumentParser(description=__doc__)
+    data = './data'
+    logs = './logs'
+    examples = 'examples'
+    parser = ArgumentParser(description=__doc__)
+    parser.add_argument('--data', default=data, help=f'Path to data files [{data}]')
+    parser.add_argument('--logs', default=logs, help=f'Location for storing log files [{logs}]')
+    parser.add_argument('--examples', default=examples, help=f'Path to examples files [{examples}]')    
     return parser.parse_args()
     
 def main():
     start  = time()
     args = parse_args()
-    
-    elapsed = time() - start
-    minutes = int(elapsed/60)
-    seconds = elapsed - 60*minutes
-    print (f'Elapsed Time {minutes} m {seconds:.2f} s')
+    with Logger(Path(__file__).stem, path=args.logs) as _:
+        root_dir = Path(args.data) / args.examples
+        vocabulary = Vocabulary.create((root_dir / 'vocabulary').with_suffix('.pkl'))
+        for symbol in sorted(vocabulary.symbols):
+            try:
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} {symbol}')
+            except UnicodeEncodeError:
+                pass
+        elapsed = time() - start
+        minutes = int(elapsed/60)
+        seconds = elapsed - 60*minutes
+        print (f'Elapsed Time {minutes} m {seconds:.2f} s')
     
 if __name__=='__main__':
     main()
