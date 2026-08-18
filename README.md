@@ -25,6 +25,7 @@ tfidf-harness.py|Test harness for td-idf algorithm
 tokenizer.py|Prepare text for processing
 trans_tut.py|[Transformer Model Tutorial in PyTorch: From Theory to Code](https://www.datacamp.com/tutorial/building-a-transformer-with-py-torch) Arjun Aarkar
 vocabulary.py|Establish mapping between words and tokens
+vocab-probe.py|Investigate Issue #92: Vocabulary has too many tokens
 
 ## Data folder
 
