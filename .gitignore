@@ -136,8 +136,9 @@ dmypy.json
 *.pth
 *.zip
 
+data/2553/
 data/2554/
-data/examples/
+data/examples*/
 
 *.aux
 *.bbl

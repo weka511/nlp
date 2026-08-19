@@ -42,10 +42,16 @@ class BNC:
     '''
     Read text from BNC corpus
     '''
-
-    def __init__(self, root=r'./data/2554/download\Texts'):
-        nltk.data.path.append(r'./data\2554\download')
-        self.bnc = BNCCorpusReader(root=root, fileids=r'[A-K]/\w*/\w*\.xml')
+    def __init__(self, root=r'./data/2553/download'):
+        '''
+        Connect to Baby BNC
+        '''      
+        nltk.data.path.append(root)
+        self.bnc = BNCCorpusReader(root=root+r'\Texts', fileids=r'\w*/\w*\.xml')
+        # Here is the code for full BNC
+        #def __init__(self, root=r'./data/2554/download\Texts'):
+        #        nltk.data.path.append(r'./data\2554\download')
+        #        self.bnc = BNCCorpusReader(root=root, fileids=r'[A-K]/\w*/\w*\.xml')        
 
     def filenames(self):
         '''
