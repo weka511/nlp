@@ -16,10 +16,11 @@
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 '''
-This module contains classes needed to train CBOW, such as the model and the loss
+Train a Continuous Bag of Words Model
 '''
 
-from abc import ABC, abstractmethod
+from pickle import dump, load
+from queue import Queue
 from unittest import main,TestCase
 import numpy as np
 from numpy.testing import assert_array_equal,assert_array_almost_equal
@@ -45,28 +46,66 @@ class Model:
     '''
     CBOW neural network
     '''
+    @staticmethod
+    def create(file_name,encoder=None):
+        '''
+        Load a model that has previously been saved
+        
+        Parameters:
+            file_name    Path to file 
+        '''
+        with open(file_name, 'rb') as file:
+            loaded_data = load(file)
+            m,n = loaded_data['P'].shape
+            product = Model(m=m,n=n,encoder=encoder)
+            product.P = loaded_data['P']
+            product.H = loaded_data['H']
+            return product
+        
     def __init__(self,m=19,n=300,rng = np.random.default_rng(),encoder=None):
         self.P = rng.uniform(low=-1,high=+1,size=(m,n))
         self.H = rng.uniform(low=-1,high=+1,size=(n,m))
         self.encoder = encoder
         
     def get_average(self,w):
-        m,n = w.shape
+        '''
+        Used to average the vectors making up the context
+        
+        Returns:
+            A single word vector
+        '''
         return np.average(w,axis=0)
         
     def forward(self,X):
+        '''
+        Given an input to projection layer, fill in projection and hidden layers
+        '''
         self.X = X
         self.y = np.dot(X,self.P)
         z = np.dot(self.y,self.H)
         return z
     
     def __call__(self,feature:[int]):
+        '''
+        Used to average a context and pass it through the network.
+        '''
         W = np.array([self.encoder.create(w) for w in feature])
         X = self.get_average(W)        
         return self.forward(X)
-
-def kronecker_delta(i,j):
-    return 1 if i == j else 0
+    
+    def save(self,file_name):
+        '''
+        Save model in a file
+        
+        Parameters:
+            file_name    Path to file 
+        '''
+        with open(file_name,'wb') as out:
+            dump({
+                'P':self.P,
+                'H':self.H
+                },
+                 out)
 
 class CrossEntropyLoss:
     '''
@@ -105,10 +144,6 @@ class CrossEntropyLoss:
         self.dLoss_dH = np.outer(dLoss_dz,self.model.y).T
         self.dLoss_dP = np.outer(np.matmul(self.model.H,dLoss_dz),self.model.X).T
 
-class DataLoader(ABC):
-    @abstractmethod
-    def generate_data(self):
-        ...
 
 class GradientDescent:
     def __init__(self,model,loss_fn,lr=0.01):
@@ -119,7 +154,7 @@ class GradientDescent:
     def step(self):
         self.model.H -= self.lr*self.loss_fn.dLoss_dH
         self.model.P -= self.lr*self.loss_fn.dLoss_dP
-
+            
 class NanoCorpus:
     def __init__(self):
         self.data = [
