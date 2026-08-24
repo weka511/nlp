@@ -42,12 +42,12 @@ class BNC:
     '''
     Read text from BNC corpus
     '''
-    def __init__(self, root=r'./data/2553/download'):
+    def __init__(self, root=r'./data/2553/download',component=r'\w*'):
         '''
         Connect to Baby BNC
         '''      
         nltk.data.path.append(root)
-        self.bnc = BNCCorpusReader(root=root+r'\Texts', fileids=r'\w*/\w*\.xml')
+        self.bnc = BNCCorpusReader(root=root+r'\Texts', fileids=component+r'/\w*\.xml')
         # Here is the code for full BNC
         #def __init__(self, root=r'./data/2554/download\Texts'):
         #        nltk.data.path.append(r'./data\2554\download')
@@ -82,7 +82,14 @@ class ExampleSet:
         self.SOS = self.vocabulary.tokenize('<SOS>')
         self.EOS = self.vocabulary.tokenize('<EOS>')
         self.window_size = window_size
-
+        self.count = 0
+        
+    def __len__(self):
+        '''
+        The length is the total number of examples
+        '''
+        return self.count
+        
     def build(self, sentence : [str], out_file : TextIO):
         '''
         Construct words and contexts for one sentence
@@ -120,6 +127,7 @@ class ExampleSet:
             out.writerow([words] + context)
             start += 1
             end += 1
+            self.count += 1
 
 
 def parse_args():
@@ -133,6 +141,10 @@ def parse_args():
     parser.add_argument('-o', '--output', default=None, required=True, help='File name for storing results')
     parser.add_argument('-m', '--window_size', type=int, default=window_size,
                         help=f'Half size of window (context extends left and right) [{window_size}]')
+    parser.add_argument('--component',
+                        default=r'/\w*\.xml',
+                        choices=['aca','dem','fic','news'],
+                        help='database component')
     return parser.parse_args()
 
 
@@ -143,10 +155,11 @@ def main():
     '''    
     start = time()
     args = parse_args()
+    total_examples = 0
     with Logger(Path(__file__).stem, path=args.logs) as _:
         out_root_path = Path(f'{args.data}/{args.output}')
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Writing results to {out_root_path}')
-        bnc = BNC()
+        bnc = BNC(component=args.component)
         vocabulary = Vocabulary()
         for path in bnc.filenames():
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} Opened {path}')
@@ -157,10 +170,16 @@ def main():
                 for sentence in bnc.sentences(path=path,stem=args.stem):
                     examples.build(sentence, out_file)
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} Vocabulary contains {len(vocabulary)} words')
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} There are {len(examples)} examples')
+            total_examples += len(examples)
+            
             if user_has_requested_stop():
                 break
+            
+            
         vocabulary_path = (out_root_path / 'vocabulary').with_suffix('.pkl')           
         vocabulary.save(vocabulary_path)
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} There are {total_examples} examples')
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Saved vocabulary in {vocabulary_path}')
         
         elapsed = time() - start
