@@ -15,7 +15,9 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-'''Train Continuous Bag of Words'''
+'''
+Train Projection layer to serve as a Continuous Bag of Words
+'''
 
 from argparse import ArgumentParser
 from csv import reader
@@ -37,7 +39,7 @@ class DataLoader:
     '''
     This class reads stored training examples. It is meant to run in separate thread from training.
     '''
-    Sentinel = -1 # Used to inform tharing thread that we have no more data for it
+    Sentinel = -1 # Used to inform training thread that we have no more data for it
     
     def __init__(self,maxsize=8,data='data',examples='examples'):
         self.maxsize = maxsize
@@ -107,9 +109,10 @@ def parse_args():
     parser.add_argument('-n', type=int, default=n)
     parser.add_argument('-N', type=int, default=N)
     parser.add_argument('--examples', default=examples, help=f'Path to examples files [{examples}]')
+    parser.add_argument('-o', '--output', default=None, required=True, help='File name for storing results')
     return parser.parse_args()
 
-def train(dataloader,encoder,model,loss_fn,optimizer):
+def train(dataloader,encoder,model,loss_fn,optimizer,start):
     '''
     Train for one datum
     
@@ -120,13 +123,22 @@ def train(dataloader,encoder,model,loss_fn,optimizer):
         loss_fn      Computer training loss
         optimizer    Use the adjust weights to minimize loss
     '''
-    for feature,label in dataloader.consume():
+    for i,(feature,label) in enumerate(dataloader.consume()):
         label = encoder.create(label)
         prediction = model(feature)
         loss = loss_fn(prediction,label)
-        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Loss={loss}')
+        #Logger.get_instance().log(f'{__file__} {Logger.get_line()} Loss={loss}')
+        if i%1000 == 0:
+            elapsed = time() - start
+            minutes = int(elapsed / 60)
+            seconds = elapsed - 60 * minutes
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} i={i} {minutes} m {seconds:.2f} s')
+            if i > 10000: return
+  
         loss_fn.backward()
         optimizer.step()
+        
+    model.save(Path(f'{args.data}/{args.output}'))
 
 def main():
     '''
@@ -147,7 +159,7 @@ def main():
         model = Model(m=len(dataloader), n=args.n,encoder=encoder,rng=np.random.default_rng(seed=seed))
         loss_fn = CrossEntropyLoss(model)
         optimizer = GradientDescent(model,loss_fn,lr=0.01)      
-        worker = Thread(target=train, args=[dataloader,encoder,model,loss_fn,optimizer],daemon=True)
+        worker = Thread(target=train, args=[dataloader,encoder,model,loss_fn,optimizer,start],daemon=True)
         worker.start()
         dataloader.load(worker)
  
