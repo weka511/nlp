@@ -21,114 +21,16 @@
 '''
 
 from argparse import ArgumentParser
-from csv import writer, QUOTE_MINIMAL
 from os.path import join
 from pathlib import Path
 from time import time
-from typing import TextIO
-
 import numpy as np
-import nltk
-from nltk.corpus.reader.bnc import BNCCorpusReader
-
 from vocabulary import Vocabulary
 from shared.utils import Logger, user_has_requested_stop, get_seed
-from tokenizer import generate_sentences, generate_text, generate_tokens, Token
+from cbow2 import ExampleSet, BNC
 
 __version__ = '1.1'
 __author__ = 'Simon Crase'
-
-class BNC:
-    '''
-    Read text from BNC corpus
-    '''
-    def __init__(self, root=r'./data/2553/download',component=r'\w*'):
-        '''
-        Connect to Baby BNC
-        '''      
-        nltk.data.path.append(root)
-        self.bnc = BNCCorpusReader(root=root+r'\Texts', fileids=component+r'/\w*\.xml')
-        # Here is the code for full BNC
-        #def __init__(self, root=r'./data/2554/download\Texts'):
-        #        nltk.data.path.append(r'./data\2554\download')
-        #        self.bnc = BNCCorpusReader(root=root, fileids=r'[A-K]/\w*/\w*\.xml')        
-
-    def filenames(self):
-        '''
-        This generator is used to iterate through filenames
-        '''
-        for filename in self.bnc.fileids():
-            yield filename
-
-    def sentences(self, path, stem=False):
-        '''
-        This generator is used to iterate through sentences in a specified file
-        
-        Parameters:
-            filename   Full pathname for file
-            stem       If true, then use word stems instead of word strings.
-        '''
-        for sentence in self.bnc.sents(fileids=path,stem=stem):
-            yield sentence
-
-
-class ExampleSet:
-    '''
-    This class holds the words and contexts for one sentence
-    '''
-
-    def __init__(self, window_size : int =4, vocabulary:Vocabulary=Vocabulary()):
-        self.vocabulary = vocabulary
-        self.SOS = self.vocabulary.tokenize('<SOS>')
-        self.EOS = self.vocabulary.tokenize('<EOS>')
-        self.window_size = window_size
-        self.count = 0
-        
-    def __len__(self):
-        '''
-        The length is the total number of examples
-        '''
-        return self.count
-        
-    def build(self, sentence : [str], out_file : TextIO):
-        '''
-        Construct words and contexts for one sentence
-        
-        Parameters:
-            sentence
-            out_file
-        '''
-        self.__accumulate__(self.__tokenize__(sentence), out_file)
-
-    def __tokenize__(self,sentence : [str]) -> [int]:
-        '''
-        Convert sentence from a list of words to a list of tokens
-        '''
-        return ([self.SOS] +
-                [self.vocabulary.tokenize(word.lower() if word.isalpha() else '<UNK>') for word in sentence] +
-                [self.EOS])
-    
-    def __accumulate__(self, tokens: [int], out_file:TextIO):
-        '''
-        Convert a sequence of tokens, representing one sentence, to 
-        words and contexts
-        
-        Parameters:
-            tokens
-        '''
-        out = writer(out_file, delimiter=',', quotechar='|', quoting=QUOTE_MINIMAL)
-        start = 0
-        end = start + 2 * self.window_size + 1
-        n_entries = len(tokens) - end + 1
-        while end <= len(tokens):
-            run = [tokens[i] for i in range(start, end)]
-            words = run[self.window_size]
-            context = run[:self.window_size] + run[self.window_size + 1:]
-            out.writerow([words] + context)
-            start += 1
-            end += 1
-            self.count += 1
-
 
 def parse_args():
     data = './data'
@@ -146,7 +48,6 @@ def parse_args():
                         choices=['aca','dem','fic','news'],
                         help='database component')
     return parser.parse_args()
-
 
 def main():
     '''
@@ -175,8 +76,7 @@ def main():
             
             if user_has_requested_stop():
                 break
-            
-            
+             
         vocabulary_path = (out_root_path / 'vocabulary').with_suffix('.pkl')           
         vocabulary.save(vocabulary_path)
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} There are {total_examples} examples')
@@ -186,7 +86,6 @@ def main():
         minutes = int(elapsed / 60)
         seconds = elapsed - 60 * minutes
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Elapsed Time {minutes} m {seconds:.2f} s')
-
 
 if __name__ == '__main__':
     main()

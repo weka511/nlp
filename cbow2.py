@@ -19,12 +19,113 @@
 Train a Continuous Bag of Words Model
 '''
 
+from csv import reader, writer, QUOTE_MINIMAL
+import dbm
 from pickle import dump, load
 from queue import Queue
-from unittest import main,TestCase
+from typing import TextIO
+from unittest import main,TestCase,skip
 import numpy as np
 from numpy.testing import assert_array_equal,assert_array_almost_equal
+import nltk
+from nltk.corpus.reader.bnc import BNCCorpusReader
+from nltk.tokenize import word_tokenize
+from vocabulary import Vocabulary
 
+__version__ = '1.1'
+__author__ = 'Simon Crase'
+
+class BNC:
+    '''
+    Read text from BNC corpus
+    '''
+    def __init__(self, root=r'./data/2553/download',component=r'\w*'):
+        '''
+        Connect to Baby BNC
+        '''      
+        nltk.data.path.append(root)
+        self.bnc = BNCCorpusReader(root=root+r'\Texts', fileids=component+r'/\w*\.xml')
+        # Here is the code for full BNC
+        #def __init__(self, root=r'./data/2554/download\Texts'):
+        #        nltk.data.path.append(r'./data\2554\download')
+        #        self.bnc = BNCCorpusReader(root=root, fileids=r'[A-K]/\w*/\w*\.xml')        
+
+    def filenames(self):
+        '''
+        This generator is used to iterate through filenames
+        '''
+        for filename in self.bnc.fileids():
+            yield filename
+
+    def sentences(self, path, stem=False):
+        '''
+        This generator is used to iterate through sentences in a specified file
+        
+        Parameters:
+            filename   Full pathname for file
+            stem       If true, then use word stems instead of word strings.
+        '''
+        for sentence in self.bnc.sents(fileids=path,stem=stem):
+            yield sentence
+            
+class ExampleSet:
+    '''
+    This class holds the words and contexts for one sentence
+    '''
+
+    def __init__(self, window_size : int =4, vocabulary:Vocabulary=Vocabulary()):
+        self.vocabulary = vocabulary
+        self.SOS = self.vocabulary.tokenize('<SOS>')
+        self.EOS = self.vocabulary.tokenize('<EOS>')
+        self.window_size = window_size
+        self.count = 0
+        
+    def __len__(self):
+        '''
+        The length is the total number of examples
+        '''
+        return self.count
+        
+    def build(self, sentence : [str], out_file : TextIO):
+        '''
+        Construct words and contexts for one sentence
+        
+        Parameters:
+            sentence
+            out_file
+        '''
+        self.__accumulate__(self.__tokenize__(sentence), out_file)
+
+    def __tokenize__(self,sentence : [str]) -> [int]:
+        '''
+        Convert sentence from a list of words to a list of tokens
+        '''
+        return ([self.SOS] +
+                [self.vocabulary.tokenize(word.lower() if word.isalpha() else '<UNK>') for word in sentence] +
+                [self.EOS])
+    
+    def __accumulate__(self, tokens: [int], out_file:TextIO):
+        '''
+        Convert a sequence of tokens, representing one sentence, to 
+        words and contexts
+        
+        Parameters:
+            tokens
+            out_file
+        '''
+        out = writer(out_file, delimiter=',', quotechar='|', quoting=QUOTE_MINIMAL)
+        start = 0
+        end = start + 2 * self.window_size + 1
+        n_entries = len(tokens) - end + 1
+        while end <= len(tokens):
+            run = [tokens[i] for i in range(start, end)]
+            words = run[self.window_size]
+            context = run[:self.window_size] + run[self.window_size + 1:]
+            out.writerow([words] + context)
+            start += 1
+            end += 1
+            self.count += 1
+            
 class OneHotFactory:
     '''
     Encodes tokens as 1-hot vectors for use in neural network
@@ -33,14 +134,20 @@ class OneHotFactory:
         self.n = n
         
     def create(self,tokens:[int]):
+        '''
+        Create a matrix of 1-hot vectors from a list of tokens
+        
+        Parameters:
+            tokens
+        '''
         try:
-            one_hot = np.zeros(tokens.shape + (self.n,))
+            product = np.zeros(tokens.shape + (self.n,))
             for i in range(len(tokens)):
-                one_hot[i,tokens[i]] = 1
+                product[i,tokens[i]] = 1
         except AttributeError:
-            one_hot = np.zeros(self.n)
-            one_hot[tokens] = 1 
-        return one_hot
+            product = np.zeros(self.n)
+            product[tokens] = 1 
+        return product
 
 class Model:
     '''
@@ -107,6 +214,84 @@ class Model:
                 },
                  out)
 
+class ExamplesFile:
+    '''
+    This class reads stored training examples from a single file.
+    '''
+    def __init__(self,filename,batch_size=32,progress='progress'):
+        self.filename = filename
+        self.batch_size = batch_size
+        self.progress = progress
+        
+    def load(self):
+        '''
+        Load examples file from ...
+        '''
+        with dbm.open(self.progress,'c') as progress_db, open(self.filename,newline='') as in_file:
+            try:
+                record = int(progress_db[path.stem])
+            except KeyError:
+                record = 0
+                progress_db[path.stem] = record
+                
+            batch = []
+            for row in reader(in_file,delimiter=','):
+                batch.append([int(w) for w in row])
+                if len(batch) >= self.batch_size:
+                    yield(batch)
+                    batch = []
+                    record += len(batch)
+                    progress_db[path.stem] = record
+            if len(batch) >= 0:
+                yield(batch)
+                record += len(batch)
+                progress_db[path.stem] = record                
+
+class DataLoader:
+    '''
+    This class reads stored training examples. It is meant to run in a separate thread from training.
+    '''
+    def __init__(self,data='data',examples='examples',batch_size=32,maxsize=8):
+        self.pipeline = Queue(maxsize=maxsize)
+        self.root_dir = Path(data) / examples
+        self.vocabulary = Vocabulary.create((self.root_dir / 'vocabulary').with_suffix('.pkl'))
+        self.batch_size = batch_size
+        self.examples = examples
+        
+    def __len__(self):
+        '''
+        Returns number of tokens in vocabulary
+        '''
+        return len(self.vocabulary)
+    
+    def load(self,worker):
+        '''
+        Read data from saved examples and queue it, so
+        it can be read by worker thread.
+        
+        Parameters:
+            worker     The worker thread that extract data from queue
+        '''
+        with dbm.open(self.examples,flag='c') as progress_db:
+            for path in self.root_dir.rglob("*.csv"):
+                if path.is_file():
+                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} Opening: {path}')  
+                    examples_file = ExamplesFile(path)
+                    for batch in examples_file.load():
+                        self.pipeline.queue(batch)
+                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} Closing: {path}') 
+                    
+                    progress.write(f'{path.stem}\n')
+                    
+                if user_has_requested_stop():
+                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} Stopping within {self.maxsize} steps')
+                    break 
+                
+            self.pipeline.put([l])   
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()}')
+            worker.join()
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()}')               
+    
 class CrossEntropyLoss:
     '''
     Used to calculate cross entropy loss
@@ -270,6 +455,19 @@ class TestCrossEntropy(TestCase):
             self.loss_fn.log_softmax(np.array([0.9,0.05,0.025,0.025])),
             self.loss_fn.log_safe_softmax(np.array([0.9,0.05,0.025,0.025]))
         )    
-    
+ 
+class TestExamplesFile(TestCase):
+    @skip('FIXME')
+    def test_generator(self):
+        '''
+        Visually inspected file: these are the result we'd expect
+        '''
+        file = ExamplesFile(r'C:\Users\weka5\nlp\data\examples-baby\fic\BMW.csv')
+        for i,batch in enumerate(file.load()):
+            if i < 986:
+                self.assertEqual(32,len(batch))
+            else:
+                self.assertEqual(4,len(batch))
+            
 if __name__=='__main__':
         main()
