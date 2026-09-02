@@ -16,7 +16,8 @@
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 '''
-Train a Continuous Bag of Words Model
+Continuous Bag of Words Model
+Classes for building examples and training model
 '''
 
 from csv import reader, writer, QUOTE_MINIMAL
@@ -29,7 +30,6 @@ import numpy as np
 from numpy.testing import assert_array_equal,assert_array_almost_equal
 import nltk
 from nltk.corpus.reader.bnc import BNCCorpusReader
-from nltk.tokenize import word_tokenize
 from vocabulary import Vocabulary
 
 __version__ = '1.1'
@@ -62,8 +62,8 @@ class BNC:
         This generator is used to iterate through sentences in a specified file
         
         Parameters:
-            filename   Full pathname for file
-            stem       If true, then use word stems instead of word strings.
+            path   Full pathname for file
+            stem   If true, then use word stems instead of word strings.
         '''
         for sentence in self.bnc.sents(fileids=path,stem=stem):
             yield sentence
@@ -99,6 +99,9 @@ class ExampleSet:
     def __tokenize__(self,sentence : [str]) -> [int]:
         '''
         Convert sentence from a list of words to a list of tokens
+        
+        Parameters:
+            sentence
         '''
         return ([self.SOS] +
                 [self.vocabulary.tokenize(word.lower() if word.isalpha() else '<UNK>') for word in sentence] +

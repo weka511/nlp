@@ -26,13 +26,54 @@ from pathlib import Path
 from time import time
 import numpy as np
 from vocabulary import Vocabulary
-from shared.utils import Logger, user_has_requested_stop, get_seed
+from shared.utils import Logger, user_has_requested_stop
 from cbow2 import ExampleSet, BNC
 
 __version__ = '1.1'
 __author__ = 'Simon Crase'
 
+class ExampleSetBuilder:
+    '''
+    Build examples for one file from corpus
+    '''
+    def __init__(self,corpus,vocabulary,out_root_path,
+                 window_size=4,stem=False):
+        '''
+        Parameters:
+            corpus
+            vocabulary
+            out_root_path
+            window_size
+            stem
+        '''
+        self.corpus = corpus
+        self.vocabulary = vocabulary
+        self.out_root_path = out_root_path
+        self.window_size = window_size
+        self.stem = stem
+    
+    def build(self,path):
+        '''
+        Build exmples for one file
+        
+        Parameters:
+            path     Path to file that is to be processed
+        '''
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Opened {path}')
+        out_file_path = (self.out_root_path / path).with_suffix('.csv')
+        out_file_path.parent.mkdir(parents=True, exist_ok=True)
+        examples = ExampleSet(window_size=self.window_size, vocabulary=self.vocabulary)
+        with open(out_file_path, 'w', newline='') as out_file:
+            for sentence in self.corpus.sentences(path=path,stem=self.stem):
+                examples.build(sentence, out_file)
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Vocabulary contains {len(self.vocabulary)} words')
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} There are {len(examples)} examples')
+        return len(examples)
+    
 def parse_args():
+    '''
+    Parse command line arguments
+    '''
     data = './data'
     logs = './logs'
     window_size = 4
@@ -49,6 +90,8 @@ def parse_args():
                         help='database component')
     return parser.parse_args()
 
+
+
 def main():
     '''
     Read sentences from a corpus and generate words 
@@ -60,26 +103,18 @@ def main():
     with Logger(Path(__file__).stem, path=args.logs) as _:
         out_root_path = Path(f'{args.data}/{args.output}')
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Writing results to {out_root_path}')
-        bnc = BNC(component=args.component)
+        corpus = BNC(component=args.component)
         vocabulary = Vocabulary()
-        for path in bnc.filenames():
-            Logger.get_instance().log(f'{__file__} {Logger.get_line()} Opened {path}')
-            out_file_path = (out_root_path / path).with_suffix('.csv')
-            out_file_path.parent.mkdir(parents=True, exist_ok=True)
-            examples = ExampleSet(window_size=args.window_size, vocabulary=vocabulary)
-            with open(out_file_path, 'w', newline='') as out_file:
-                for sentence in bnc.sentences(path=path,stem=args.stem):
-                    examples.build(sentence, out_file)
-            Logger.get_instance().log(f'{__file__} {Logger.get_line()} Vocabulary contains {len(vocabulary)} words')
-            Logger.get_instance().log(f'{__file__} {Logger.get_line()} There are {len(examples)} examples')
-            total_examples += len(examples)
-            
+        builder = ExampleSetBuilder(corpus,vocabulary,out_root_path,
+                                    window_size=args.window_size,stem=args.stem)
+        for path in corpus.filenames():
+            total_examples += builder.build(path)
             if user_has_requested_stop():
                 break
              
         vocabulary_path = (out_root_path / 'vocabulary').with_suffix('.pkl')           
         vocabulary.save(vocabulary_path)
-        Logger.get_instance().log(f'{__file__} {Logger.get_line()} There are {total_examples} examples')
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} There are {total_examples} examples in total')
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Saved vocabulary in {vocabulary_path}')
         
         elapsed = time() - start
