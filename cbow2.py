@@ -166,15 +166,15 @@ class Model:
         '''
         with open(file_name, 'rb') as file:
             loaded_data = load(file)
-            m,n = loaded_data['P'].shape
-            product = Model(m=m,n=n,encoder=encoder)
+            m,dimensionality = loaded_data['P'].shape
+            product = Model(m=m,dimensionality=dimensionality,encoder=encoder)
             product.P = loaded_data['P']
             product.H = loaded_data['H']
             return product
         
-    def __init__(self,m=19,n=300,rng = np.random.default_rng(),encoder=None):
-        self.P = rng.uniform(low=-1,high=+1,size=(m,n))
-        self.H = rng.uniform(low=-1,high=+1,size=(n,m))
+    def __init__(self,m=19,dimensionality=300,rng = np.random.default_rng(),encoder=None):
+        self.P = rng.uniform(low=-1,high=+1,size=(m,dimensionality))
+        self.H = rng.uniform(low=-1,high=+1,size=(dimensionality,m))
         self.encoder = encoder
         
     def get_average(self,w):
@@ -210,7 +210,7 @@ class Model:
         Parameters:
             file_name    Path to file 
         '''
-        with open(file_name,'wb') as out:
+        with open(file_name.with_suffix('.pkl'),'wb') as out:
             dump({
                 'P':self.P,
                 'H':self.H

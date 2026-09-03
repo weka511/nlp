@@ -41,11 +41,20 @@ class DataLoader:
     '''
     Sentinel = -1 # Used to inform training thread that we have no more data for it
     
-    def __init__(self,maxsize=8,data='data',examples='examples'):
+    def __init__(self,maxsize=8,data='data',examples='examples',rng=np.random.default_rng(),P=0.01):
+        '''
+        Parameters:
+            maxsize
+            data
+            examples
+            rng
+        '''
         self.maxsize = maxsize
         self.pipeline = Queue(maxsize=maxsize)
         self.root_dir = Path(data) / examples
         self.vocabulary = Vocabulary.create((self.root_dir / 'vocabulary').with_suffix('.pkl'))
+        self.rng = rng
+        self.P = P
         
     def __len__(self):
         '''
@@ -59,20 +68,14 @@ class DataLoader:
         it can be read by worker thread.
         
         Parameters:
-            worker     The worker thread that extract data from queue
+            worker     The worker thread that extracts data from queue
         '''
         with open((self.root_dir / 'progress').with_suffix('.txt'),'a') as progress:
             running = True
             for path in self.root_dir.rglob("*.csv"):
                 if not running: break
                 if not path.is_file(): continue
- 
-                Logger.get_instance().log(f'{__file__} {Logger.get_line()} File: {path}')      
-                with open(path,newline='') as in_file:
-                    for row in reader(in_file,delimiter=','):
-                        tokens = [int(w) for w in row]
-                        self.pipeline.put(tokens)
-                        
+                self.load_file(path,)                         
                 progress.write(f'{path.stem}\n')
                 
                 if user_has_requested_stop():
@@ -84,7 +87,15 @@ class DataLoader:
         Logger.get_instance().log(f'{__file__} {Logger.get_line()}')
         worker.join()
         Logger.get_instance().log(f'{__file__} {Logger.get_line()}')    
-        
+  
+    def load_file(self,path):
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} File: {path}')      
+        with open(path,newline='') as in_file:
+            for row in reader(in_file,delimiter=','):
+                if self.rng.uniform() < self.P:
+                    tokens = [int(w) for w in row]
+                    self.pipeline.put(tokens)
+                    
     def consume(self):
         '''
         This is called from the worker thread to extract data from queue
@@ -101,20 +112,25 @@ def parse_args():
     logs = './logs'
     examples = 'examples'
     n = 300
-    N = 50
+    P = 0.01
+    lr = 0.01
+    freq = 10
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--seed', type=int, default=None, help='Seed for random number generation')
     parser.add_argument('--data', default=data, help=f'Path to data files [{data}]')
     parser.add_argument('--logs', default=logs, help=f'Location for storing log files [{logs}]')
-    parser.add_argument('-n', type=int, default=n)
-    parser.add_argument('-N', type=int, default=N)
+    parser.add_argument('-d', '--dimensionality',type=int, default=n,help=f'Dimensionality of word vectors [{n}]')
+    parser.add_argument('-N', '--N',type=int, default=None,help=f'Number of iterations')
     parser.add_argument('--examples', default=examples, help=f'Path to examples files [{examples}]')
     parser.add_argument('-o', '--output', default=None, required=True, help='File name for storing results')
+    parser.add_argument('-P','--P',default=P,type=float,help=f'Probability that an example will be accepted [{P}]')
+    parser.add_argument('--lr',default=lr,type=float,help=f'Learning rate [{lr}]')
+    parser.add_argument('--freq',type=int, default=freq,help=f'Frequency for reporting progress [{freq}]')
     return parser.parse_args()
 
-def train(dataloader,encoder,model,loss_fn,optimizer,start):
+def train(dataloader,encoder,model,loss_fn,optimizer,start,freq,N,path):
     '''
-    Train for one datum
+    Train for one epoch
     
     Parameters:
         dataloader   Reads examples and formats as feature and label
@@ -122,23 +138,28 @@ def train(dataloader,encoder,model,loss_fn,optimizer,start):
         model        The model being trained
         loss_fn      Computer training loss
         optimizer    Use the adjust weights to minimize loss
+        start        Time execution started
+        freq         Frequency for reporting
+        N            Maximum number of iterations
+        path         Path for saving weights
     '''
+    Losses = []
     for i,(feature,label) in enumerate(dataloader.consume()):
+        if N != None and i > N: break
         label = encoder.create(label)
         prediction = model(feature)
-        loss = loss_fn(prediction,label)
-        #Logger.get_instance().log(f'{__file__} {Logger.get_line()} Loss={loss}')
-        if i%1000 == 0:
+        Losses.append(loss_fn(prediction,label))
+        if i%freq == 0:
             elapsed = time() - start
             minutes = int(elapsed / 60)
             seconds = elapsed - 60 * minutes
-            Logger.get_instance().log(f'{__file__} {Logger.get_line()} i={i} {minutes} m {seconds:.2f} s')
-            if i > 10000: return
-  
+            Logger.get_instance().log(f'{__file__} {Logger.get_line()} i={i}, Mean Loss={np.mean(Losses)}, {minutes} m {seconds:.2f} s')
+            Losses = []
+ 
         loss_fn.backward()
         optimizer.step()
         
-    model.save(Path(f'{args.data}/{args.output}'))
+    model.save(path)
 
 def main():
     '''
@@ -150,16 +171,24 @@ def main():
         for key, value in vars(args).items():
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} {key} = {value}')
 
-        seed = get_seed(args.seed,
-                        notify=lambda s: Logger.get_instance().log(f'{__file__} {Logger.get_line()}'
-                                                                   f' Created new seed {s}'))
         
-        dataloader = DataLoader(examples=args.examples)
+        rng = np.random.default_rng(
+                            seed=get_seed(args.seed,
+                                          notify=lambda s: Logger.get_instance().log(
+                                              f'{__file__} {Logger.get_line()}'
+                                              f' Created new seed {s}')))
+        
+        dataloader = DataLoader(examples=args.examples,rng=rng,P=args.P)
         encoder = OneHotFactory(n=len(dataloader))
-        model = Model(m=len(dataloader), n=args.n,encoder=encoder,rng=np.random.default_rng(seed=seed))
+        model = Model(m=len(dataloader),
+                      dimensionality=args.dimensionality,
+                      encoder=encoder,
+                      rng=rng)
         loss_fn = CrossEntropyLoss(model)
-        optimizer = GradientDescent(model,loss_fn,lr=0.01)      
-        worker = Thread(target=train, args=[dataloader,encoder,model,loss_fn,optimizer,start],daemon=True)
+        optimizer = GradientDescent(model,loss_fn,lr=args.lr)      
+        worker = Thread(target=train,
+                        args=[dataloader,encoder,model,loss_fn,optimizer,start,args.freq,args.N,Path(f'{args.data}/{args.output}')],
+                        daemon=True)
         worker.start()
         dataloader.load(worker)
  
