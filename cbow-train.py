@@ -197,7 +197,8 @@ def check_point(model,path):
     
 def train(dataloader,encoder,model,loss_fn,optimizer,start,freq,N,path):
     '''
-    Train for one epoch
+    This function executes in the worker thread to pass through 
+    the dataset and adjust weights to minimize the loss
     
     Parameters:
         dataloader   Reads examples and formats as feature and label
@@ -219,7 +220,7 @@ def train(dataloader,encoder,model,loss_fn,optimizer,start,freq,N,path):
         label = encoder.create(label)
         prediction = model(feature)
         Losses.append(loss_fn(prediction,label))
-        if i%freq == 0:
+        if i > 0 and i%freq == 0:
             elapsed = time() - start
             minutes = int(elapsed / 60)
             seconds = elapsed - 60 * minutes
@@ -254,9 +255,10 @@ def main():
         encoder = OneHotFactory(n=len(dataloader))
         model = create_model(args.restart,dataloader,args.dimensionality,encoder,rng,args.data)
         loss_fn = CrossEntropyLoss(model)
-        optimizer = GradientDescent(model,loss_fn,lr=args.lr)      
+        optimizer = GradientDescent(model,loss_fn,lr=args.lr) 
+        path = Path(f'{args.data}/{args.output}').with_suffix('.pkl')
         worker = Thread(target=train,
-                        args=[dataloader,encoder,model,loss_fn,optimizer,start,args.freq,args.N,Path(f'{args.data}/{args.output}').with_suffix('.pkl')],
+                        args=[dataloader,encoder,model,loss_fn,optimizer,start,args.freq,args.N,path],
                         daemon=True)
         worker.start()
         dataloader.load(worker)
