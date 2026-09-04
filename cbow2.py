@@ -157,22 +157,31 @@ class Model:
     CBOW neural network
     '''
     @staticmethod
-    def create(file_name,encoder=None):
+    def create(path,rng = np.random.default_rng(),encoder=None):
         '''
         Load a model that has previously been saved
         
         Parameters:
-            file_name    Path to file 
+            path     Path to file 
+            rng      Random number generator
+            encoder
         '''
-        with open(file_name, 'rb') as file:
+        with open(path, 'rb') as file:
             loaded_data = load(file)
             m,dimensionality = loaded_data['P'].shape
-            product = Model(m=m,dimensionality=dimensionality,encoder=encoder)
+            product = Model(m=m,dimensionality=dimensionality,encoder=encoder,rng=rng)
             product.P = loaded_data['P']
             product.H = loaded_data['H']
             return product
         
     def __init__(self,m=19,dimensionality=300,rng = np.random.default_rng(),encoder=None):
+        '''
+        Parameters:
+            m
+            dimensionality
+            rng
+            encoder
+        '''
         self.P = rng.uniform(low=-1,high=+1,size=(m,dimensionality))
         self.H = rng.uniform(low=-1,high=+1,size=(dimensionality,m))
         self.encoder = encoder

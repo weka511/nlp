@@ -152,8 +152,24 @@ def parse_args():
     parser.add_argument('-P','--P',default=P,type=float,help=f'Probability that an example will be accepted [{P}]')
     parser.add_argument('--lr',default=lr,type=float,help=f'Learning rate [{lr}]')
     parser.add_argument('--freq',type=int, default=freq,help=f'Frequency for reporting progress [{freq}]')
+    parser.add_argument('--restart', default=None, help='Restart using saved weights')
     return parser.parse_args()
 
+def create_model(restart,dataloader,dimensionality,encoder,rng,data):
+    '''
+    Create data model, either a fresh one, or one saved from a previous run
+    '''
+    if restart == None:
+        return Model(m=len(dataloader),
+                      dimensionality=dimensionality,
+                      encoder=encoder,
+                      rng=rng)
+    else:
+        path = Path(f'{data}/{restart}').with_suffix('.pkl')
+        product = Model.create(path,rng=rng,encoder=encoder)
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Loaded model from {path} ')
+        return product
+    
 def train(dataloader,encoder,model,loss_fn,optimizer,start,freq,N,path):
     '''
     Train for one epoch
@@ -202,7 +218,6 @@ def main():
         for key, value in vars(args).items():
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} {key} = {value}')
 
-        
         rng = np.random.default_rng(
                             seed=get_seed(args.seed,
                                           notify=lambda s: Logger.get_instance().log(
@@ -211,10 +226,7 @@ def main():
         
         dataloader = DataLoader(examples=args.examples,rng=rng,P=args.P)
         encoder = OneHotFactory(n=len(dataloader))
-        model = Model(m=len(dataloader),
-                      dimensionality=args.dimensionality,
-                      encoder=encoder,
-                      rng=rng)
+        model = create_model(args.restart,dataloader,args.dimensionality,encoder,rng,args.data)
         loss_fn = CrossEntropyLoss(model)
         optimizer = GradientDescent(model,loss_fn,lr=args.lr)      
         worker = Thread(target=train,
