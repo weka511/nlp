@@ -23,6 +23,7 @@ from argparse import ArgumentParser
 from csv import reader
 from pathlib import Path
 from queue import Queue
+from shutil import copy
 from time import time
 from threading import Thread
 
@@ -140,7 +141,7 @@ def parse_args():
     n = 300
     P = 0.01
     lr = 0.01
-    freq = 10
+    freq = 25
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--seed', type=int, default=None, help='Seed for random number generation')
     parser.add_argument('--data', default=data, help=f'Path to data files [{data}]')
@@ -169,6 +170,20 @@ def create_model(restart,dataloader,dimensionality,encoder,rng,data):
         product = Model.create(path,rng=rng,encoder=encoder)
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Loaded model from {path} ')
         return product
+ 
+def check_point(model,path):
+    '''
+    Save weights at a checkpoint
+    
+    Parameters:
+        model     The model being trained
+        path      Pathnemae for saving weights
+    '''
+    try:
+        copy(path,path.with_suffix('.bak'))
+    except FileNotFoundError:
+        pass
+    model.save(path)
     
 def train(dataloader,encoder,model,loss_fn,optimizer,start,freq,N,path):
     '''
@@ -200,6 +215,7 @@ def train(dataloader,encoder,model,loss_fn,optimizer,start,freq,N,path):
             seconds = elapsed - 60 * minutes
             Logger.get_instance().log(f'{__file__} {Logger.get_line()} i={i}, Mean Loss={np.mean(Losses)}, {minutes} m {seconds:.2f} s')
             Losses = []
+            check_point(model,path)
  
         loss_fn.backward()
         optimizer.step()
@@ -230,7 +246,7 @@ def main():
         loss_fn = CrossEntropyLoss(model)
         optimizer = GradientDescent(model,loss_fn,lr=args.lr)      
         worker = Thread(target=train,
-                        args=[dataloader,encoder,model,loss_fn,optimizer,start,args.freq,args.N,Path(f'{args.data}/{args.output}')],
+                        args=[dataloader,encoder,model,loss_fn,optimizer,start,args.freq,args.N,Path(f'{args.data}/{args.output}').with_suffix('.pkl')],
                         daemon=True)
         worker.start()
         dataloader.load(worker)

@@ -212,14 +212,14 @@ class Model:
         X = self.get_average(W)        
         return self.forward(X)
     
-    def save(self,file_name):
+    def save(self,path):
         '''
         Save model in a file
         
         Parameters:
-            file_name    Path to file 
+            path    Path to file 
         '''
-        with open(file_name.with_suffix('.pkl'),'wb') as out:
+        with open(path,'wb') as out:
             dump({
                 'P':self.P,
                 'H':self.H
