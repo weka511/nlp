@@ -154,7 +154,7 @@ class OneHotFactory:
 
 class Model:
     '''
-    CBOW neural network
+    Continuous Bag of Words Model neural network
     '''
     @staticmethod
     def create(path,rng = np.random.default_rng(),encoder=None):
@@ -164,7 +164,7 @@ class Model:
         Parameters:
             path     Path to file 
             rng      Random number generator
-            encoder
+            encoder  Used to convert integers to 1-hot vectors
         '''
         with open(path, 'rb') as file:
             loaded_data = load(file)
@@ -177,10 +177,10 @@ class Model:
     def __init__(self,m=19,dimensionality=300,rng = np.random.default_rng(),encoder=None):
         '''
         Parameters:
-            m
-            dimensionality
-            rng
-            encoder
+            m                Size of inpput layer
+            dimensionality   Dimensionality of space that we poject ipout onto
+            rng              Random number generator
+            encoder          Used to convert integers to 1-hot vectors
         '''
         self.P = rng.uniform(low=-1,high=+1,size=(m,dimensionality))
         self.H = rng.uniform(low=-1,high=+1,size=(dimensionality,m))
@@ -190,6 +190,9 @@ class Model:
         '''
         Used to average the vectors making up the context
         
+        Parameters:
+            w   Vectors making up the context
+        
         Returns:
             A single word vector
         '''
@@ -198,6 +201,9 @@ class Model:
     def forward(self,X):
         '''
         Given an input to projection layer, fill in projection and hidden layers
+        
+        Parameters:
+             X        Input to projection layer
         '''
         self.X = X
         self.y = np.dot(X,self.P)
@@ -207,6 +213,9 @@ class Model:
     def __call__(self,feature:[int]):
         '''
         Used to average a context and pass it through the network.
+        
+        Parameters:
+            feature    Vector making up context
         '''
         W = np.array([self.encoder.create(w) for w in feature])
         X = self.get_average(W)        
@@ -385,11 +394,11 @@ class TestModel(TestCase):
     def setUp(self):
         self.corpus = NanoCorpus()
         self.factory = OneHotFactory(n=self.corpus.get_n()+1)
-        self.model = Model(m=self.corpus.get_n(),n=11)
+        self.model = Model(m=self.corpus.get_n(),dimensionality=11)
        
     def test_convert_1hot(self):
         '''
-        Verify calulcation of a gaggle of 1-hot vectors from a sequence of tokens
+        Verify calculation of a gaggle of 1-hot vectors from a sequence of tokens
         '''
         Expected = np.zeros((6,17))
         Expected[0,0] = 1
