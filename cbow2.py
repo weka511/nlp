@@ -161,19 +161,18 @@ class Model:
         encoder    Used to convert integers to 1-hot vectors
     '''
     @staticmethod
-    def create(path,rng = np.random.default_rng(),encoder=None):
+    def create(path,encoder=None):
         '''
         Load a model that has previously been saved
         
         Parameters:
             path     Path to file 
-            rng      Random number generator
             encoder  Used to convert integers to 1-hot vectors
         '''
         with open(path, 'rb') as file:
             loaded_data = load(file)
             m,dimensionality = loaded_data['P'].shape
-            product = Model(m=m,dimensionality=dimensionality,encoder=encoder,rng=rng)
+            product = Model(m=m,dimensionality=dimensionality,encoder=encoder)
             product.P = loaded_data['P']
             product.H = loaded_data['H']
             return product

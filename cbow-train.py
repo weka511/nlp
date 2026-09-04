@@ -33,7 +33,7 @@ from shared.utils import Logger, user_has_requested_stop, get_seed
 from vocabulary import Vocabulary
 from cbow2 import Model, OneHotFactory, GradientDescent, CrossEntropyLoss
 
-__version__ = '1.0'
+__version__ = '1.1'
 __author__ = 'Simon Crase'
 
 class DataLoader:
@@ -159,6 +159,16 @@ def parse_args():
 def create_model(restart,dataloader,dimensionality,encoder,rng,data):
     '''
     Create data model, either a fresh one, or one saved from a previous run
+    
+    Parameters:
+        restart         Either None (instantiate fresh model) or the pathname of a saved Model
+        dataloader      The data loader (used to set size of input layer if restart==None)
+        dimensionality  Number of dimensions that we will project to
+        encoder         Used to convert tokens to 1-hot vectors
+        rng             Random number generator
+        data            Path to folder for saved Model 
+    Returns:
+        Model for training
     '''
     if restart == None:
         return Model(m=len(dataloader),
@@ -167,7 +177,7 @@ def create_model(restart,dataloader,dimensionality,encoder,rng,data):
                       rng=rng)
     else:
         path = Path(f'{data}/{restart}').with_suffix('.pkl')
-        product = Model.create(path,rng=rng,encoder=encoder)
+        product = Model.create(path,encoder=encoder)
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Loaded model from {path} ')
         return product
  
