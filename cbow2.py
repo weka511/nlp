@@ -20,6 +20,7 @@ Continuous Bag of Words Model
 Classes for building examples and training model
 '''
 
+from abc import ABC, abstractmethod
 from csv import writer, QUOTE_MINIMAL
 from pickle import dump, load
 from queue import Queue
@@ -249,12 +250,21 @@ class CrossEntropyLoss:
         self.model = model
         
     def log_softmax(self,z):
+        '''
+        Calculate log of softmax
+        
+        Parameters:
+             z
+        '''
         self.exp_z = np.exp(z)
         return z - np.log(self.exp_z.sum())
     
     def log_safe_softmax(self,z):
         '''
         Numerically stable version Goodfellow et al, eq (6.33)
+        
+        Parameters:
+            z 
         '''
         return self.log_softmax(z - z.max())
     
@@ -275,14 +285,47 @@ class CrossEntropyLoss:
         self.dLoss_dH = np.outer(dLoss_dz,self.model.y).T
         self.dLoss_dP = np.outer(np.matmul(self.model.H,dLoss_dz),self.model.X).T
 
-
-class GradientDescent:
+class Optimizer(ABC):
+    '''
+    Attributes:
+       model      The model whose loss we are trying to minimize
+       loss_fn    The loss function we are trying to minimize
+       lr         Learning rate
+    '''
     def __init__(self,model,loss_fn,lr=0.01):
+        '''
+        Parameters:
+            model      The model whose loss we are trying to minimize
+            loss_fn    The loss function we are trying to minimize
+            lr         Learning rate
+        '''
         self.model = model
         self.loss_fn = loss_fn
-        self.lr = lr
+        self.lr = lr 
+        
+    @abstractmethod
+    def step(self):
+        '''
+        Perform one step of optimization
+        '''
+        
+class GradientDescent(Optimizer):
+    '''
+    Optimizer used to perform Gradient Descent
+    '''
+    def __init__(self,model,loss_fn,lr=0.01):
+        '''
+        Parameters:
+            model      The model whose loss we are trying to minimize
+            loss_fn    The loss function we are trying to minimize
+            lr         Learning rate
+        '''
+        super().__init__(model,loss_fn,lr=lr)
         
     def step(self):
+        '''
+        Perform one step of gradient descent: adjust H and P in model
+        '''        
         self.model.H -= self.lr*self.loss_fn.dLoss_dH
         self.model.P -= self.lr*self.loss_fn.dLoss_dP
             
