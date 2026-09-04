@@ -20,8 +20,7 @@ Continuous Bag of Words Model
 Classes for building examples and training model
 '''
 
-from csv import reader, writer, QUOTE_MINIMAL
-import dbm
+from csv import writer, QUOTE_MINIMAL
 from pickle import dump, load
 from queue import Queue
 from typing import TextIO
@@ -113,8 +112,8 @@ class ExampleSet:
         words and contexts
         
         Parameters:
-            tokens
-            out_file
+            tokens      The sequence of tokens
+            out_file    Pathe name for output file
         '''
         out = writer(out_file, delimiter=',', quotechar='|', quoting=QUOTE_MINIMAL)
         start = 0
@@ -141,7 +140,7 @@ class OneHotFactory:
         Create a matrix of 1-hot vectors from a list of tokens
         
         Parameters:
-            tokens
+            tokens     List of integers, one for each toen
         '''
         try:
             product = np.zeros(tokens.shape + (self.n,))
@@ -154,7 +153,12 @@ class OneHotFactory:
 
 class Model:
     '''
-    Continuous Bag of Words Model neural network
+    Neural network representing Continuous Bag of Words Model
+    
+    Attributes:
+        P          Projection layer
+        H          Hidden layer
+        encoder    Used to convert integers to 1-hot vectors
     '''
     @staticmethod
     def create(path,rng = np.random.default_rng(),encoder=None):
@@ -234,85 +238,7 @@ class Model:
                 'H':self.H
                 },
                  out)
-
-class ExamplesFile:
-    '''
-    This class reads stored training examples from a single file.
-    '''
-    def __init__(self,filename,batch_size=32,progress='progress'):
-        self.filename = filename
-        self.batch_size = batch_size
-        self.progress = progress
-        
-    def load(self):
-        '''
-        Load examples file from ...
-        '''
-        with dbm.open(self.progress,'c') as progress_db, open(self.filename,newline='') as in_file:
-            try:
-                record = int(progress_db[path.stem])
-            except KeyError:
-                record = 0
-                progress_db[path.stem] = record
-                
-            batch = []
-            for row in reader(in_file,delimiter=','):
-                batch.append([int(w) for w in row])
-                if len(batch) >= self.batch_size:
-                    yield(batch)
-                    batch = []
-                    record += len(batch)
-                    progress_db[path.stem] = record
-            if len(batch) >= 0:
-                yield(batch)
-                record += len(batch)
-                progress_db[path.stem] = record                
-
-class DataLoader:
-    '''
-    This class reads stored training examples. It is meant to run in a separate thread from training.
-    '''
-    def __init__(self,data='data',examples='examples',batch_size=32,maxsize=8):
-        self.pipeline = Queue(maxsize=maxsize)
-        self.root_dir = Path(data) / examples
-        self.vocabulary = Vocabulary.create((self.root_dir / 'vocabulary').with_suffix('.pkl'))
-        self.batch_size = batch_size
-        self.examples = examples
-        
-    def __len__(self):
-        '''
-        Returns number of tokens in vocabulary
-        '''
-        return len(self.vocabulary)
-    
-    def load(self,worker):
-        '''
-        Read data from saved examples and queue it, so
-        it can be read by worker thread.
-        
-        Parameters:
-            worker     The worker thread that extract data from queue
-        '''
-        with dbm.open(self.examples,flag='c') as progress_db:
-            for path in self.root_dir.rglob("*.csv"):
-                if path.is_file():
-                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} Opening: {path}')  
-                    examples_file = ExamplesFile(path)
-                    for batch in examples_file.load():
-                        self.pipeline.queue(batch)
-                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} Closing: {path}') 
-                    
-                    progress.write(f'{path.stem}\n')
-                    
-                if user_has_requested_stop():
-                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} Stopping within {self.maxsize} steps')
-                    break 
-                
-            self.pipeline.put([l])   
-            Logger.get_instance().log(f'{__file__} {Logger.get_line()}')
-            worker.join()
-            Logger.get_instance().log(f'{__file__} {Logger.get_line()}')               
-    
+ 
 class CrossEntropyLoss:
     '''
     Used to calculate cross entropy loss
@@ -476,19 +402,6 @@ class TestCrossEntropy(TestCase):
             self.loss_fn.log_softmax(np.array([0.9,0.05,0.025,0.025])),
             self.loss_fn.log_safe_softmax(np.array([0.9,0.05,0.025,0.025]))
         )    
- 
-class TestExamplesFile(TestCase):
-    @skip('FIXME')
-    def test_generator(self):
-        '''
-        Visually inspected file: these are the result we'd expect
-        '''
-        file = ExamplesFile(r'C:\Users\weka5\nlp\data\examples-baby\fic\BMW.csv')
-        for i,batch in enumerate(file.load()):
-            if i < 986:
-                self.assertEqual(32,len(batch))
-            else:
-                self.assertEqual(4,len(batch))
             
 if __name__=='__main__':
         main()
