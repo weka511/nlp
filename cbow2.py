@@ -238,16 +238,42 @@ class Model:
                 'H':self.H
                 },
                  out)
- 
-class CrossEntropyLoss:
+
+class Loss(ABC):
+    '''
+    Used to calculate loss and its derivatives
+    '''
+    def __init__(self,model=None):
+        self.model = model
+    @abstractmethod
+    def __call__(self,prediction,label):
+        '''
+        Calculate loss
+        
+        Parameters:
+            prediction   Prediction from model 
+            label        1-hot vector representing true value
+        '''
+    @abstractmethod
+    def backward(self):
+        '''
+        Perform back propagation: calculate losses for Projection layer and Hidden layer
+        '''
+        
+class CrossEntropyLoss(Loss):
     '''
     Used to calculate cross entropy loss
     
     See A Brief Overview of Cross Entropy Loss, Chris Hughes,
     https://medium.com/@chris.p.hughes10/a-brief-overview-of-cross-entropy-loss-523aa56b75d5
+    
+    Attributes:
+        model
+        label
+        exp_z
     '''
     def __init__(self,model=None):
-        self.model = model
+        super().__init__(model=model)
         
     def log_softmax(self,z):
         '''
@@ -268,22 +294,36 @@ class CrossEntropyLoss:
         '''
         return self.log_softmax(z - z.max())
     
-    def _cross_entropy(self,log_probabilities,label):
-        return -np.dot(log_probabilities,label).sum()
+    def _cross_entropy(self,log_p,y):
+        '''
+        Calculate cross entropy using the equation from Chris Hughes's aritcle
+        
+        Parameters:
+            y      The true proabilities of eack class
+            log_p  Logs of the probabilities estimated by the model
+        '''
+        return -np.dot(log_p,y)
     
     def __call__(self,prediction,label):
         '''
+        Calculate the cross entropy loss
+        
         Parameters:
-            prediction
-            label        A int
+            prediction   Prediction from model 
+            label        1-hot vector representing true value
         '''
         self.label = label
         return self._cross_entropy(self.log_safe_softmax(prediction),label)
     
     def backward(self):
-        dLoss_dz = -self.label + self.exp_z
-        self.dLoss_dH = np.outer(dLoss_dz,self.model.y).T
-        self.dLoss_dP = np.outer(np.matmul(self.model.H,dLoss_dz),self.model.X).T
+        '''
+        Perform back propagation: calculate losses for Projection layer and Hidden layer
+        
+        See pages 8 and 9 of my NLP notebook
+        '''
+        dLoss_dz = -self.label + self.exp_z                                        # Equation C
+        self.dLoss_dH = np.outer(dLoss_dz,self.model.y).T                          # Equation F
+        self.dLoss_dP = np.outer(np.matmul(self.model.H,dLoss_dz),self.model.X).T  # ???
 
 class Optimizer(ABC):
     '''
@@ -329,25 +369,11 @@ class GradientDescent(Optimizer):
         self.model.H -= self.lr*self.loss_fn.dLoss_dH
         self.model.P -= self.lr*self.loss_fn.dLoss_dP
             
-class NanoCorpus:
-    def __init__(self):
-        self.data = [
-            [0,  2,  3,  4,  5, 1], #     he is      a  king.
-            [0,  6,  3,  4,  7, 1], #    she is      a  queen.
-            [0,  2,  3,  4,  8, 1], #     he is      a  man.
-            [0,  6,  3,  4,  9, 1], #    she is      a  woman.
-            [0, 10,  3, 11, 12, 1], # warsaw is poland  capital.
-            [0, 14,  3, 14, 12, 1], # berlin is germany capital
-            [0, 15,  3, 16, 12, 1]  # paris is  france  capital.
-        ]
-    
-    def get_n(self):
-        return max(max(row) for row in self.data)
-    
-    def __getitem__(self,i):
-        return self.data[i]
-        
+
 class TestOneHotFactory(TestCase):
+    '''
+    Tests to verify that OneHotFactory sets up vectors correctly
+    '''
     def setUp(self):
         self.factory = OneHotFactory(n=7)  
         
@@ -359,8 +385,26 @@ class TestOneHotFactory(TestCase):
                            self.factory.create(np.array([1,2,4,5])))
         
 class TestModel(TestCase):
+    class NanoCorpus:
+        def __init__(self):
+            self.data = [
+                [0,  2,  3,  4,  5, 1], #     he is      a  king.
+                [0,  6,  3,  4,  7, 1], #    she is      a  queen.
+                [0,  2,  3,  4,  8, 1], #     he is      a  man.
+                [0,  6,  3,  4,  9, 1], #    she is      a  woman.
+                [0, 10,  3, 11, 12, 1], # warsaw is poland  capital.
+                [0, 14,  3, 14, 12, 1], # berlin is germany capital
+                [0, 15,  3, 16, 12, 1]  # paris is  france  capital.
+            ]
+        
+        def get_n(self):
+            return max(max(row) for row in self.data)
+        
+        def __getitem__(self,i):
+            return self.data[i]
+        
     def setUp(self):
-        self.corpus = NanoCorpus()
+        self.corpus = self.NanoCorpus()
         self.factory = OneHotFactory(n=self.corpus.get_n()+1)
         self.model = Model(m=self.corpus.get_n(),dimensionality=11)
        
