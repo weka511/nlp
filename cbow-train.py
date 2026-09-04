@@ -44,10 +44,11 @@ class DataLoader:
     def __init__(self,maxsize=8,data='data',examples='examples',rng=np.random.default_rng(),P=0.01):
         '''
         Parameters:
-            maxsize
-            data
-            examples
-            rng
+            maxsize   maximum number of data that may be stored in pipeline
+            data      Path to data
+            examples  Name of file where examples are stored
+            rng       Random number generatior for sampling
+            P         Probability of an example being sampled
         '''
         self.maxsize = maxsize
         self.pipeline = Queue(maxsize=maxsize)
@@ -55,10 +56,11 @@ class DataLoader:
         self.vocabulary = Vocabulary.create((self.root_dir / 'vocabulary').with_suffix('.pkl'))
         self.rng = rng
         self.P = P
+        self.running = False
         
     def __len__(self):
         '''
-        Returns numbert of token in vocabulary
+        Returns number of token in vocabulary
         '''
         return len(self.vocabulary)
 
@@ -68,33 +70,52 @@ class DataLoader:
         it can be read by worker thread.
         
         Parameters:
-            worker     The worker thread that extracts data from queue
+            worker     So we can join worker when we are done
         '''
         with open((self.root_dir / 'progress').with_suffix('.txt'),'a') as progress:
-            running = True
+            self.running = True
             for path in self.root_dir.rglob("*.csv"):
-                if not running: break
+                if not self.running: break
                 if not path.is_file(): continue
                 self.load_file(path,)                         
                 progress.write(f'{path.stem}\n')
-                
-                if user_has_requested_stop():
-                    running = False
-                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} Stopping within {self.maxsize} steps')
+                if not self.running:
+                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} Dataloader exiting')  
                     break
+                if user_has_requested_stop():
+                    self.stop()
    
+        self.pipeline.maxsize += 1 # Prevent program hanging if consumer has quit already
         self.pipeline.put([DataLoader.Sentinel])   
-        Logger.get_instance().log(f'{__file__} {Logger.get_line()}')
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Waiting to join worker')
         worker.join()
-        Logger.get_instance().log(f'{__file__} {Logger.get_line()}')    
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} joined')    
   
+    def stop(self):
+        '''
+        Used by consumer to terminate processing
+        '''
+        if not self.running: return
+        self.running = False
+        Logger.get_instance().log(f'{__file__} {Logger.get_line()} Stopping within {self.maxsize} steps')
+        
     def load_file(self,path):
+        '''
+        Load examples from one file
+        
+        Parameters:
+            path      Pathname for file being read
+        '''
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} File: {path}')      
         with open(path,newline='') as in_file:
             for row in reader(in_file,delimiter=','):
-                if self.rng.uniform() < self.P:
-                    tokens = [int(w) for w in row]
-                    self.pipeline.put(tokens)
+                if self.running:
+                    if self.rng.uniform() < self.P:
+                        tokens = [int(w) for w in row]
+                        self.pipeline.put(tokens)
+                else:   # Not running means we are done
+                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} Stopping')
+                    return
                     
     def consume(self):
         '''
@@ -102,12 +123,17 @@ class DataLoader:
         '''
         while True:
             tokens = self.pipeline.get()
-            if tokens[0] == DataLoader.Sentinel: return
+            if tokens[0] == DataLoader.Sentinel:
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Dataloader sentinal detected')   
+                return
             mid_point = len(tokens) // 2
             yield tokens[:mid_point] + tokens[mid_point+1:], tokens[mid_point]        
-            self.pipeline.task_done()
+            self.pipeline.task_done()   # Item has been processed
         
 def parse_args():
+    '''
+    Parse command line arguments
+    '''
     data = './data'
     logs = './logs'
     examples = 'examples'
@@ -145,7 +171,10 @@ def train(dataloader,encoder,model,loss_fn,optimizer,start,freq,N,path):
     '''
     Losses = []
     for i,(feature,label) in enumerate(dataloader.consume()):
-        if N != None and i > N: break
+        if N != None and i > N:
+            dataloader.stop()
+            break
+ 
         label = encoder.create(label)
         prediction = model(feature)
         Losses.append(loss_fn(prediction,label))
@@ -159,7 +188,9 @@ def train(dataloader,encoder,model,loss_fn,optimizer,start,freq,N,path):
         loss_fn.backward()
         optimizer.step()
         
+    Logger.get_instance().log(f'{__file__} {Logger.get_line()} About to save')       
     model.save(path)
+    Logger.get_instance().log(f'{__file__} {Logger.get_line()} Saved in {path}')
 
 def main():
     '''
