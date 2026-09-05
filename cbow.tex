@@ -62,7 +62,7 @@
 \makeglossaries
 
 %opening
-\title{Natural Language Processing}
+\title{Continuous Bag of Words}
 \author{Simon Crase}
 
 \begin{document}
@@ -89,20 +89,11 @@
 	
 \maketitle
 
-\begin{abstract}
-This document contains derivations of equations relevant to Natural Language Processing.
-\end{abstract}
 
-\tableofcontents
-\listoffigures
-
-\section{Continuous Bag of Words}
-In this section I derive the equations needed to implement \gls{gls:cbow}\cite{mikolov2013efficient}.
-
-\subsection{Model}
+\section{Model}
 
 \begin{figure}[H]
-	\caption[Continuous Bag of Words]{This figure depicts the layers of the network to implement Continuous Bag of Words. $P$ is the matrix used to project the input, $H$ is the matrix that creates the hidden layer, and $Lambda$ is the loss function, the \gls{gls:crossentropy} of the \gls{gls:softmax} relative to the labels $w$.}
+	\caption[Continuous Bag of Words]{The layers of the network for Continuous Bag of Words. $P$ is the matrix used to project the input, and $H$ is the matrix that creates the hidden layer. $Lambda$ is the loss function, the \gls{gls:crossentropy} of the \gls{gls:softmax} (\ref{eq:glossary:crossentropy},\ref{eq:glossary:softmax}) relative to the labels $w$.}
 	\begin{center}
 		\begin{tikzpicture}
 			\node[draw,minimum width=2em, minimum height=1em] (x) {$x_i$};
@@ -137,9 +128,9 @@ where the $p_k=\sigma(\vec{z})_k$ are calculated using the \gls{gls:softmax} fun
 	\Lambda[P,H,e_m] =& -z_m +  \ln \sum_{k} e^{z_{k}}  \numberthis \label{eq:def:lambda}\
 \end{align*}
 
-\subsection{Calculating the Gradient}
+\section{Calculating the Gradient}
 
-I will use the chain rule to calculate $\frac{\partial{\Lambda}}{\partial H_{ij}}$ and $\frac{\partial{\Lambda}}{\partial P_{ij}}$.
+From the chain rule:
 \begin{align*}
 	\frac{\partial{\Lambda}}{\partial H_{ij}} =& \sum_k \frac{\partial{\Lambda}}{\partial z_k}\frac{\partial z_k}{\partial H_{ij}} \numberthis \label{eq:Lambda:H}\\
 	\frac{\partial{\Lambda}}{\partial P_{ij}} =&\sum_{k,j^{\prime}} \frac{\partial{\Lambda}}{\partial z_k} \frac{\partial z_k}{\partial y_{j^{\prime}}} \frac{\partial y_{j^{\prime}}}{\partial P_{ij}} \numberthis \label{eq:Lambda:P}
@@ -160,14 +151,15 @@ Combining \eqref{eq:Lambda:H}, \eqref{eq:Lambda:z}, and \eqref{eq:z:H}:
 	\frac{\partial{\Lambda}}{\partial H_{ij}} =& \sum_k  [-\delta_{mk} + \frac{e^{z_k}}{\sum_{k^{\prime}} e^{z_{k^{\prime}}}} ] \delta_{ik} y_j\\
 	=& [-\delta_{mi} + \frac{e^{z_i}}{\sum_{k^{\prime}} e^{z_{k^{\prime}}}} ]  y_j   \numberthis \label{eq:Lambda:HH}
 \end{align*}
-Differentiating \eqref{eq:def:y} :
+Differentiating \eqref{eq:def:y} and \eqref{eq:def:z}:
 \begin{align*}
 	\frac{\partial y_k}{\partial P_{ij}} =&\frac{\partial \sum_{i^{\prime}} P_{k{i^{\prime}}} x_{i^{\prime}}}{\partial P_{ij}}\\
 	=& \delta_{ik} \delta_{j{i^{\prime}}} x_{{i^{\prime}}}\\
-	=& \delta_{ik} x_j
+	=& \delta_{ik} x_j \numberthis \label{eq:dy:dp}\\
+	\frac{\partial z_k}{\partial y_j} =& H_{kj} \numberthis \label{eq:dz:dy}
 \end{align*}
 
-From \eqref{eq:Lambda:P}, \eqref{eq:Lambda:z}, \eqref{eq:def:z}, and \eqref{eq:def:y}.
+From \eqref{eq:Lambda:P}, \eqref{eq:Lambda:z}, \eqref{eq:dy:dp}, and \eqref{eq:dz:dy}:
 \begin{align*}
 	\frac{\partial{\Lambda}}{\partial P_{ij}} =&\sum_{k,j^{\prime}} [-\delta_{mk} + \frac{e^{z_k}}{\sum_{k^{\prime}} e^{z_{k^{\prime}}}}] H_{k{j^{\prime}}} \delta_{ij^{\prime}} x_j\\
 	=&\sum_{k,} [-\delta_{mk} + \frac{e^{z_k}}{\sum_{k^{\prime}} e^{z_{k^{\prime}}}}] H_{ki}  x_j \numberthis \label{eq:Lambda:PP}
