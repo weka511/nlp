@@ -266,6 +266,9 @@ class Model:
 class Loss(ABC):
     '''
     Used to calculate loss and its derivatives
+    
+    Attributes:
+        model      The model whose loss we are trying to minimize
     '''
     def __init__(self,model=None):
         self.model = model
@@ -294,9 +297,8 @@ class CrossEntropyLoss(Loss):
     https://medium.com/@chris.p.hughes10/a-brief-overview-of-cross-entropy-loss-523aa56b75d5
     
     Attributes:
-        model
-        label
-        exp_z
+        label     True value from examples
+        exp_z     Cached value of exp(z) to expedite calculation of gradinent
     '''
     def __init__(self,model=None):
         super().__init__(model=model)
@@ -306,7 +308,7 @@ class CrossEntropyLoss(Loss):
         Calculate log of softmax
         
         Parameters:
-             z
+             z      Predictions from model
         '''
         self.exp_z = np.exp(z)
         return z - np.log(self.exp_z.sum())
@@ -316,7 +318,7 @@ class CrossEntropyLoss(Loss):
         Numerically stable version Goodfellow et al, eq (6.33)
         
         Parameters:
-            z 
+            z       Predictions from model
         '''
         return self.log_softmax(z - z.max())
     
@@ -345,11 +347,11 @@ class CrossEntropyLoss(Loss):
         '''
         Perform back propagation: calculate losses for Projection layer and Hidden layer
         
-        See pages 8 and 9 of my NLP notebook
+        See pages 8 and 9 of my NLP notebook and also the pdf generated from cbow.tex
         '''
-        dLoss_dz = -self.label + self.exp_z                                        # Equation C
-        self.dLoss_dH = np.outer(dLoss_dz,self.model.y).T                          # Equation F
-        self.dLoss_dP = np.outer(np.matmul(self.model.H,dLoss_dz),self.model.X).T  # ???
+        dLoss_dz = -self.label + self.exp_z/self.exp_z.sum()                       # Equation (7)
+        self.dLoss_dH = np.outer(dLoss_dz,self.model.y).T                          # Equation (9)
+        self.dLoss_dP = np.outer(np.matmul(self.model.H,dLoss_dz),self.model.X).T  # Equation (12)
 
 class Optimizer(ABC):
     '''
