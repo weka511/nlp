@@ -7,6 +7,7 @@ My experiments with Natural Language Processing, mostly concerned with exploring
 File | Description
 ------------------|------------------------------------------------------------
 cbow.py|Continuous Bag of Words
+cbow.tex|Derivations of equations used for cbow2.py
 cbow2.py|Continuous Bag of Words: code used by cbow-train.py
 cbow-examples.py|Construct examples for Continuous Bag of Words
 cbow-train.py|Train model for Continuous Bag of Words
@@ -16,7 +17,6 @@ crp.py|Implementation of distance dependent Chinese Restaurant Process
 ngram.py|Exercise 3.8 from Jurafsky and Martin: build ngram table from corpus
 ngram_generate.py|Exercise 3.10 from Jurafsky and Martin: use ngrams to generate random sequences
 nlp.bib|Bibliography
-nlp.tex|Derrivations of equations used for cbow2.py
 nlp.wpr|Wing IDE Project file
 skipgram2.py|This program has been written to test my understanding of [word2vec](https://arxiv.org/abs/1301.3781/Word2Vec).
 template.py|Template for new code with command line interface
