@@ -43,7 +43,7 @@ class DataLoader:
     '''
     Sentinel = -1 # Used to inform training thread that we have no more data for it
 
-    def __init__(self, maxsize=8, data='data', examples='examples', rng=np.random.default_rng(), P=0.01):
+    def __init__(self, maxsize=8, data='data', examples='examples', rng=np.random.default_rng(), P=0.01,sections=[]):
         '''
         Parameters:
             maxsize   maximum number of data that may be stored in pipeline
@@ -51,6 +51,7 @@ class DataLoader:
             examples  Name of file where examples are stored
             rng       Random number generatior for sampling
             P         Probability of an example being sampled
+            sections  Restrict to specified sections
         '''
         self.maxsize = maxsize
         self.pipeline = Queue(maxsize=maxsize)
@@ -59,6 +60,7 @@ class DataLoader:
         self.rng = rng
         self.P = P
         self.running = False
+        self.sections = sections
 
     def __len__(self):
         '''
@@ -74,20 +76,18 @@ class DataLoader:
         Parameters:
             worker     So we can join worker when we are done
         '''
-        with open((self.root_dir / 'progress').with_suffix('.txt'), 'a') as progress:
-            self.running = True
-            for path in self.root_dir.rglob("*.csv"):
-                if not self.running:
-                    break
-                if not path.is_file():
-                    continue
-                self.load_file(path,)
-                progress.write(f'{path.stem}\n')
-                if not self.running:
-                    Logger.get_instance().log(f'{__file__} {Logger.get_line()} Dataloader exiting')
-                    break
-                if user_has_requested_stop():
-                    self.stop()
+        self.running = True
+        for path in self.root_dir.rglob("*.csv"):
+            if not self.running:  break
+            if not path.is_file(): continue
+            if len(self.sections) == 0 or str(path.stem) in self.sections:
+                self.load_file(path)
+ 
+            if not self.running:
+                Logger.get_instance().log(f'{__file__} {Logger.get_line()} Dataloader exiting')
+                break
+            if user_has_requested_stop():
+                self.stop()
 
         self.pipeline.maxsize += 1 # Prevent program hanging if consumer has quit already
         self.pipeline.put([DataLoader.Sentinel])
@@ -159,6 +159,7 @@ def parse_args():
     parser.add_argument('--lr', default=lr, type=float, help=f'Learning rate [{lr}]')
     parser.add_argument('--freq', type=int, default=freq, help=f'Frequency for reporting progress [{freq}]')
     parser.add_argument('--restart', default=None, help='Restart using saved weights')
+    parser.add_argument('--sections', default=[], nargs='*',help='Restrict processing to specified sections')
     return parser.parse_args()
 
 
@@ -261,7 +262,7 @@ def main():
                               f'{__file__} {Logger.get_line()}'
                               f' Created new seed {s}')))
 
-        dataloader = DataLoader(examples=args.examples, rng=rng, P=args.P)
+        dataloader = DataLoader(examples=args.examples, rng=rng, P=args.P,sections=args.sections)
         encoder = OneHotFactory(n=len(dataloader))
         model = create_model(args.restart, dataloader, args.dimensionality, encoder, rng, args.data)
         loss_fn = CrossEntropyLoss(model)
