@@ -27,7 +27,7 @@ from time import time
 import numpy as np
 from vocabulary import Vocabulary
 from shared.utils import Logger, user_has_requested_stop
-from cbow2 import ExampleSet, BNC
+from cbow2 import ExampleSet, BNC_Baby
 
 __version__ = '1.1'
 __author__ = 'Simon Crase'
@@ -103,7 +103,7 @@ def main():
     with Logger(Path(__file__).stem, path=args.logs) as _:
         out_root_path = Path(f'{args.data}/{args.output}')
         Logger.get_instance().log(f'{__file__} {Logger.get_line()} Writing results to {out_root_path}')
-        corpus = BNC(component=args.component)
+        corpus = BNC_Baby(component=args.component)
         vocabulary = Vocabulary()
         builder = ExampleSetBuilder(corpus,vocabulary,out_root_path,
                                     window_size=args.window_size,stem=args.stem)

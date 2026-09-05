@@ -35,7 +35,7 @@ from vocabulary import Vocabulary
 __version__ = '1.1'
 __author__ = 'Simon Crase'
 
-class BNC:
+class BNC(ABC):
     '''
     Read text from BNC corpus
     '''
@@ -44,12 +44,7 @@ class BNC:
         Connect to Baby BNC
         '''      
         nltk.data.path.append(root)
-        self.bnc = BNCCorpusReader(root=root+r'\Texts', fileids=component+r'/\w*\.xml')
-        # Here is the code for full BNC
-        #def __init__(self, root=r'./data/2554/download\Texts'):
-        #        nltk.data.path.append(r'./data\2554\download')
-        #        self.bnc = BNCCorpusReader(root=root, fileids=r'[A-K]/\w*/\w*\.xml')        
-
+        
     def filenames(self):
         '''
         This generator is used to iterate through filenames
@@ -67,13 +62,42 @@ class BNC:
         '''
         for sentence in self.bnc.sents(fileids=path,stem=stem):
             yield sentence
-            
+
+class BNC_Baby(BNC):
+    def __init__(self, root=r'./data/2553/download',component=r'\w*'):
+        '''
+        Connect to Baby BNC
+        '''
+        super().__init__(root)
+        self.bnc = BNCCorpusReader(root=root+r'\Texts', fileids=component+r'/\w*\.xml')
+        
+class BNC_Full(BNC):        
+    def __init__(self, root=r'./data/2554/download\Texts'):
+        '''
+        Connect to Full BNC
+        ''' 
+        super().__init___(root)
+        nltk.data.path.append(r'./data\2554\download')
+        self.bnc = BNCCorpusReader(root=root, fileids=r'[A-K]/\w*/\w*\.xml')   
+
 class ExampleSet:
     '''
     This class holds the words and contexts for one sentence
+    
+    Attributes:
+        vocabulary   Words used in set
+        SOS          Token for start of sentence
+        EOS          Token for end of sentence
+        window_size  Determines how many context words will be included in each example
+        count        Total number of examples
     '''
 
     def __init__(self, window_size : int =4, vocabulary:Vocabulary=Vocabulary()):
+        '''
+        Parameters:
+            window_size
+            vocabulary
+        '''
         self.vocabulary = vocabulary
         self.SOS = self.vocabulary.tokenize('<SOS>')
         self.EOS = self.vocabulary.tokenize('<EOS>')
@@ -245,6 +269,7 @@ class Loss(ABC):
     '''
     def __init__(self,model=None):
         self.model = model
+        
     @abstractmethod
     def __call__(self,prediction,label):
         '''
@@ -254,6 +279,7 @@ class Loss(ABC):
             prediction   Prediction from model 
             label        1-hot vector representing true value
         '''
+        
     @abstractmethod
     def backward(self):
         '''
