@@ -140,6 +140,7 @@ data/2553/
 data/2554/
 data/examples*/
 
+# Tex intermediate files
 *.aux
 *.bbl
 *.blg
@@ -152,3 +153,4 @@ data/examples*/
 *.gls
 *.ist
 
+*.bak
