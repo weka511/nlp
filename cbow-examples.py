@@ -40,11 +40,11 @@ class ExampleSetBuilder:
                  window_size=4,stem=False):
         '''
         Parameters:
-            corpus
-            vocabulary
-            out_root_path
-            window_size
-            stem
+            corpus         The source of the sentences
+            vocabulary     Mapping between words and tokens
+            out_root_path  Specified where to store esamples
+            window_size    Identifies size of context
+            stem           Set this to use stems instead of full words
         '''
         self.corpus = corpus
         self.vocabulary = vocabulary
@@ -54,7 +54,7 @@ class ExampleSetBuilder:
     
     def build(self,path):
         '''
-        Build exmples for one file
+        Build examples for one file
         
         Parameters:
             path     Path to file that is to be processed
@@ -90,8 +90,6 @@ def parse_args():
                         help='database component')
     return parser.parse_args()
 
-
-
 def main():
     '''
     Read sentences from a corpus and generate words 
@@ -106,11 +104,11 @@ def main():
         corpus = BNC_Baby(component=args.component)
         vocabulary = Vocabulary()
         builder = ExampleSetBuilder(corpus,vocabulary,out_root_path,
-                                    window_size=args.window_size,stem=args.stem)
+                                    window_size=args.window_size,
+                                    stem=args.stem)
         for path in corpus.filenames():
             total_examples += builder.build(path)
-            if user_has_requested_stop():
-                break
+            if user_has_requested_stop(): break
              
         vocabulary_path = (out_root_path / 'vocabulary').with_suffix('.pkl')           
         vocabulary.save(vocabulary_path)
