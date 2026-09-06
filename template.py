@@ -24,10 +24,16 @@ from time import time
 import numpy as np
 
 def parse_args():
+    '''
+    Parse command line arguments
+    '''
     parser = ArgumentParser(description=__doc__)
     return parser.parse_args()
     
 def main():
+    '''
+    Do whatever...
+    '''
     start  = time()
     args = parse_args()
     
