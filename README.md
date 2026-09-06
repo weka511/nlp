@@ -10,6 +10,7 @@ cbow.py|Continuous Bag of Words
 cbow.tex|Derivations of equations used for cbow2.py
 cbow2.py|Continuous Bag of Words: code used by cbow-train.py
 cbow-examples.py|Construct examples for Continuous Bag of Words
+cbow-index|Construct an index for all file in example set
 cbow-train.py|Train model for Continuous Bag of Words
 command.py|Allow a program to be structured as a set of Command objects. A command can be invoked by specifying its name as the first command line parameter.
 corpus.py|Read data from BNC corpus
